@@ -162,10 +162,20 @@ function rank(entry: RuleStatus): number {
   return (entry.verdict === 'FAIL' ? 0 : 3) + STATUS_RANK[entry.status];
 }
 
+/**
+ * A `VEHICLE_DETECTED` result with `evidence.bbox` located a vehicle; `mapModelOutput` sets `FAIL` on it only when the
+ * detection confidence is below its threshold.
+ */
+function isVehicleLocated(result: RuleResult): boolean {
+  return (
+    result.id === 'VEHICLE_DETECTED' && result.evidence?.bbox !== undefined
+  );
+}
+
 /** The copy follows the result's own verdict, so policy escalation never overstates certainty. */
 function feedbackStatus(result: RuleResult): RuleFeedbackStatus {
   if (result.verdict === 'FAIL') {
-    return 'FAIL';
+    return isVehicleLocated(result) ? 'WARN' : 'FAIL';
   }
   return result.verdict === 'WARN' && result.confidence === 0
     ? 'UNCHECKED'
@@ -190,7 +200,11 @@ export function getParkingFeedback(
     if (options.policy && !rulePolicy?.enabled) {
       continue;
     }
-    if (result.id === 'VEHICLE_DETECTED' && result.verdict === 'FAIL') {
+    if (
+      result.id === 'VEHICLE_DETECTED' &&
+      result.verdict === 'FAIL' &&
+      !isVehicleLocated(result)
+    ) {
       vehicleMissing = true;
     }
     let verdict: FeedbackVerdict | undefined =

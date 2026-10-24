@@ -253,13 +253,16 @@ Rule entries have the shape `{ kind: 'rule', key: 'rule.<RuleId>.<FAIL|WARN|UNCH
    A result without an effective verdict is omitted.
 4. The key suffix depends only on the result's own `verdict`, so policy escalation never makes the text more certain
    than the result: `FAIL` gives `FAIL`; `WARN` with `confidence` `0` gives `UNCHECKED`, which `mapModelOutput` emits
-   when it could not evaluate the rule; any other `WARN` or an escalated `PASS` gives `WARN`.
+   when it could not evaluate the rule; any other `WARN` or an escalated `PASS` gives `WARN`. Exception: a
+   `VEHICLE_DETECTED` `FAIL` with `evidence.bbox` gives `WARN`, because `mapModelOutput` sets `evidence.bbox` only when it
+   located a vehicle, and then `FAIL` means that the detection confidence is below the `VEHICLE_DETECTED` threshold.
 5. Each `RuleId` produces at most one entry. Among its results, an effective verdict of `FAIL` is preferred over `WARN`;
    with the same effective verdict, the suffix `FAIL` is preferred over `WARN` and `WARN` over `UNCHECKED`; the first
    result is preferred over later equal results.
-6. If a non-omitted `VEHICLE_DETECTED` result has its own `verdict` `FAIL`, entries for `UPRIGHT`, `TACTILE_PAVING`,
-   `CROSSWALK`, `ROADWAY`, `SIDEWALK_BLOCK`, and `PARKING_ZONE` are omitted, because they describe a vehicle that was not
-   found. A `VEHICLE_DETECTED` result that is `FAIL` only through policy escalation does not omit them.
+6. If a non-omitted `VEHICLE_DETECTED` result has its own `verdict` `FAIL` and no `evidence.bbox`, entries for
+   `UPRIGHT`, `TACTILE_PAVING`, `CROSSWALK`, `ROADWAY`, `SIDEWALK_BLOCK`, and `PARKING_ZONE` are omitted, because they
+   describe a vehicle that was not found. A `VEHICLE_DETECTED` result that is `FAIL` only through policy escalation, or
+   that has `evidence.bbox`, does not omit them.
 
 Each distinct `GuidanceIssue` in `issues` produces `{ kind: 'guidance', key: 'guidance.<GuidanceIssue>', issue, text }`.
 Guidance issues are not filtered by the policy. Values outside `GuidanceIssue` are omitted.

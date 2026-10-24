@@ -269,6 +269,37 @@ describe('getParkingFeedback', () => {
     ).toEqual(['rule.VEHICLE_DETECTED.WARN', 'rule.CROSSWALK.FAIL']);
   });
 
+  it('treats a located vehicle below the detection threshold as hard to recognize', () => {
+    const output: RawModelOutput = {
+      detections: [
+        {
+          classId: 'vehicle',
+          confidence: 0.6,
+          box: [0.3, 0.3, 0.6, 0.6],
+          upright: { score: 0.95, confidence: 0.95 },
+        },
+        { classId: 'crosswalk', confidence: 0.95, box: [0, 0, 1, 1] },
+      ],
+      imageQuality: { score: 0.9, confidence: 0.9 },
+    };
+    const rules = mapModelOutput(output, {
+      thresholds: { VEHICLE_DETECTED: { failBelow: 0.7, passAt: 0.8 } },
+    });
+    expect(
+      rules.find((entry) => entry.id === 'VEHICLE_DETECTED')
+    ).toMatchObject({
+      verdict: 'FAIL',
+      evidence: { bbox: [0.3, 0.3, 0.6, 0.6] },
+    });
+    const feedback = getParkingFeedback({ rules }, { policy: defaultPolicy });
+    expect(feedback.map((entry) => entry.key)).toEqual([
+      'rule.VEHICLE_DETECTED.WARN',
+      'rule.CROSSWALK.FAIL',
+      'rule.PARKING_ZONE.FAIL',
+    ]);
+    expect(feedback[0]).toMatchObject({ verdict: 'FAIL' });
+  });
+
   it('reports only the missing vehicle for a mapped scene without a vehicle', () => {
     const rules = mapModelOutput({
       detections: [],
