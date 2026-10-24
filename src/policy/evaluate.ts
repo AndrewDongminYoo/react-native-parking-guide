@@ -19,7 +19,7 @@ function clamp01(value: number): number {
 }
 
 function getRuleScore(rule: RuleResult): number {
-  if (typeof rule.score === 'number') {
+  if (typeof rule.score === 'number' && !Number.isNaN(rule.score)) {
     return clamp01(rule.score);
   }
 
