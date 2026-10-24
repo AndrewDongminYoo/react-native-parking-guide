@@ -31,8 +31,8 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 
 | Goal step | Implemented | Not implemented |
 | --- | --- | --- |
-| 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, and iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`) | Model-based issues (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`); target-vehicle selection inside the guide frame; use of `VehicleType` by any API |
-| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A model and on-device inference (CoreML on iOS, TFLite on Android); `GEOFENCE` evaluation |
+| 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, and iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`) | Model-based issues (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`); use of `VehicleType` by any API |
+| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection inside `MappingOptions.guideFrame`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A model and on-device inference (CoreML on iOS, TFLite on Android); `GEOFENCE` evaluation |
 | 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput` | Rider-facing feedback for each failed rule; photo capture into `VerificationResult` |
 
 `getModelVersion()` is a native stub that returns `"0.1.0-dev"`.
@@ -49,8 +49,8 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 - **v0.2 (M2)**: JS frame-result handoff, smoothed capture guidance, and iOS and Android image-quality frame analysis
   are implemented.
 - **v0.5**: a vehicle and prohibited-zone model with on-device inference, model-based capture guidance
-  (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), target-vehicle selection inside the guide frame,
-  prohibited-zone rules (tactile paving, crosswalk, roadway, sidewalk block, parking zone), and geofence integration.
+  (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), prohibited-zone rules (tactile paving, crosswalk, roadway, sidewalk block,
+  parking zone), and geofence integration.
 - **v1.0**: photo capture into `VerificationResult`, rider-facing feedback for each failed rule, attestation support,
   and opt-in upload and server-side verification integration.
 
@@ -131,7 +131,12 @@ Invalid numeric values, inverted boxes, malformed masks, mismatched mask grids, 
 throw `RangeError`; the mapper never clamps invalid model input.
 
 `minimumConfidence` defaults to `0.5`. Detections and assessments strictly below it are ignored.
-The mapper selects the accepted nonempty vehicle with the highest confidence, retaining the first on ties.
+Without `MappingOptions.guideFrame`, the mapper selects the accepted nonempty vehicle with the highest confidence,
+retaining the first on ties. `guideFrame` is the capture guide frame as a `ModelBox` in the same image space; it must
+have a positive area (`left < right`, `top < bottom`), otherwise the mapper throws `RangeError`. With `guideFrame`,
+only vehicles whose **box** (not mask) intersects the frame with a positive area are candidates. The mapper selects
+the candidate with the largest intersection area, rounded half up to 6 decimal places like zone scores, then the
+highest confidence, then the first in `detections` order. If no vehicle intersects the frame, no vehicle is selected.
 Only that vehicle's `upright` assessment is used. A returned vehicle `evidence.bbox` is a fresh normalized
 `[left, top, right, bottom]` array.
 

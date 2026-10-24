@@ -381,11 +381,17 @@ describe('mapModelOutput', () => {
     expect(() => mapModelOutput(boxesScene([[1, 0, 0, 1]]))).toThrow(
       RangeError
     );
+    expect(() =>
+      // eslint-disable-next-line no-sparse-arrays
+      mapModelOutput(boxesScene([[, 0, 1, 1] as unknown as ModelBox]))
+    ).toThrow(RangeError);
     for (const mask of [
       { width: 0, height: 1, data: [] },
       { width: 1.5, height: 2, data: [1, 1, 1] },
       { width: 2, height: 2, data: [1] },
       { width: 1, height: 1, data: [0.5] },
+      // eslint-disable-next-line no-sparse-arrays
+      { width: 2, height: 1, data: [1, ,] },
     ]) {
       expect(() =>
         mapModelOutput({
@@ -443,5 +449,128 @@ describe('mapModelOutput', () => {
         expect(confidence).toBeLessThanOrEqual(1);
       }
     }
+  });
+});
+
+describe('mapModelOutput guideFrame', () => {
+  const guideFrame: ModelBox = [0.25, 0.25, 0.75, 0.75];
+
+  function vehicle(
+    box: ModelBox,
+    confidence: number,
+    uprightScore: number
+  ): ModelDetection {
+    return {
+      classId: 'vehicle',
+      confidence,
+      box,
+      upright: { score: uprightScore, confidence: 1 },
+    };
+  }
+
+  function selected(output: RawModelOutput, options: MappingOptions) {
+    const results = mapModelOutput(output, options);
+    return {
+      bbox: results.find(({ id }) => id === 'VEHICLE_DETECTED')?.evidence?.bbox,
+      upright: results.find(({ id }) => id === 'UPRIGHT')?.score,
+      vehicle: results.find(({ id }) => id === 'VEHICLE_DETECTED')?.verdict,
+    };
+  }
+
+  it('selects the in-frame vehicle over a higher-confidence vehicle outside the frame', () => {
+    const outside = vehicle([0, 0, 0.2, 0.2], 0.99, 0);
+    const inside = vehicle([0.3, 0.3, 0.7, 0.7], 0.6, 1);
+    const output: RawModelOutput = {
+      detections: [
+        outside,
+        inside,
+        { classId: 'crosswalk', confidence: 1, box: [0, 0, 0.2, 0.2] },
+      ],
+    };
+    expect(selected(output, {}).bbox).toEqual([0, 0, 0.2, 0.2]);
+    expect(selected(output, { guideFrame })).toEqual({
+      bbox: [0.3, 0.3, 0.7, 0.7],
+      upright: 1,
+      vehicle: 'WARN',
+    });
+    expect(rule(output, 'CROSSWALK', { guideFrame }).score).toBe(1);
+  });
+
+  it('prefers the larger frame intersection, then higher confidence, then input order', () => {
+    const small = vehicle([0.25, 0.25, 0.35, 0.35], 1, 0);
+    const large = vehicle([0.2, 0.2, 0.6, 0.6], 0.6, 1);
+    expect(
+      selected({ detections: [small, large] }, { guideFrame }).upright
+    ).toBe(1);
+
+    const lowConfidence = vehicle([0.3, 0.3, 0.5, 0.5], 0.6, 0);
+    const highConfidence = vehicle([0.5, 0.5, 0.7, 0.7], 0.9, 1);
+    expect(
+      selected({ detections: [lowConfidence, highConfidence] }, { guideFrame })
+        .upright
+    ).toBe(1);
+
+    const first = vehicle([0.3, 0.3, 0.5, 0.5], 0.8, 0);
+    const second = vehicle([0.5, 0.5, 0.7, 0.7], 0.8, 1);
+    expect(
+      selected({ detections: [first, second] }, { guideFrame }).upright
+    ).toBe(0);
+  });
+
+  it('treats intersections equal to 6 decimal places as ties', () => {
+    const first = vehicle([0.3, 0.3, 0.5, 0.5], 0.9, 0);
+    const second = vehicle([0.5, 0.5, 0.7000000001, 0.7], 0.6, 1);
+    expect(
+      selected({ detections: [first, second] }, { guideFrame }).upright
+    ).toBe(0);
+  });
+
+  it('selects no vehicle when every vehicle is outside or only touches the frame', () => {
+    const output: RawModelOutput = {
+      detections: [
+        vehicle([0, 0, 0.25, 0.25], 1, 1),
+        vehicle([0.75, 0.3, 1, 0.6], 1, 1),
+        { classId: 'parking_zone', confidence: 1, box: [0, 0, 1, 1] },
+      ],
+    };
+    const results = mapModelOutput(output, { guideFrame });
+    expect(results.find(({ id }) => id === 'VEHICLE_DETECTED')).toEqual({
+      id: 'VEHICLE_DETECTED',
+      verdict: 'FAIL',
+      score: 0,
+      confidence: 0,
+    });
+    expect(results.find(({ id }) => id === 'PARKING_ZONE')).toEqual({
+      id: 'PARKING_ZONE',
+      verdict: 'WARN',
+      score: 0,
+      confidence: 0,
+    });
+  });
+
+  it('rejects an invalid guide frame', () => {
+    for (const frame of [
+      [0, 0, 1.5, 1],
+      [-0.1, 0, 1, 1],
+      [0, 0, Number.NaN, 1],
+      [0.5, 0, 0.4, 1],
+      [0.5, 0, 0.5, 1],
+      [0, 0.5, 1, 0.5],
+      [0, 0, 1],
+      // eslint-disable-next-line no-sparse-arrays
+      [, 0, 1, 1],
+    ]) {
+      expect(() =>
+        mapModelOutput(compliantScene, {
+          guideFrame: frame as unknown as ModelBox,
+        })
+      ).toThrow(RangeError);
+    }
+  });
+
+  it('does not change selection when guideFrame is undefined', () => {
+    expect(mapModelOutput(compliantScene, { guideFrame: undefined })).toEqual(
+      mapModelOutput(compliantScene)
+    );
   });
 });
