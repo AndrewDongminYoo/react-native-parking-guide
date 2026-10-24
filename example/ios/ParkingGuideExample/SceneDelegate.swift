@@ -31,19 +31,33 @@ class SceneDelegate: RCTDefaultReactNativeFactoryDelegate, UIWindowSceneDelegate
     
     reactNativeFactory?.startReactNative(
       withModuleName: "ParkingGuideExample",
-      in: window,
-      connectionOptions: connectionOptions
+      in: window
     )
 
-   
+    for urlContext in connectionOptions.urlContexts {
+      RCTLinkingManager.application(UIApplication.shared, open: urlContext.url, options: [:])
+    }
+    for userActivity in connectionOptions.userActivities {
+      RCTLinkingManager.application(
+        UIApplication.shared,
+        continue: userActivity,
+        restorationHandler: { _ in }
+      )
+    }
   }
 
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-    RCTLinkingManager.scene(scene, openURLContexts: URLContexts)
+    for urlContext in URLContexts {
+      RCTLinkingManager.application(UIApplication.shared, open: urlContext.url, options: [:])
+    }
   }
 
   func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-    RCTLinkingManager.scene(scene, continue: userActivity)
+    RCTLinkingManager.application(
+      UIApplication.shared,
+      continue: userActivity,
+      restorationHandler: { _ in }
+    )
   }
 
   override func bundleURL() -> URL? {
