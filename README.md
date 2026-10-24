@@ -33,7 +33,7 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 | --- | --- | --- |
 | 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), and `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`) | Producing model-based issues from camera frames (requires on-device inference); use of `VehicleType` by any API |
 | 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection inside `MappingOptions.guideFrame`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A model and on-device inference (CoreML on iOS, TFLite on Android); `GEOFENCE` evaluation |
-| 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput` | Rider-facing feedback for each failed rule; photo capture into `VerificationResult` |
+| 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`) | A result screen in the example app; photo capture into `VerificationResult` |
 
 `getModelVersion()` is a native stub that returns `"0.1.0-dev"`.
 
@@ -51,7 +51,7 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 - **v0.5**: a vehicle and prohibited-zone model with on-device inference, model-based capture guidance from camera
   frames (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), prohibited-zone rules (tactile paving, crosswalk, roadway, sidewalk block,
   parking zone), and geofence integration.
-- **v1.0**: photo capture into `VerificationResult`, rider-facing feedback for each failed rule, attestation support,
+- **v1.0**: photo capture into `VerificationResult`, a rider-facing result screen in the example app, attestation support,
   and opt-in upload and server-side verification integration.
 
 ## Installation
@@ -110,6 +110,9 @@ and Android image-quality frame analysis.
 - `mapGuidanceIssues(output: RawModelOutput, options?: GuidanceMappingOptions): GuidanceIssue[]` converts one frame's
   model output into model-based capture guidance issues. See [Model-based capture guidance](#model-based-capture-guidance).
 - `DEFAULT_GUIDANCE_THRESHOLDS` contains the immutable guidance thresholds listed below.
+- `getParkingFeedback(input: FeedbackInput, options?: FeedbackOptions): ParkingFeedback[]` converts rule results and
+  guidance issues into ordered rider-facing feedback entries. See [Rider feedback](#rider-feedback).
+- `DEFAULT_FEEDBACK_TEXT` contains the immutable default English text for every feedback key listed below.
 
 ### Model-output mapping
 
@@ -233,6 +236,80 @@ default. `tooFarBelow` and `tooCloseAbove` must be
 finite with `0 <= tooFarBelow <= tooCloseAbove`; `groundMarginBelow` must be finite and in [0, 1]. Otherwise
 `mapGuidanceIssues` throws `RangeError`. Ground visibility is geometric: the model taxonomy has no ground class.
 Native frame analysis does not call `mapGuidanceIssues` yet, because on-device inference is not implemented.
+
+### Rider feedback
+
+`getParkingFeedback` is pure and deterministic and does not mutate its input. `FeedbackInput` has
+`rules: readonly RuleResult[]` and optional `issues: readonly GuidanceIssue[]`; a `VerificationResult` is a valid input.
+
+Rule entries have the shape `{ kind: 'rule', key: 'rule.<RuleId>.<FAIL|WARN|UNCHECKED>', ruleId, verdict, text }`.
+
+1. A rule result whose `id` is not a `RuleId` is omitted.
+2. When `FeedbackOptions.policy` is set, a rule result that `evaluatePolicy` ignores (no entry in `policy.rules`, or
+   `enabled: false`) is omitted.
+3. The effective verdict is the result's `verdict` if it is `FAIL` or `WARN`. When `FeedbackOptions.policy` is set and
+   the result alone makes `evaluatePolicy` return `FAIL` (its rule has `severity: 'FAIL'` and the result's verdict is
+   `FAIL` or its score is strictly less than `failBelow`), the effective verdict is `FAIL`, even for a `PASS` result.
+   A result without an effective verdict is omitted.
+4. The key suffix depends only on the result's own `verdict`, so policy escalation never makes the text more certain
+   than the result: `FAIL` gives `FAIL`; `WARN` with `confidence` `0` gives `UNCHECKED`, which `mapModelOutput` emits
+   when it could not evaluate the rule; any other `WARN` or an escalated `PASS` gives `WARN`. Exception: a
+   `VEHICLE_DETECTED` `FAIL` with `evidence.bbox` gives `WARN`, because `mapModelOutput` sets `evidence.bbox` only when it
+   located a vehicle, and then `FAIL` means that the detection confidence is below the `VEHICLE_DETECTED` threshold.
+5. Each `RuleId` produces at most one entry. Among its results, an effective verdict of `FAIL` is preferred over `WARN`;
+   with the same effective verdict, the suffix `FAIL` is preferred over `WARN` and `WARN` over `UNCHECKED`; the first
+   result is preferred over later equal results.
+6. If a non-omitted `VEHICLE_DETECTED` result has its own `verdict` `FAIL` and no `evidence.bbox`, entries for
+   `UPRIGHT`, `TACTILE_PAVING`, `CROSSWALK`, `ROADWAY`, `SIDEWALK_BLOCK`, and `PARKING_ZONE` are omitted, because they
+   describe a vehicle that was not found. A `VEHICLE_DETECTED` result that is `FAIL` only through policy escalation, or
+   that has `evidence.bbox`, does not omit them.
+
+Each distinct `GuidanceIssue` in `issues` produces `{ kind: 'guidance', key: 'guidance.<GuidanceIssue>', issue, text }`.
+Guidance issues are not filtered by the policy. Values outside `GuidanceIssue` are omitted.
+
+Order: rule entries with effective verdict `FAIL`, then rule entries with effective verdict `WARN`, each in `RuleId`
+declaration order (`VEHICLE_DETECTED`, `UPRIGHT`, `TACTILE_PAVING`, `CROSSWALK`, `ROADWAY`, `SIDEWALK_BLOCK`,
+`PARKING_ZONE`, `GEOFENCE`, `IMAGE_QUALITY`), then guidance entries in `GuidanceIssue` declaration order (`NO_VEHICLE`,
+`TOO_CLOSE`, `TOO_FAR`, `TILTED`, `BLURRY`, `LOW_LIGHT`, `GROUND_NOT_VISIBLE`).
+
+`text` is the default English text from `DEFAULT_FEEDBACK_TEXT`. Keys are stable; localize by `key` in the host app.
+
+| Key | Default English text |
+| --- | --- |
+| `rule.VEHICLE_DETECTED.FAIL` | No vehicle found in the photo. Retake it with the whole vehicle in the frame. |
+| `rule.VEHICLE_DETECTED.WARN` | The vehicle is hard to recognize. Retake the photo with the whole vehicle in the frame. |
+| `rule.VEHICLE_DETECTED.UNCHECKED` | Could not check for a vehicle. Retake the photo with the whole vehicle in the frame. |
+| `rule.UPRIGHT.FAIL` | The vehicle has fallen over. Stand it upright on its kickstand. |
+| `rule.UPRIGHT.WARN` | The vehicle may not be upright. Make sure it stands on its kickstand. |
+| `rule.UPRIGHT.UNCHECKED` | Could not check whether the vehicle is upright. Retake the photo with the whole vehicle in the frame. |
+| `rule.TACTILE_PAVING.FAIL` | The vehicle is on tactile paving for visually impaired pedestrians. Move it off the paving. |
+| `rule.TACTILE_PAVING.WARN` | The vehicle may be on tactile paving. Make sure it is clear of the paving. |
+| `rule.TACTILE_PAVING.UNCHECKED` | Could not check for tactile paving. Retake the photo with the ground around the vehicle in the frame. |
+| `rule.CROSSWALK.FAIL` | The vehicle is on a crosswalk. Move it off the crosswalk. |
+| `rule.CROSSWALK.WARN` | The vehicle may be on a crosswalk. Make sure it is clear of the crosswalk. |
+| `rule.CROSSWALK.UNCHECKED` | Could not check for a crosswalk. Retake the photo with the ground around the vehicle in the frame. |
+| `rule.ROADWAY.FAIL` | The vehicle is on the road. Move it off the road. |
+| `rule.ROADWAY.WARN` | The vehicle may be on the road. Make sure it is off the road. |
+| `rule.ROADWAY.UNCHECKED` | Could not check whether the vehicle is on the road. Retake the photo with the ground around the vehicle in the frame. |
+| `rule.SIDEWALK_BLOCK.FAIL` | The vehicle blocks the sidewalk. Move it to the edge so people can pass. |
+| `rule.SIDEWALK_BLOCK.WARN` | The vehicle may block the sidewalk. Make sure people can pass. |
+| `rule.SIDEWALK_BLOCK.UNCHECKED` | Could not check whether the vehicle blocks the sidewalk. Retake the photo with the ground around the vehicle in the frame. |
+| `rule.PARKING_ZONE.FAIL` | The vehicle is outside the parking zone. Move it inside the marked zone. |
+| `rule.PARKING_ZONE.WARN` | The vehicle may be outside the parking zone. Make sure it is fully inside the marked zone. |
+| `rule.PARKING_ZONE.UNCHECKED` | Could not check the parking zone. Retake the photo with the ground around the vehicle in the frame. |
+| `rule.GEOFENCE.FAIL` | Parking is not allowed here. Move the vehicle to an allowed parking area. |
+| `rule.GEOFENCE.WARN` | Parking may not be allowed here. Check the map for allowed parking areas. |
+| `rule.GEOFENCE.UNCHECKED` | Could not check the parking location. Make sure location access is on and try again. |
+| `rule.IMAGE_QUALITY.FAIL` | The photo is too unclear to check. Retake it in better light and hold the phone steady. |
+| `rule.IMAGE_QUALITY.WARN` | The photo may be too unclear to check. Retake it in better light and hold the phone steady. |
+| `rule.IMAGE_QUALITY.UNCHECKED` | Could not check the photo quality. Retake the photo. |
+| `guidance.NO_VEHICLE` | Point the camera at the vehicle. |
+| `guidance.TOO_CLOSE` | Move back so the whole vehicle fits in the frame. |
+| `guidance.TOO_FAR` | Move closer to the vehicle. |
+| `guidance.TILTED` | Hold the phone upright and straight. |
+| `guidance.BLURRY` | Hold the phone steady. |
+| `guidance.LOW_LIGHT` | It is too dark. Move to a brighter spot. |
+| `guidance.GROUND_NOT_VISIBLE` | Show the ground under the vehicle in the frame. |
 
 ### Capture guidance
 
@@ -389,6 +466,7 @@ stated.
 | `RulePolicy` | Required `enabled: boolean`; optional `weight: number`, `severity: Verdict`, and `failBelow: number`. An omitted `weight` defaults to `1` in `evaluatePolicy`. |
 | `ParkingPolicy` | Required `version: number`, `rules: Partial<Record<RuleId, RulePolicy>>`, and `passThreshold: number`. `evaluatePolicy` does not validate ranges; `validatePolicy` checks them as listed in [Runtime exports](#runtime-exports). |
 | `PolicyValidationResult` | `ParkingPolicy \| string[]`. A `string[]` contains one message per validation error. |
+| `FeedbackInput`, `FeedbackKey`, `FeedbackOptions`, `FeedbackVerdict`, `GuidanceFeedbackKey`, `ParkingFeedback`, `RuleFeedbackKey`, `RuleFeedbackStatus` | Rider feedback types. See [Rider feedback](#rider-feedback). |
 | `GuidanceMappingOptions`, `GuidanceThresholds` | Model-based capture guidance types. See [Model-based capture guidance](#model-based-capture-guidance). |
 | `InferenceRuleId`, `MappingOptions`, `MappingThresholds`, `ModelAssessment`, `ModelBox`, `ModelClass`, `ModelDetection`, `ModelMask`, `RawModelOutput` | Model-output mapping types. See [Model-output mapping](#model-output-mapping). |
 | `VerificationResult` | Required `verdict: Verdict`, `score: number`, `rules: RuleResult[]`, `photo: { uri: string; width: number; height: number; sha256: string }`, and `metadata: { capturedAt: string; location?: { lat: number; lng: number; accuracy: number }; heading?: number; deviceTilt: { pitch: number; roll: number }; modelVersion: string; platform: 'ios' \| 'android'; attestation?: string }`. The type defines no additional numeric ranges or defaults. |

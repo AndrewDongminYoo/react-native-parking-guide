@@ -41,7 +41,8 @@ Pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, iO
    Native analysis produces only `BLURRY`, `LOW_LIGHT`, and `TILTED`. `mapGuidanceIssues` maps `RawModelOutput` to
    `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, and `GROUND_NOT_VISIBLE`, but no frame processor calls it yet.
 2. On-device inference (CoreML on iOS, TFLite on Android) → `RawModelOutput` → `mapModelOutput` → per-rule `RuleResult[]`.
-3. Pure TypeScript JSON-policy rule engine (`evaluatePolicy`) → final `Verdict` and score.
+3. Pure TypeScript JSON-policy rule engine (`evaluatePolicy`) → final `Verdict` and score; `getParkingFeedback` →
+   rider-facing feedback keys and default English text.
 
 ## Setup and commands
 
@@ -72,6 +73,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `src/policy/evaluate.ts` | `evaluatePolicy(ruleResults, policy)` — pure, platform-independent. |
 | `src/guidance/` | Pure frame-result reduction and `useParkingGuidance`; frame results must be delivered on the JS thread. |
 | `src/inference/mapping.ts` | `mapModelOutput(output, options)` — pure conversion of `RawModelOutput` to `RuleResult[]`; no model execution. |
+| `src/feedback/feedback.ts` | `getParkingFeedback(input, options)` — stable rider-facing feedback keys and default English text. |
 | `src/inference/guidance.ts` | `mapGuidanceIssues(output, options)` — pure conversion of `RawModelOutput` to model-based `GuidanceIssue[]`. |
 | `src/guidance/frameAnalyzer.ts` | Optional VisionCamera analyzer factory and shared native initialization thresholds. |
 | `ios/ParkingGuideFrameProcessor.mm`, `cpp/CaptureMetrics.h` | iOS image-quality plugin and portable native metrics. |
