@@ -72,7 +72,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `src/policy/defaultPolicy.ts` | Default `ParkingPolicy` (weights, severities, `failBelow`, `passThreshold`). |
 | `src/policy/evaluate.ts` | `evaluatePolicy(ruleResults, policy)` — pure, platform-independent. |
 | `src/guidance/` | Pure frame-result reduction and `useParkingGuidance`; frame results must be delivered on the JS thread. |
-| `src/inference/mapping.ts` | `mapModelOutput(output, options)` — pure conversion of `RawModelOutput` to `RuleResult[]`; no model execution. |
+| `src/inference/mapping.ts` | `mapModelOutput(output, options)` — pure conversion of `RawModelOutput` to `RuleResult[]`, including the `evidence.proximity` flag; no model execution. |
 | `src/feedback/feedback.ts` | `getParkingFeedback(input, options)` — stable rider-facing feedback keys and default English text. |
 | `src/inference/guidance.ts` | `mapGuidanceIssues(output, options)` — pure conversion of `RawModelOutput` to model-based `GuidanceIssue[]`. |
 | `src/guidance/frameAnalyzer.ts` | Optional VisionCamera analyzer factory and shared native initialization thresholds. |

@@ -7,6 +7,7 @@ import {
 } from '../__fixtures__/modelOutputs';
 import {
   DEFAULT_MAPPING_THRESHOLDS,
+  DEFAULT_PROXIMITY_THRESHOLD,
   mapModelOutput,
 } from '../inference/mapping';
 import type {
@@ -572,5 +573,136 @@ describe('mapModelOutput guideFrame', () => {
     expect(mapModelOutput(compliantScene, { guideFrame: undefined })).toEqual(
       mapModelOutput(compliantScene)
     );
+  });
+});
+
+describe('zone proximity', () => {
+  // Vehicle box 0.2 wide and 0.4 tall, so distances are gaps divided by 0.4.
+  const vehicleBox: ModelBox = [0.4, 0.3, 0.6, 0.7];
+
+  function scene(
+    zones: readonly ModelDetection[],
+    vehicle: Partial<ModelDetection> = {}
+  ): RawModelOutput {
+    return {
+      detections: [
+        { classId: 'vehicle', confidence: 0.9, box: vehicleBox, ...vehicle },
+        ...zones,
+      ],
+    };
+  }
+
+  function zone(
+    classId: ModelDetection['classId'],
+    box: ModelBox,
+    confidence = 0.9
+  ): ModelDetection {
+    return { classId, confidence, box };
+  }
+
+  it('defaults the threshold to one vehicle box longer side', () => {
+    expect(DEFAULT_PROXIMITY_THRESHOLD).toBe(1);
+  });
+
+  it('reports the normalized gap to the nearest zone without changing the result', () => {
+    // Horizontal gap 0.1 to the nearer crosswalk: 0.1 / 0.4 = 0.25.
+    const output = scene([
+      zone('crosswalk', [0.7, 0.3, 0.9, 0.7]),
+      zone('crosswalk', [0, 0, 0.1, 0.1]),
+    ]);
+    const crosswalk = rule(output, 'CROSSWALK');
+    expect(crosswalk).toEqual({
+      id: 'CROSSWALK',
+      verdict: 'PASS',
+      score: 1,
+      confidence: 0.9,
+      evidence: { proximity: { distance: 0.25, near: true } },
+    });
+  });
+
+  it('uses the Euclidean gap between box corners', () => {
+    // Gap (0.12, 0.16) to the corner: hypot = 0.2; 0.2 / 0.4 = 0.5.
+    const output = scene([zone('tactile_paving', [0.72, 0.86, 0.9, 0.95])]);
+    expect(rule(output, 'TACTILE_PAVING').evidence).toEqual({
+      proximity: { distance: 0.5, near: true },
+    });
+  });
+
+  it('reports distance 0 when the vehicle touches or overlaps the zone', () => {
+    const touching = scene([zone('crosswalk', [0.6, 0.3, 0.8, 0.7])]);
+    expect(rule(touching, 'CROSSWALK').evidence).toEqual({
+      proximity: { distance: 0, near: true },
+    });
+    const overlapping = scene([zone('crosswalk', [0, 0, 1, 1])]);
+    const result = rule(overlapping, 'CROSSWALK');
+    expect(result).toMatchObject({ verdict: 'FAIL', score: 0 });
+    expect(result.evidence).toEqual({ proximity: { distance: 0, near: true } });
+  });
+
+  it('flags a zone exactly at the threshold and not one just beyond it', () => {
+    // Gap 0.2 -> 0.5; gap 0.2004 -> 0.501.
+    const at = scene([zone('crosswalk', [0.8, 0.3, 0.9, 0.7])]);
+    const beyond = scene([zone('crosswalk', [0.8004, 0.3, 0.9, 0.7])]);
+    const options: MappingOptions = { proximityThreshold: 0.5 };
+    expect(rule(at, 'CROSSWALK', options).evidence).toEqual({
+      proximity: { distance: 0.5, near: true },
+    });
+    expect(rule(beyond, 'CROSSWALK', options)).toEqual({
+      ...rule(beyond, 'CROSSWALK'),
+      evidence: { proximity: { distance: 0.501, near: false } },
+    });
+  });
+
+  it('flags a zone beyond the default threshold as not near', () => {
+    // Corner gap (0.36, 0.27): hypot = 0.45; 0.45 / 0.4 = 1.125.
+    const output = scene([zone('crosswalk', [0, 0, 0.04, 0.03])]);
+    expect(rule(output, 'CROSSWALK').evidence).toEqual({
+      proximity: { distance: 1.125, near: false },
+    });
+  });
+
+  it('measures boxes even when masks exist', () => {
+    const output = scene(
+      [
+        {
+          ...zone('crosswalk', [0, 0, 1, 1]),
+          mask: { width: 2, height: 2, data: [1, 0, 0, 0] },
+        },
+      ],
+      { mask: { width: 2, height: 2, data: [0, 0, 0, 1] } }
+    );
+    const result = rule(output, 'CROSSWALK');
+    expect(result.score).toBe(1);
+    expect(result.evidence).toEqual({ proximity: { distance: 0, near: true } });
+  });
+
+  it('omits proximity without a vehicle, without accepted zones, and for other rules', () => {
+    const noVehicle: RawModelOutput = {
+      detections: [zone('crosswalk', [0, 0, 1, 1])],
+    };
+    expect(rule(noVehicle, 'CROSSWALK').evidence).toBeUndefined();
+    const lowConfidence = scene([zone('crosswalk', [0.7, 0.3, 0.9, 0.7], 0.4)]);
+    expect(rule(lowConfidence, 'CROSSWALK').evidence).toBeUndefined();
+    const others = scene([
+      zone('roadway', [0.7, 0.3, 0.9, 0.7]),
+      zone('sidewalk_block', [0.7, 0.3, 0.9, 0.7]),
+      zone('parking_zone', [0.7, 0.3, 0.9, 0.7]),
+    ]);
+    for (const id of ['ROADWAY', 'SIDEWALK_BLOCK', 'PARKING_ZONE'] as const) {
+      expect(rule(others, id).evidence).toBeUndefined();
+    }
+    expect(rule(others, 'TACTILE_PAVING').evidence).toBeUndefined();
+  });
+
+  it('rejects an invalid proximity threshold', () => {
+    const output = scene([]);
+    for (const proximityThreshold of [-0.1, Number.NaN, Infinity]) {
+      expect(() => mapModelOutput(output, { proximityThreshold })).toThrow(
+        RangeError
+      );
+    }
+    expect(() =>
+      mapModelOutput(output, { proximityThreshold: 2.5 })
+    ).not.toThrow();
   });
 });

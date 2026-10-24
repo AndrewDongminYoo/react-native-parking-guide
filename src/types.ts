@@ -39,6 +39,16 @@ export interface GuidanceState {
   progress: number;
 }
 
+/**
+ * Image-space nearness of the selected vehicle to the nearest accepted zone instance of a rule's class.
+ * `distance` is the gap between the two boxes divided by the longer side of the vehicle box (`0` when they touch or
+ * overlap); `near` is `distance <= MappingOptions.proximityThreshold`. It does not affect the rule score or verdict.
+ */
+export interface ZoneProximity {
+  distance: number;
+  near: boolean;
+}
+
 export interface RuleResult {
   id: RuleId;
   verdict: Verdict;
@@ -48,6 +58,8 @@ export interface RuleResult {
   evidence?: {
     bbox?: number[];
     maskUri?: string;
+    /** Set by `mapModelOutput` for `TACTILE_PAVING` and `CROSSWALK` only. */
+    proximity?: ZoneProximity;
   };
 }
 
