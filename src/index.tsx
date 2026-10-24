@@ -2,6 +2,8 @@ import ParkingGuide from './NativeParkingGuide';
 
 export { defaultPolicy } from './policy/defaultPolicy';
 export { evaluatePolicy } from './policy/evaluate';
+export { validatePolicy } from './policy/validate';
+export type { PolicyValidationResult } from './policy/validate';
 export type {
   GuidanceIssue,
   GuidanceState,
