@@ -40,7 +40,8 @@ Pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, iO
 1. Realtime capture guidance via a `react-native-vision-camera` frame processor → `GuidanceState` / `GuidanceIssue`.
    Native analysis produces only `BLURRY`, `LOW_LIGHT`, and `TILTED`. `mapGuidanceIssues` maps `RawModelOutput` to
    `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, and `GROUND_NOT_VISIBLE`, but no frame processor calls it yet.
-2. On-device inference (CoreML on iOS, TFLite on Android) → `RawModelOutput` → `mapModelOutput` → per-rule `RuleResult[]`.
+2. On-device inference (CoreML on iOS, TFLite on Android) → `RawModelOutput` → `mapModelOutput` → per-rule `RuleResult[]`;
+   `evaluateGeofence` adds the `GEOFENCE` result from a caller-supplied location and zones.
 3. Pure TypeScript JSON-policy rule engine (`evaluatePolicy`) → final `Verdict` and score; `getParkingFeedback` →
    rider-facing feedback keys and default English text.
 
@@ -74,6 +75,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `src/guidance/` | Pure frame-result reduction and `useParkingGuidance`; frame results must be delivered on the JS thread. |
 | `src/inference/mapping.ts` | `mapModelOutput(output, options)` — pure conversion of `RawModelOutput` to `RuleResult[]`, including the `evidence.proximity` flag; no model execution. |
 | `src/feedback/feedback.ts` | `getParkingFeedback(input, options)` — stable rider-facing feedback keys and default English text. |
+| `src/geofence/geofence.ts` | `evaluateGeofence(location, zones)` — pure `GEOFENCE` `RuleResult` from a caller-supplied location and zones. |
 | `src/inference/guidance.ts` | `mapGuidanceIssues(output, options)` — pure conversion of `RawModelOutput` to model-based `GuidanceIssue[]`. |
 | `src/guidance/frameAnalyzer.ts` | Optional VisionCamera analyzer factory and shared native initialization thresholds. |
 | `ios/ParkingGuideFrameProcessor.mm`, `cpp/CaptureMetrics.h` | iOS image-quality plugin and portable native metrics. |

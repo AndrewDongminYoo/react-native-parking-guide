@@ -48,6 +48,17 @@ export type {
   ModelMask,
   RawModelOutput,
 } from './inference/mapping';
+export {
+  DEFAULT_MAX_GEOFENCE_ACCURACY,
+  evaluateGeofence,
+} from './geofence/geofence';
+export type {
+  GeoLocation,
+  GeoPoint,
+  GeofenceOptions,
+  GeofenceZone,
+  GeofenceZoneKind,
+} from './geofence/geofence';
 export { defaultPolicy } from './policy/defaultPolicy';
 export { evaluatePolicy } from './policy/evaluate';
 export { validatePolicy } from './policy/validate';

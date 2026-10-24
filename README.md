@@ -32,7 +32,7 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 | Goal step | Implemented | Not implemented |
 | --- | --- | --- |
 | 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), and `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`) | Producing model-based issues from camera frames (requires on-device inference); use of `VehicleType` by any API |
-| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection inside `MappingOptions.guideFrame` and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A model and on-device inference (CoreML on iOS, TFLite on Android); `GEOFENCE` evaluation |
+| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection inside `MappingOptions.guideFrame` and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A model and on-device inference (CoreML on iOS, TFLite on Android); reading device location or fetching zone data |
 | 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`) | A result screen in the example app; photo capture into `VerificationResult` |
 
 `getModelVersion()` is a native stub that returns `"0.1.0-dev"`.
@@ -111,6 +111,9 @@ and Android image-quality frame analysis.
 - `mapGuidanceIssues(output: RawModelOutput, options?: GuidanceMappingOptions): GuidanceIssue[]` converts one frame's
   model output into model-based capture guidance issues. See [Model-based capture guidance](#model-based-capture-guidance).
 - `DEFAULT_GUIDANCE_THRESHOLDS` contains the immutable guidance thresholds listed below.
+- `evaluateGeofence(location: GeoLocation | undefined, zones: readonly GeofenceZone[], options?: GeofenceOptions): RuleResult`
+  returns the `GEOFENCE` result for a caller-supplied location and zones. See [Geofence](#geofence).
+- `DEFAULT_MAX_GEOFENCE_ACCURACY` (`50`) is the default `GeofenceOptions.maxAccuracy` in meters.
 - `getParkingFeedback(input: FeedbackInput, options?: FeedbackOptions): ParkingFeedback[]` converts rule results and
   guidance issues into ordered rider-facing feedback entries. See [Rider feedback](#rider-feedback).
 - `DEFAULT_FEEDBACK_TEXT` contains the immutable default English text for every feedback key listed below.
@@ -223,6 +226,48 @@ const rules = mapModelOutput(output, {
 const result = evaluatePolicy(rules, defaultPolicy);
 ```
 
+### Geofence
+
+`evaluateGeofence(location, zones)` is pure and deterministic, does not mutate its input, and never reads device
+location or fetches zone data; the caller supplies both. It returns one `RuleResult` with `id: 'GEOFENCE'`.
+
+- `GeoPoint` has WGS 84 `lat` in `[-90, 90]` and `lng` in `[-180, 180]`, in degrees. `GeoLocation` adds `accuracy`,
+  the horizontal accuracy radius in meters (finite and `>= 0`), so `VerificationResult.metadata.location` is a valid
+  `GeoLocation`.
+- `GeofenceZone` has `kind: 'allowed' | 'prohibited'` and `polygon: readonly GeoPoint[]` with at least 3 vertices.
+  The ring closes implicitly (repeating the first vertex is allowed), and inside is decided by the even-odd rule.
+- `GeofenceOptions.maxAccuracy` defaults to `DEFAULT_MAX_GEOFENCE_ACCURACY` (`50` m). It must not be `NaN` and must
+  be `>= 0`; `Infinity` disables the limit.
+- Invalid coordinates, accuracy, `maxAccuracy`, zone kinds, and polygons that are not arrays, have fewer than
+  3 vertices, or contain a hole or a non-object vertex throw `RangeError`. Zones are validated even when `location` is
+  `undefined`.
+
+Each zone is classified relative to the location. The function projects the vertices onto a plane tangent at the
+location (mean Earth radius `6371008.8` m) and computes the shortest distance from the location to the polygon
+boundary. Longitudes are unwrapped along each ring, so a zone may cross the antimeridian, and each ring is placed at the
+360° copy nearest the location, so a zone on the opposite side of the Earth stays far away. Edges are straight lines in
+that projection, which is accurate for zones up to a few kilometers across that are near the location.
+
+- `uncertain`: the boundary distance is less than or equal to `accuracy`.
+- `inside` or `outside`: otherwise, by the even-odd rule.
+
+The result is the first match in this list:
+
+1. `location` is `undefined`, or `location.accuracy` is greater than `maxAccuracy`: `WARN` with `score: 0` and
+   `confidence: 0` (unchecked, like an unevaluated mapper rule). A coarse fix, such as a reduced-precision location
+   when the rider has turned off precise location, therefore cannot make every nearby boundary uncertain.
+2. Any `prohibited` zone is `inside`, or at least one `allowed` zone exists and every `allowed` zone is `outside`:
+   `FAIL` with `score: 0` and `confidence: 1`.
+3. Any `prohibited` zone is `uncertain`, or at least one `allowed` zone exists and no `allowed` zone is `inside`:
+   `WARN` with `score: 0.5` and `confidence: 1`.
+4. Otherwise, including when `zones` is empty: `PASS` with `score: 1` and `confidence: 1`.
+
+`defaultPolicy.rules.GEOFENCE` has `severity: 'FAIL'` and `failBelow: 0.5`, so rules 1 and 2 hard-fail
+`evaluatePolicy`, and rule 3 (a boundary lies within an accuracy of at most `maxAccuracy`) does not: the rider cannot
+correct GPS error at a zone boundary. A rule 3 `WARN` lowers the weighted score by at most `0.5 × 1 / 9` (about `0.056`)
+with every other `defaultPolicy` rule passing, so the overall verdict can still be `PASS`; `getParkingFeedback` still
+returns `rule.GEOFENCE.WARN`. To skip the geofence check, do not pass a `GEOFENCE` result to `evaluatePolicy`.
+
 ### Model-based capture guidance
 
 `mapGuidanceIssues` is pure and deterministic: it does not execute a model, read the camera, or mutate its input.
@@ -317,7 +362,7 @@ declaration order (`VEHICLE_DETECTED`, `UPRIGHT`, `TACTILE_PAVING`, `CROSSWALK`,
 | `rule.PARKING_ZONE.UNCHECKED` | Could not check the parking zone. Retake the photo with the ground around the vehicle in the frame. |
 | `rule.GEOFENCE.FAIL` | Parking is not allowed here. Move the vehicle to an allowed parking area. |
 | `rule.GEOFENCE.WARN` | Parking may not be allowed here. Check the map for allowed parking areas. |
-| `rule.GEOFENCE.UNCHECKED` | Could not check the parking location. Make sure location access is on and try again. |
+| `rule.GEOFENCE.UNCHECKED` | Could not check the parking location. Turn on precise location access and try again. |
 | `rule.IMAGE_QUALITY.FAIL` | The photo is too unclear to check. Retake it in better light and hold the phone steady. |
 | `rule.IMAGE_QUALITY.WARN` | The photo may be too unclear to check. Retake it in better light and hold the phone steady. |
 | `rule.IMAGE_QUALITY.UNCHECKED` | Could not check the photo quality. Retake the photo. |
@@ -487,6 +532,7 @@ stated.
 | `PolicyValidationResult` | `ParkingPolicy \| string[]`. A `string[]` contains one message per validation error. |
 | `FeedbackInput`, `FeedbackKey`, `FeedbackOptions`, `FeedbackVerdict`, `GuidanceFeedbackKey`, `ParkingFeedback`, `RuleFeedbackKey`, `RuleFeedbackStatus` | Rider feedback types. See [Rider feedback](#rider-feedback). |
 | `GuidanceMappingOptions`, `GuidanceThresholds` | Model-based capture guidance types. See [Model-based capture guidance](#model-based-capture-guidance). |
+| `GeoLocation`, `GeoPoint`, `GeofenceOptions`, `GeofenceZone`, `GeofenceZoneKind` | Geofence types. See [Geofence](#geofence). |
 | `InferenceRuleId`, `MappingOptions`, `MappingThresholds`, `ModelAssessment`, `ModelBox`, `ModelClass`, `ModelDetection`, `ModelMask`, `RawModelOutput` | Model-output mapping types. See [Model-output mapping](#model-output-mapping). |
 | `VerificationResult` | Required `verdict: Verdict`, `score: number`, `rules: RuleResult[]`, `photo: { uri: string; width: number; height: number; sha256: string }`, and `metadata: { capturedAt: string; location?: { lat: number; lng: number; accuracy: number }; heading?: number; deviceTilt: { pitch: number; roll: number }; modelVersion: string; platform: 'ios' \| 'android'; attestation?: string }`. The type defines no additional numeric ranges or defaults. |
 
@@ -509,7 +555,7 @@ This JSON object matches `ParkingPolicy` and has the same values as `defaultPoli
     "ROADWAY": { "enabled": true, "weight": 1, "severity": "FAIL", "failBelow": 0.85 },
     "SIDEWALK_BLOCK": { "enabled": true, "weight": 1, "severity": "WARN", "failBelow": 0.8 },
     "PARKING_ZONE": { "enabled": true, "weight": 0.8, "severity": "WARN", "failBelow": 0.7 },
-    "GEOFENCE": { "enabled": true, "weight": 1, "severity": "FAIL", "failBelow": 0.95 },
+    "GEOFENCE": { "enabled": true, "weight": 1, "severity": "FAIL", "failBelow": 0.5 },
     "IMAGE_QUALITY": { "enabled": true, "weight": 0.9, "severity": "WARN", "failBelow": 0.6 }
   }
 }

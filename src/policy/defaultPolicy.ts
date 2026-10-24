@@ -31,7 +31,8 @@ export const defaultPolicy: ParkingPolicy = {
       severity: 'WARN',
       failBelow: 0.7,
     },
-    GEOFENCE: { enabled: true, weight: 1, severity: 'FAIL', failBelow: 0.95 },
+    // evaluateGeofence scores WARN (GPS accuracy covers a zone boundary) as 0.5, which must not hard-fail.
+    GEOFENCE: { enabled: true, weight: 1, severity: 'FAIL', failBelow: 0.5 },
     IMAGE_QUALITY: {
       enabled: true,
       weight: 0.9,

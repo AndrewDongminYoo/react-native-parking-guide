@@ -98,7 +98,7 @@ export const DEFAULT_FEEDBACK_TEXT: Readonly<Record<FeedbackKey, string>> =
     'rule.GEOFENCE.WARN':
       'Parking may not be allowed here. Check the map for allowed parking areas.',
     'rule.GEOFENCE.UNCHECKED':
-      'Could not check the parking location. Make sure location access is on and try again.',
+      'Could not check the parking location. Turn on precise location access and try again.',
     'rule.IMAGE_QUALITY.FAIL':
       'The photo is too unclear to check. Retake it in better light and hold the phone steady.',
     'rule.IMAGE_QUALITY.WARN':
