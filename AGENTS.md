@@ -80,7 +80,8 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 - Rule score: if `RuleResult.score` is a number, it is clamped to the range [0, 1]; otherwise the score is
   derived from `verdict`: `PASS` → 1, `WARN` → 0.5, `FAIL` → 0.
 - Overall score: the weighted mean of the scores of non-ignored rules, using `RulePolicy.weight`
-  (default `1`). If the sum of weights is 0 (including when every rule is ignored), the overall score is `1`.
+  (default `1`). If the sum of weights is greater than 0, the weighted mean is clamped to the range [0, 1].
+  If the sum of weights is 0 or negative (including when every rule is ignored), the overall score is `1`.
 - Hard fail: the overall verdict is `FAIL` if any non-ignored rule has `severity: 'FAIL'` and either its
   `verdict` is `FAIL` or its score is strictly less than `failBelow`.
 - Otherwise the overall verdict is `PASS` if the overall score is greater than or equal to `passThreshold`,

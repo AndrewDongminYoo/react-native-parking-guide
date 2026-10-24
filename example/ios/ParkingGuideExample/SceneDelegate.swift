@@ -32,18 +32,40 @@ class SceneDelegate: RCTDefaultReactNativeFactoryDelegate, UIWindowSceneDelegate
     reactNativeFactory?.startReactNative(
       withModuleName: "ParkingGuideExample",
       in: window,
-      connectionOptions: connectionOptions
+      launchOptions: launchOptions(from: connectionOptions)
     )
+  }
 
-   
+  // Cold-start links must be passed as launch options so `Linking.getInitialURL()` can read them.
+  private func launchOptions(
+    from connectionOptions: UIScene.ConnectionOptions
+  ) -> [UIApplication.LaunchOptionsKey: Any]? {
+    if let url = connectionOptions.urlContexts.first?.url {
+      return [.url: url]
+    }
+    if let userActivity = connectionOptions.userActivities.first {
+      return [
+        .userActivityDictionary: [
+          UIApplication.LaunchOptionsKey.userActivityType.rawValue: userActivity.activityType,
+          "UIApplicationLaunchOptionsUserActivityKey": userActivity,
+        ] as [String: Any],
+      ]
+    }
+    return nil
   }
 
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-    RCTLinkingManager.scene(scene, openURLContexts: URLContexts)
+    for urlContext in URLContexts {
+      RCTLinkingManager.application(UIApplication.shared, open: urlContext.url, options: [:])
+    }
   }
 
   func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-    RCTLinkingManager.scene(scene, continue: userActivity)
+    RCTLinkingManager.application(
+      UIApplication.shared,
+      continue: userActivity,
+      restorationHandler: { _ in }
+    )
   }
 
   override func bundleURL() -> URL? {
