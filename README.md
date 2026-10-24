@@ -35,6 +35,9 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 | 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection inside `MappingOptions.guideFrame` and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A model and on-device inference (CoreML on iOS, TFLite on Android); reading device location or fetching zone data |
 | 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`) | A result screen in the example app; photo capture into `VerificationResult` |
 
+Outside the three goal steps, `uploadVerification` (an opt-in upload of a `VerificationResult` to a caller-owned
+endpoint) is implemented; the package provides no server.
+
 `getModelVersion()` is a native stub that returns `"0.1.0-dev"`.
 
 ## Planned architecture
@@ -117,6 +120,10 @@ and Android image-quality frame analysis.
 - `getParkingFeedback(input: FeedbackInput, options?: FeedbackOptions): ParkingFeedback[]` converts rule results and
   guidance issues into ordered rider-facing feedback entries. See [Rider feedback](#rider-feedback).
 - `DEFAULT_FEEDBACK_TEXT` contains the immutable default English text for every feedback key listed below.
+- `uploadVerification<T>(result: VerificationResult, options: UploadOptions): Promise<UploadResult<T>>` posts `result`
+  as JSON to a caller-owned `https://` endpoint, only when called. See [Opt-in upload](#opt-in-upload).
+- `DEFAULT_UPLOAD_TIMEOUT_MS` (`10000`), `DEFAULT_UPLOAD_RETRIES` (`2`), and `DEFAULT_UPLOAD_RETRY_DELAY_MS` (`500`) are
+  the `UploadOptions` defaults.
 
 ### Model-output mapping
 
@@ -507,6 +514,72 @@ with VisionCamera and Worklets Core, including compilation of `ios/ParkingGuideF
 - `onFrameResult` retains its identity while the two option values are unchanged; `reset` retains its identity
   for the lifetime of the hook.
 
+### Opt-in upload
+
+`uploadVerification(result, options)` sends one `VerificationResult` to a server that the app owns. It runs only when
+the app calls it: the package never uploads automatically, has no default endpoint, and provides no server.
+
+Request:
+
+- `POST` to `options.endpoint`. The endpoint must be `https://` (case-insensitive), then a host, then an optional
+  `:port` from `1` to `65535`, then an optional path, query, or fragment that starts with `/`, `?`, or `#` and contains
+  no whitespace. The host must be one of:
+  - a DNS name of at most 253 characters made of dot-separated labels; each label has 1 to 63 ASCII letters, digits,
+    or hyphens and does not start or end with a hyphen. Write an internationalized name in its `xn--` form.
+  - a dotted-decimal IPv4 address with four parts from `0` to `255` and no leading zeros.
+
+  A host whose last label is numeric must be such an IPv4 address. Everything else is rejected, including `http://`
+  and other schemes, an empty host, user information such as `user:password@`, percent-encoded hosts, IPv6 literals
+  such as `[2001:db8::1]`, and a trailing dot.
+- Body: `JSON.stringify(result)`. Headers: `Content-Type: application/json` and `Accept: application/json`, then
+  `options.headers`. A caller header replaces a default header whose name matches case-insensitively.
+
+Options (invalid values reject with `RangeError` before any request is sent; `options` must be an object and
+`options.headers`, when present, a non-array object whose values are strings):
+
+| Option | Default | Constraint | Meaning |
+| --- | --- | --- | --- |
+| `endpoint` | none (required) | `https://` URL as above | Upload target. |
+| `headers` | `{}` | object of strings | Extra request headers, for example `Authorization`. |
+| `timeoutMs` | `DEFAULT_UPLOAD_TIMEOUT_MS` (`10000`) | finite, `> 0` | Per-attempt limit for the request and for reading the response body. The request is aborted when it elapses. |
+| `retries` | `DEFAULT_UPLOAD_RETRIES` (`2`) | integer, `>= 0` | Attempts after the first, so at most `retries + 1` requests. |
+| `retryDelayMs` | `DEFAULT_UPLOAD_RETRY_DELAY_MS` (`500`) | finite, `>= 0` | Retry `n` (1-based) starts `retryDelayMs × 2^(n − 1)` ms after the previous attempt fails. |
+
+Outcome. The returned promise resolves with an `UploadResult<T>` for every transport outcome:
+
+| Attempt outcome | Result | Retried |
+| --- | --- | --- |
+| HTTP status `200`–`299`, empty body | `{ ok: true, status, body: undefined, attempts }` | — |
+| HTTP status `200`–`299`, JSON body | `{ ok: true, status, body, attempts }`; `body` is `JSON.parse` output cast to `T` without validation | — |
+| HTTP status `200`–`299`, body that is not valid JSON | `{ ok: false, error: 'invalid_response', status, attempts }` | No |
+| HTTP status `200`–`299`, body read fails or exceeds `timeoutMs` | `{ ok: false, error: 'network' \| 'timeout', status, attempts }` | No (the server already accepted the request) |
+| HTTP status `408`, `429`, or `500`–`599` | `{ ok: false, error: 'http', status, attempts }` | Yes |
+| Any other HTTP status | `{ ok: false, error: 'http', status, attempts }` | No |
+| `fetch` rejects | `{ ok: false, error: 'network', attempts }` | Yes |
+| No response within `timeoutMs` | `{ ok: false, error: 'timeout', attempts }` | Yes |
+
+`attempts` is the number of requests sent. When retries run out, the result of the last attempt is returned.
+A timeout or network failure can occur after the server has received the request, so a retry can deliver the same
+body more than once; the server should treat repeated uploads with the same `photo.sha256` as one submission.
+
+Privacy. The package does not read or send the photo file. The JSON body contains every field of `result`, including
+`photo.uri` (a path on the device), `photo.sha256`, `metadata.location` (latitude, longitude, and accuracy) when set,
+`metadata.heading`, `metadata.deviceTilt`, `metadata.platform`, and `metadata.attestation` when set. The function does
+not log any of these values. Before calling it, obtain the rider's consent for sending this data, and remove fields that
+the server does not need from the object you pass.
+
+```ts
+import { uploadVerification } from 'react-native-parking-guide';
+
+const upload = await uploadVerification<{ accepted: boolean }>(result, {
+  endpoint: 'https://parking.example.com/verifications',
+  headers: { Authorization: `Bearer ${token}` },
+});
+if (!upload.ok) {
+  // upload.error is 'http', 'network', 'timeout', or 'invalid_response'.
+}
+```
+
 ### Exported types
 
 These are the types exported by `src/index.tsx`. Numeric fields are TypeScript `number` values; unless a range is
@@ -533,6 +606,7 @@ stated.
 | `FeedbackInput`, `FeedbackKey`, `FeedbackOptions`, `FeedbackVerdict`, `GuidanceFeedbackKey`, `ParkingFeedback`, `RuleFeedbackKey`, `RuleFeedbackStatus` | Rider feedback types. See [Rider feedback](#rider-feedback). |
 | `GuidanceMappingOptions`, `GuidanceThresholds` | Model-based capture guidance types. See [Model-based capture guidance](#model-based-capture-guidance). |
 | `GeoLocation`, `GeoPoint`, `GeofenceOptions`, `GeofenceZone`, `GeofenceZoneKind` | Geofence types. See [Geofence](#geofence). |
+| `UploadErrorKind`, `UploadOptions`, `UploadResult<T>` | Opt-in upload types. See [Opt-in upload](#opt-in-upload). |
 | `InferenceRuleId`, `MappingOptions`, `MappingThresholds`, `ModelAssessment`, `ModelBox`, `ModelClass`, `ModelDetection`, `ModelMask`, `RawModelOutput` | Model-output mapping types. See [Model-output mapping](#model-output-mapping). |
 | `VerificationResult` | Required `verdict: Verdict`, `score: number`, `rules: RuleResult[]`, `photo: { uri: string; width: number; height: number; sha256: string }`, and `metadata: { capturedAt: string; location?: { lat: number; lng: number; accuracy: number }; heading?: number; deviceTilt: { pitch: number; roll: number }; modelVersion: string; platform: 'ios' \| 'android'; attestation?: string }`. The type defines no additional numeric ranges or defaults. |
 

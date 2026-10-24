@@ -76,6 +76,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `src/inference/mapping.ts` | `mapModelOutput(output, options)` — pure conversion of `RawModelOutput` to `RuleResult[]`, including the `evidence.proximity` flag; no model execution. |
 | `src/feedback/feedback.ts` | `getParkingFeedback(input, options)` — stable rider-facing feedback keys and default English text. |
 | `src/geofence/geofence.ts` | `evaluateGeofence(location, zones)` — pure `GEOFENCE` `RuleResult` from a caller-supplied location and zones. |
+| `src/upload.ts` | `uploadVerification(result, options)` — opt-in JSON upload of a `VerificationResult` to a caller-owned `https://` endpoint, with timeout and retries. The only network call in the package; never call it automatically. |
 | `src/inference/guidance.ts` | `mapGuidanceIssues(output, options)` — pure conversion of `RawModelOutput` to model-based `GuidanceIssue[]`. |
 | `src/guidance/frameAnalyzer.ts` | Optional VisionCamera analyzer factory and shared native initialization thresholds. |
 | `ios/ParkingGuideFrameProcessor.mm`, `cpp/CaptureMetrics.h` | iOS image-quality plugin and portable native metrics. |
