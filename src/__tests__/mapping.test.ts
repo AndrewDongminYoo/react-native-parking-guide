@@ -381,6 +381,10 @@ describe('mapModelOutput', () => {
     expect(() => mapModelOutput(boxesScene([[1, 0, 0, 1]]))).toThrow(
       RangeError
     );
+    expect(() =>
+      // eslint-disable-next-line no-sparse-arrays
+      mapModelOutput(boxesScene([[, 0, 1, 1] as unknown as ModelBox]))
+    ).toThrow(RangeError);
     for (const mask of [
       { width: 0, height: 1, data: [] },
       { width: 1.5, height: 2, data: [1, 1, 1] },
@@ -551,6 +555,8 @@ describe('mapModelOutput guideFrame', () => {
       [0.5, 0, 0.5, 1],
       [0, 0.5, 1, 0.5],
       [0, 0, 1],
+      // eslint-disable-next-line no-sparse-arrays
+      [, 0, 1, 1],
     ]) {
       expect(() =>
         mapModelOutput(compliantScene, {

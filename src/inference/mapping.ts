@@ -88,6 +88,13 @@ function validateUnit(value: number): void {
   }
 }
 
+// Iterates every index so sparse array holes are rejected; Array.prototype.forEach skips them.
+function validateCoordinates(box: ModelBox): void {
+  for (const value of box) {
+    validateUnit(value);
+  }
+}
+
 function validateAssessment(assessment: ModelAssessment | undefined): void {
   if (assessment) {
     validateUnit(assessment.score);
@@ -105,7 +112,7 @@ function validateOutput(output: RawModelOutput): void {
     if (box.length !== 4) {
       throw new RangeError('Model boxes must have four coordinates.');
     }
-    box.forEach(validateUnit);
+    validateCoordinates(box);
     if (box[0] > box[2] || box[1] > box[3]) {
       throw new RangeError('Model box coordinates must not be inverted.');
     }
@@ -138,7 +145,7 @@ function validateGuideFrame(frame: ModelBox | undefined): void {
   if (frame.length !== 4) {
     throw new RangeError('guideFrame must have four coordinates.');
   }
-  frame.forEach(validateUnit);
+  validateCoordinates(frame);
   if (frame[0] >= frame[2] || frame[1] >= frame[3]) {
     throw new RangeError('guideFrame must have a positive area.');
   }
