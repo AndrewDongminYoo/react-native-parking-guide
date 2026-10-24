@@ -25,6 +25,7 @@ Planned architecture (see `README.md` roadmap):
 - `android/src/main/java/com/parkingguide/` — Kotlin TurboModule (`ParkingGuideModule`) and package (`ParkingGuidePackage`).
 - `ParkingGuide.podspec`, `android/build.gradle` — native build configuration.
 - `example/` — example app (Yarn workspace) used for manual and CI native builds.
+- `.github/skills/` — React Native agent skills vendored from [AndrewDongminYoo/rn-agents-kit](https://github.com/AndrewDongminYoo/rn-agents-kit) (Apache-2.0; audit-first). Do not edit; excluded from ESLint. See `.github/skills/README.md`.
 
 ## 판정 규칙 / Verdict semantics (`evaluatePolicy`)
 

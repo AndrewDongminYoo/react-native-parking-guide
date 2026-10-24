@@ -50,6 +50,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `android/src/main/java/com/parkingguide/` | Kotlin `ParkingGuideModule` / `ParkingGuidePackage`. |
 | `ParkingGuide.podspec`, `android/build.gradle` | Native build configuration. |
 | `example/` | Example app used for manual testing and CI native builds. |
+| `.github/skills/` | Vendored React Native agent skills (rn-agents-kit, Apache-2.0). Do not edit. |
 | `lib/` | Generated build output — never edit by hand. |
 
 ## Verdict rules / 판정 규칙 (`evaluatePolicy`)
@@ -71,6 +72,16 @@ When adding or changing a method on `Spec` in `src/NativeParkingGuide.ts`, updat
 3. JS wrapper and exports in `src/index.tsx`
 
 `getModelVersion()` returns `"0.1.0-dev"` on both platforms — keep native values in sync.
+
+## Agent skills / 에이전트 스킬
+
+React Native maintenance skills from [AndrewDongminYoo/rn-agents-kit](https://github.com/AndrewDongminYoo/rn-agents-kit)
+are vendored under `.github/skills/` (Apache-2.0). Each skill has a `SKILL.md` describing when and how to use it,
+e.g. `rn-project-snapshot`, `rn-newarch-audit`, `rn-audit`, `rn-upgrade-pulse`, `rn-device-capture`, `rn-metro-console`.
+They are audit-first: inspect and report before changing anything. See `.github/skills/README.md` for the full list.
+Do not edit vendored skill files; they are excluded from ESLint.
+
+`.github/skills/`에 rn-agents-kit의 React Native 유지보수 스킬이 포함되어 있습니다. 각 `SKILL.md`를 참고하세요.
 
 ## Conventions / 코드 스타일
 
