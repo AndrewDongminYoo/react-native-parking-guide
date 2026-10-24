@@ -40,7 +40,8 @@ Pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, iO
 1. Realtime capture guidance via a `react-native-vision-camera` frame processor → `GuidanceState` / `GuidanceIssue`.
    Native analysis produces only `BLURRY`, `LOW_LIGHT`, and `TILTED`. `mapGuidanceIssues` maps `RawModelOutput` to
    `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, and `GROUND_NOT_VISIBLE`, but no frame processor calls it yet.
-2. On-device inference (CoreML on iOS, TFLite on Android) → `RawModelOutput` → `mapModelOutput` → per-rule `RuleResult[]`;
+2. On-device inference of a host-supplied model (CoreML on iOS, TFLite on Android; the package bundles no weights,
+   see `## Model source` in `README.md`) → `RawModelOutput` → `mapModelOutput` → per-rule `RuleResult[]`;
    `evaluateGeofence` adds the `GEOFENCE` result from a caller-supplied location and zones.
 3. Pure TypeScript JSON-policy rule engine (`evaluatePolicy`) → final `Verdict` and score; `getParkingFeedback` →
    rider-facing feedback keys and default English text.

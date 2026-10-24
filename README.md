@@ -32,7 +32,7 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 | Goal step | Implemented | Not implemented |
 | --- | --- | --- |
 | 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), and `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`) | Producing model-based issues from camera frames (requires on-device inference); use of `VehicleType` by any API |
-| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection inside `MappingOptions.guideFrame` and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A model and on-device inference (CoreML on iOS, TFLite on Android); reading device location or fetching zone data |
+| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection inside `MappingOptions.guideFrame` and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | On-device inference of a host-supplied model (CoreML on iOS, TFLite on Android) and a published reference model (see [Model source](#model-source)); reading device location or fetching zone data |
 | 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`) | A result screen in the example app; photo capture into `VerificationResult` |
 
 Outside the three goal steps, `uploadVerification` (an opt-in upload of a `VerificationResult` to a caller-owned
@@ -43,15 +43,34 @@ endpoint) is implemented; the package provides no server.
 ## Planned architecture
 
 - Realtime capture guidance: a `react-native-vision-camera` frame processor.
-- On-device inference: CoreML on iOS, TFLite on Android.
+- On-device inference of a host-supplied model: CoreML on iOS, TFLite on Android. See [Model source](#model-source).
 - Final verdict: a TypeScript rule engine (`evaluatePolicy`) driven by a JSON policy.
+
+## Model source
+
+The package bundles no model weights. The host app supplies the model file, and the package defines the model
+output contract: `RawModelOutput` in [Model-output mapping](#model-output-mapping). The decision, including the class
+list, input resolution, and licenses, is recorded in
+[the #32 decision comment](https://github.com/donminzzi/react-native-parking-guide/issues/32#issuecomment-6390993023).
+
+- Classes: a model adapter maps the model classes `kickboard`, `bicycle` (including e-bikes), and `motorcycle`
+  (including mopeds) to `classId` `vehicle`, and maps `tactile_paving`, `crosswalk`, `roadway`, `sidewalk_block`, and
+  `parking_zone` to the `classId` of the same name. `RawModelOutput` does not carry the vehicle type yet
+  ([#34](https://github.com/donminzzi/react-native-parking-guide/issues/34)). Vehicle uprightness is reported as
+  `ModelDetection.upright`.
+- Input resolution of the reference model: 512 × 512 RGB.
+- Licenses: the reference model uses only Apache-2.0, MIT, or BSD code and weights. Ultralytics YOLO (AGPL-3.0) and
+  weights pretrained on non-commercial data are excluded.
+- Reference model: RF-DETR-Seg (Apache-2.0), distributed separately from this package. Training and publishing it is
+  tracked in [#56](https://github.com/donminzzi/react-native-parking-guide/issues/56); it is not published yet.
 
 ## Roadmap
 
 - **v0.1 (MVP)**: TurboModule scaffold, typed API skeleton, policy evaluation engine, native model-version stub.
 - **v0.2 (M2)**: JS frame-result handoff, smoothed capture guidance, and iOS and Android image-quality frame analysis
   are implemented.
-- **v0.5**: a vehicle and prohibited-zone model with on-device inference, model-based capture guidance from camera
+- **v0.5**: on-device inference of a host-supplied vehicle and prohibited-zone model, a separately distributed
+  reference model ([#56](https://github.com/donminzzi/react-native-parking-guide/issues/56)), model-based capture guidance from camera
   frames (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), prohibited-zone rules (tactile paving, crosswalk, roadway, sidewalk block,
   parking zone), and geofence integration.
 - **v1.0**: photo capture into `VerificationResult`, a rider-facing result screen in the example app, attestation support,
