@@ -31,19 +31,27 @@ class SceneDelegate: RCTDefaultReactNativeFactoryDelegate, UIWindowSceneDelegate
     
     reactNativeFactory?.startReactNative(
       withModuleName: "ParkingGuideExample",
-      in: window
+      in: window,
+      launchOptions: launchOptions(from: connectionOptions)
     )
+  }
 
-    for urlContext in connectionOptions.urlContexts {
-      RCTLinkingManager.application(UIApplication.shared, open: urlContext.url, options: [:])
+  // Cold-start links must be passed as launch options so `Linking.getInitialURL()` can read them.
+  private func launchOptions(
+    from connectionOptions: UIScene.ConnectionOptions
+  ) -> [UIApplication.LaunchOptionsKey: Any]? {
+    if let url = connectionOptions.urlContexts.first?.url {
+      return [.url: url]
     }
-    for userActivity in connectionOptions.userActivities {
-      RCTLinkingManager.application(
-        UIApplication.shared,
-        continue: userActivity,
-        restorationHandler: { _ in }
-      )
+    if let userActivity = connectionOptions.userActivities.first {
+      return [
+        .userActivityDictionary: [
+          UIApplication.LaunchOptionsKey.userActivityType.rawValue: userActivity.activityType,
+          "UIApplicationLaunchOptionsUserActivityKey": userActivity,
+        ] as [String: Any],
+      ]
     }
+    return nil
   }
 
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
