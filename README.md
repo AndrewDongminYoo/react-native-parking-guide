@@ -111,8 +111,9 @@ export { evaluation, modelVersion };
 1. Ignore a result if `policy.rules` has no entry for its `id`, or that entry has `enabled: false`.
 2. Use a numeric `RuleResult.score` clamped to `[0, 1]`. If `score` is omitted, derive it from `verdict`: `PASS` is
    `1`, `WARN` is `0.5`, and `FAIL` is `0`.
-3. Calculate the overall score as the weighted mean of non-ignored rule scores. An omitted `weight` is `1`. If the
-   sum of weights is `0`, including when every rule is ignored, the overall score is `1`.
+3. An omitted `weight` is `1`. If the sum of weights is positive, calculate the overall score as the weighted mean
+   of non-ignored rule scores and clamp it to `[0, 1]`. If the sum of weights is zero or negative, including when
+   every rule is ignored, the overall score is `1`.
 4. Return `FAIL` if any non-ignored rule has `severity: 'FAIL'` and either its `verdict` is `FAIL` or its score is
    strictly less than its configured `failBelow`.
 5. If no hard fail applies, return `PASS` when the overall score is greater than or equal to `passThreshold`;
