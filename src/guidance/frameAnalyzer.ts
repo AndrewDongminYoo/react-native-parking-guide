@@ -32,7 +32,7 @@ export function createParkingFrameAnalyzer<Frame>(proxy: {
   return (frame: Frame): GuidanceFrameResult => {
     'worklet';
     return (
-      (plugin.call(frame) as GuidanceFrameResult | undefined) ?? {
+      (plugin.call(frame) as unknown as GuidanceFrameResult | undefined) ?? {
         ready: false,
         issues: [],
         progress: 0,

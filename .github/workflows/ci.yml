@@ -47,6 +47,11 @@ jobs:
       - name: Run unit tests
         run: yarn test --maxWorkers=2 --coverage
 
+      - name: Test native capture metrics
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror cpp/__tests__/CaptureMetricsTest.cpp -o "$RUNNER_TEMP/capture-metrics-tests"
+          "$RUNNER_TEMP/capture-metrics-tests"
+
   build-library:
     runs-on: ubuntu-latest
 
