@@ -121,9 +121,8 @@ export function useParkingFrameProcessor() {
 Pass `frameProcessor` to a VisionCamera `Camera` with `pixelFormat="yuv"`. Mount capture only while the app is
 active and unmount it when capture stops, as in `example/src/App.android.tsx` (Android) and `example/src/App.tsx` (iOS).
 
-The Android implementation matches the algorithms and values in the iOS implementation from
-[PR #23](https://github.com/donminzzi/react-native-parking-guide/pull/23), commit
-`3f284355f92f47a08c4ec8db50ea2c48153e8687`. `src/guidance/frameAnalyzer.ts` supplies all three thresholds:
+The Android implementation matches the algorithms and values in `cpp/CaptureMetrics.h` and
+`ios/ParkingGuideFrameProcessor.mm`. `src/guidance/frameAnalyzer.ts` supplies all three thresholds:
 
 | Constant field | Issue condition |
 | --- | --- |
