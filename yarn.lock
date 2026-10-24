@@ -8271,6 +8271,7 @@ __metadata:
     react-native: "npm:0.86.3"
     react-native-builder-bob: "npm:^0.44.1"
     react-native-monorepo-config: "npm:^0.4.0"
+    react-native-safe-area-context: "npm:5.10.1"
     react-native-vision-camera: "npm:4.7.3"
     react-native-worklets-core: "npm:1.6.3"
   languageName: unknown
@@ -8320,6 +8321,16 @@ __metadata:
       optional: true
   languageName: unknown
   linkType: soft
+
+"react-native-safe-area-context@npm:5.10.1":
+  version: 5.10.1
+  resolution: "react-native-safe-area-context@npm:5.10.1"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+  checksum: 10c0/8aebfa832d483e385f9848b5ea92ce3e525a44cad5b3b363b5b190c1f559f3f01176f745ff7a2ad0e2191cb3fb2d0be26c8650956640f086562440c869713ec5
+  languageName: node
+  linkType: hard
 
 "react-native-vision-camera@npm:4.7.3":
   version: 4.7.3
