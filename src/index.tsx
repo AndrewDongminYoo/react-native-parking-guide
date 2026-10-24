@@ -59,6 +59,13 @@ export type {
   GeofenceZone,
   GeofenceZoneKind,
 } from './geofence/geofence';
+export {
+  DEFAULT_UPLOAD_RETRIES,
+  DEFAULT_UPLOAD_RETRY_DELAY_MS,
+  DEFAULT_UPLOAD_TIMEOUT_MS,
+  uploadVerification,
+} from './upload';
+export type { UploadErrorKind, UploadOptions, UploadResult } from './upload';
 export { defaultPolicy } from './policy/defaultPolicy';
 export { evaluatePolicy } from './policy/evaluate';
 export { validatePolicy } from './policy/validate';
