@@ -228,6 +228,8 @@ describe('mapModelOutput', () => {
     ['CROSSWALK', [0.2, 0, 0.8, 1], [0.74, 0, 0.8, 1], 0.9, 'WARN'],
     ['CROSSWALK', [0.3, 0, 0.6, 1], [0.57, 0, 0.6, 1], 0.9, 'WARN'],
     ['PARKING_ZONE', [0.1, 0, 0.4, 1], [0.1, 0, 0.34, 1], 0.8, 'PASS'],
+    ['CROSSWALK', [0, 0, 0.2, 1], [0.1799999, 0, 0.2, 1], 0.9, 'WARN'],
+    ['CROSSWALK', [0, 0, 1, 1], [0.8999995, 0, 1, 1], 0.9, 'WARN'],
   ] as [RuleId, ModelBox, ModelBox, number, Verdict][])(
     'rounds %s decimal-coordinate boundary scores to exact thresholds',
     (id, vehicleBox, zoneBox, score, verdict) => {
@@ -244,6 +246,20 @@ describe('mapModelOutput', () => {
       expect(evaluatePolicy([result], defaultPolicy).verdict).toBe('PASS');
     }
   );
+
+  it('compares thresholds with more than 6 decimal places against rounded scores', () => {
+    const output: RawModelOutput = {
+      detections: [
+        { classId: 'vehicle', confidence: 1, box: [0, 0, 1, 1] },
+        { classId: 'crosswalk', confidence: 1, box: [0.9000004, 0, 1, 1] },
+      ],
+    };
+    expect(
+      rule(output, 'CROSSWALK', {
+        thresholds: { CROSSWALK: { failBelow: 0.9000001, passAt: 0.99 } },
+      })
+    ).toMatchObject({ score: 0.9, verdict: 'FAIL' });
+  });
 
   it('divides intersection by vehicle area, not union area or zone area', () => {
     expect(rule(compliantScene, 'PARKING_ZONE').score).toBe(1);

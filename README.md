@@ -140,9 +140,12 @@ Overlapping zone instances count only once. If the vehicle and **every accepted 
 have masks, overlap uses foreground pixels. Otherwise it uses the exact union of box intersections.
 `PARKING_ZONE.score` is overlap; `TACTILE_PAVING`, `CROSSWALK`, `ROADWAY`, and `SIDEWALK_BLOCK` scores are
 `1 - overlap`. With no accepted zone instances, these scores are respectively `0` and `1`.
-Zone scores are rounded to 6 decimal places (`Math.round(score * 1e6) / 1e6`) before the threshold comparison,
-so floating-point error cannot move a score across a threshold: a 10% overlap yields exactly `0.9`, not
-`0.8999999999999999`. Thresholds with more than 6 decimal places are therefore compared against rounded scores.
+Zone scores are rounded half up to 6 decimal places before the threshold comparison
+(`Math.round(score * 1e6 + 1e-6) / 1e6`; the `1e-6` term rounds up a value up to `1e-12` below a halfway point).
+Floating-point error in box arithmetic therefore cannot move a score across a threshold that has at most
+6 decimal places: a 10% overlap yields exactly `0.9`, not `0.8999999999999999`. A threshold with more than
+6 decimal places is compared with the rounded score, so it acts like the next 6-decimal value up: with
+`failBelow: 0.9000001`, an exact score of `0.9000004` rounds to `0.9` and yields `FAIL`.
 These are geometric compliance scores, not calibrated probabilities.
 
 `VEHICLE_DETECTED.score` equals the selected vehicle's confidence. `UPRIGHT.score` and `IMAGE_QUALITY.score`

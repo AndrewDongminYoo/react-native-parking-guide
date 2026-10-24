@@ -134,13 +134,18 @@ function hasArea(detection: ModelDetection): boolean {
 }
 
 const GEOMETRIC_SCORE_SCALE = 1e6;
+/** Scaled-unit tolerance (1e-12 in score units) for box-arithmetic error just below a halfway point. */
+const HALFWAY_TOLERANCE = 1e-6;
 
 /**
- * Rounds a geometric score to 6 decimal places so floating-point error in box arithmetic
+ * Rounds a geometric score half up to 6 decimal places so floating-point error in box arithmetic
  * cannot move a score across a threshold boundary (for example 0.8999999999999999 instead of 0.9).
  */
 function roundGeometricScore(score: number): number {
-  return Math.round(score * GEOMETRIC_SCORE_SCALE) / GEOMETRIC_SCORE_SCALE;
+  return (
+    Math.round(score * GEOMETRIC_SCORE_SCALE + HALFWAY_TOLERANCE) /
+    GEOMETRIC_SCORE_SCALE
+  );
 }
 
 /** Exact union area of axis-aligned boxes; duplicate zones are not counted twice. */
