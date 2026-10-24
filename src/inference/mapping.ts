@@ -51,6 +51,12 @@ export interface MappingOptions {
   /** Detections and assessments below this confidence are ignored. Default: 0.5. */
   readonly minimumConfidence?: number;
   readonly thresholds?: Partial<Record<InferenceRuleId, MappingThresholds>>;
+  /**
+   * Capture guide frame in the same normalized, upright image space as detections.
+   * When set, only vehicles whose box intersects it with positive area are candidates, and the
+   * vehicle with the largest intersection is selected.
+   */
+  readonly guideFrame?: ModelBox;
 }
 
 export const DEFAULT_MAPPING_THRESHOLDS: Readonly<
@@ -125,6 +131,19 @@ function validateOutput(output: RawModelOutput): void {
   }
 }
 
+function validateGuideFrame(frame: ModelBox | undefined): void {
+  if (frame === undefined) {
+    return;
+  }
+  if (frame.length !== 4) {
+    throw new RangeError('guideFrame must have four coordinates.');
+  }
+  frame.forEach(validateUnit);
+  if (frame[0] >= frame[2] || frame[1] >= frame[3]) {
+    throw new RangeError('guideFrame must have a positive area.');
+  }
+}
+
 function hasArea(detection: ModelDetection): boolean {
   return (
     detection.box[2] > detection.box[0] &&
@@ -146,6 +165,41 @@ function roundGeometricScore(score: number): number {
     Math.round(score * GEOMETRIC_SCORE_SCALE + HALFWAY_TOLERANCE) /
     GEOMETRIC_SCORE_SCALE
   );
+}
+
+/** Intersection area of two boxes, or 0 when they share no positive area. */
+function boxIntersectionArea(a: ModelBox, b: ModelBox): number {
+  const width = Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+  const height = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  return width > 0 && height > 0 ? width * height : 0;
+}
+
+/**
+ * Without a guide frame: highest confidence, first on ties. With a guide frame: largest positive
+ * box intersection with the frame (rounded like geometric scores), then highest confidence, then first.
+ */
+function selectVehicle(
+  vehicles: readonly ModelDetection[],
+  guideFrame: ModelBox | undefined
+): ModelDetection | undefined {
+  let best: ModelDetection | undefined;
+  let bestArea = 0;
+  for (const vehicle of vehicles) {
+    const area = guideFrame ? boxIntersectionArea(vehicle.box, guideFrame) : 0;
+    if (guideFrame && area === 0) {
+      continue;
+    }
+    const roundedArea = roundGeometricScore(area);
+    if (
+      !best ||
+      roundedArea > bestArea ||
+      (roundedArea === bestArea && vehicle.confidence > best.confidence)
+    ) {
+      best = vehicle;
+      bestArea = roundedArea;
+    }
+  }
+  return best;
 }
 
 /** Exact union area of axis-aligned boxes; duplicate zones are not counted twice. */
@@ -227,6 +281,7 @@ export function mapModelOutput(
     }
   }
   validateOutput(output);
+  validateGuideFrame(options.guideFrame);
 
   function result(
     id: InferenceRuleId,
@@ -264,13 +319,10 @@ export function mapModelOutput(
     (detection) =>
       detection.confidence >= minimumConfidence && hasArea(detection)
   );
-  const vehicle = detections
-    .filter((detection) => detection.classId === 'vehicle')
-    .reduce<ModelDetection | undefined>(
-      (best, detection) =>
-        !best || detection.confidence > best.confidence ? detection : best,
-      undefined
-    );
+  const vehicle = selectVehicle(
+    detections.filter((detection) => detection.classId === 'vehicle'),
+    options.guideFrame
+  );
   const vehicleResult: RuleResult = vehicle
     ? {
         ...result('VEHICLE_DETECTED', vehicle.confidence, vehicle.confidence),
