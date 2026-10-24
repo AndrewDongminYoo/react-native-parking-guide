@@ -8,6 +8,12 @@ module.exports = {
     },
   },
   dependencies: {
+    'react-native-vision-camera': {
+      platforms: { ios: null },
+    },
+    'react-native-worklets-core': {
+      platforms: { ios: null },
+    },
     [pkg.name]: {
       root: path.join(__dirname, '..'),
       platforms: {

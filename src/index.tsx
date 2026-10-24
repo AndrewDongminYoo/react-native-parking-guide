@@ -1,5 +1,10 @@
 import ParkingGuide from './NativeParkingGuide';
 
+export {
+  CAPTURE_GUIDANCE_THRESHOLDS,
+  createParkingFrameAnalyzer,
+} from './guidance/frameAnalyzer';
+export type { ParkingFrameAnalyzer } from './guidance/frameAnalyzer';
 export { useParkingGuidance } from './guidance/useParkingGuidance';
 export type { ParkingGuidance } from './guidance/useParkingGuidance';
 export { createGuidanceState, reduceGuidance } from './guidance/reducer';

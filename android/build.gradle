@@ -21,6 +21,13 @@ if (project.extensions.findByName("kotlin") == null) {
 
 apply plugin: "com.facebook.react"
 
+def camera = findProject(":react-native-vision-camera")
+def frameProcessorsEnabled = camera != null &&
+  findProject(":react-native-worklets-core") != null &&
+  (rootProject.ext.has("VisionCamera_enableFrameProcessors") ?
+    rootProject.ext.get("VisionCamera_enableFrameProcessors").toString() :
+    project.findProperty("VisionCamera_enableFrameProcessors")?.toString()) != "false"
+
 android {
   namespace "com.parkingguide"
 
@@ -29,8 +36,14 @@ android {
   defaultConfig {
     minSdkVersion getExtOrDefault("minSdkVersion")
   }
+
+  sourceSets.main.java.srcDir(frameProcessorsEnabled ? "src/visionCamera/java" : "src/noCamera/java")
 }
 
 dependencies {
   implementation "com.facebook.react:react-android"
+  if (frameProcessorsEnabled) {
+    implementation project(":react-native-vision-camera")
+  }
+  testImplementation "junit:junit:4.13.2"
 }

@@ -119,6 +119,11 @@ jobs:
         run: |
           yarn turbo run build:android --cache-dir="${{ env.TURBO_CACHE_DIR }}"
 
+      - name: Test Android capture metrics
+        run: |
+          cd example/android
+          ./gradlew :react-native-parking-guide:testDebugUnitTest --no-daemon --console=plain
+
   build-ios:
     runs-on: macos-latest
 

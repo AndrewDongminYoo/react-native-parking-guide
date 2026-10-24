@@ -2,6 +2,7 @@ import { describe, expect, it, jest } from '@jest/globals';
 
 import {
   createGuidanceState,
+  createParkingFrameAnalyzer,
   getModelVersion,
   reduceGuidance,
   useParkingGuidance,
@@ -15,6 +16,7 @@ jest.mock('../NativeParkingGuide', () => ({
 describe('guidance public API', () => {
   it('exports JS guidance without installing Vision Camera', () => {
     expect(useParkingGuidance).toEqual(expect.any(Function));
+    expect(createParkingFrameAnalyzer).toEqual(expect.any(Function));
     expect(
       reduceGuidance(
         createGuidanceState(),
