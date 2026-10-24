@@ -234,6 +234,13 @@ describe('evaluateGeofence', () => {
         evaluateGeofence(location(0, 0), zones, { maxAccuracy })
       ).toThrow(RangeError);
     }
+    for (const maxAccuracy of ['invalid', '10', true]) {
+      expect(() =>
+        evaluateGeofence(location(0, 0, 3000), zones, {
+          maxAccuracy: maxAccuracy as unknown as number,
+        })
+      ).toThrow(RangeError);
+    }
   });
 
   it('rejects invalid locations and zones', () => {

@@ -23,7 +23,7 @@ export interface GeofenceZone {
 export interface GeofenceOptions {
   /**
    * A location whose `accuracy` is greater than this many meters is not evaluated (unchecked result).
-   * Not NaN and >= 0; `Infinity` disables the limit. Default: `DEFAULT_MAX_GEOFENCE_ACCURACY` (50).
+   * A number that is not NaN and is >= 0; `Infinity` disables the limit. Default: `DEFAULT_MAX_GEOFENCE_ACCURACY` (50).
    */
   readonly maxAccuracy?: number;
 }
@@ -146,8 +146,12 @@ export function evaluateGeofence(
   options: GeofenceOptions = {}
 ): RuleResult {
   const maxAccuracy = options.maxAccuracy ?? DEFAULT_MAX_GEOFENCE_ACCURACY;
-  if (Number.isNaN(maxAccuracy) || maxAccuracy < 0) {
-    throw new RangeError('maxAccuracy must not be NaN and must be >= 0.');
+  if (
+    typeof maxAccuracy !== 'number' ||
+    Number.isNaN(maxAccuracy) ||
+    maxAccuracy < 0
+  ) {
+    throw new RangeError('maxAccuracy must be a number >= 0 (not NaN).');
   }
   if (!Array.isArray(zones)) {
     throw new RangeError('Geofence zones must be an array.');

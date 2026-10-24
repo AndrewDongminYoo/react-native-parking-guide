@@ -236,8 +236,8 @@ location or fetches zone data; the caller supplies both. It returns one `RuleRes
   `GeoLocation`.
 - `GeofenceZone` has `kind: 'allowed' | 'prohibited'` and `polygon: readonly GeoPoint[]` with at least 3 vertices.
   The ring closes implicitly (repeating the first vertex is allowed), and inside is decided by the even-odd rule.
-- `GeofenceOptions.maxAccuracy` defaults to `DEFAULT_MAX_GEOFENCE_ACCURACY` (`50` m). It must not be `NaN` and must
-  be `>= 0`; `Infinity` disables the limit.
+- `GeofenceOptions.maxAccuracy` defaults to `DEFAULT_MAX_GEOFENCE_ACCURACY` (`50` m). It must be a number that is
+  not `NaN` and is `>= 0`; `Infinity` disables the limit.
 - Invalid coordinates, accuracy, `maxAccuracy`, zone kinds, and polygons that are not arrays, have fewer than
   3 vertices, or contain a hole or a non-object vertex throw `RangeError`. Zones are validated even when `location` is
   `undefined`.
