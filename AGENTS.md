@@ -22,6 +22,12 @@ Guidance for AI coding agents working in this repository.
 It guides users of rentable shared personal mobility vehicles while they photograph their parked vehicle with
 the device camera, and returns a parking verdict of `PASS`, `WARN`, or `FAIL`.
 
+Product goal: after a ride, decide on the device, without a network call, whether the vehicle stands upright in an
+allowed location (not on tactile paving, a crosswalk, or a roadway, not blocking the pedestrian passage, and inside a
+parking zone or geofence), so that the host app gives the rider immediate feedback before the rental ends.
+The capture screen guides the rider to place the target vehicle inside a guide frame. See the `Goal` section and its
+implementation status table in `README.md`; update that table when a goal step changes status.
+
 Scope: rentable shared personal mobility only — bicycles, e-bikes, kickboards (including electric kickboards), and
 motorcycles or mopeds. Cars are out of scope. In `VehicleType`, `'auto'` means "detect the vehicle type
 automatically", not "automobile"; see the TSDoc on `VehicleType` in `src/types.ts`.
@@ -31,6 +37,7 @@ Pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, iO
 `getModelVersion()` stub are implemented. Native model inference is not implemented:
 
 1. Realtime capture guidance via a `react-native-vision-camera` frame processor → `GuidanceState` / `GuidanceIssue`.
+   Only `BLURRY`, `LOW_LIGHT`, and `TILTED` are produced; model-based issues are not implemented.
 2. On-device inference (CoreML on iOS, TFLite on Android) → `RawModelOutput` → `mapModelOutput` → per-rule `RuleResult[]`.
 3. Pure TypeScript JSON-policy rule engine (`evaluatePolicy`) → final `Verdict` and score.
 
