@@ -85,14 +85,18 @@ function projectRing(
 ): [number, number][] {
   const deltas: number[] = [];
   let previous = 0;
+  let min = Infinity;
+  let max = -Infinity;
   ring.forEach((point, index) => {
     previous =
       index === 0
         ? wrapLng(point.lng - origin.lng)
         : previous + wrapLng(point.lng - ring[index - 1]!.lng);
     deltas.push(previous);
+    min = Math.min(min, previous);
+    max = Math.max(max, previous);
   });
-  const center = (Math.min(...deltas) + Math.max(...deltas)) / 2;
+  const center = (min + max) / 2;
   const shift = center - wrapLng(center);
   const metersPerDegreeLng =
     METERS_PER_DEGREE * Math.cos((origin.lat * Math.PI) / 180);

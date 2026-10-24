@@ -206,6 +206,17 @@ describe('evaluateGeofence', () => {
     expect(evaluateGeofence(newYork, [prohibited])).toEqual(PASS);
   });
 
+  it('evaluates a polygon with more vertices than the engine argument limit', () => {
+    const count = 500_000;
+    const polygon = Array.from({ length: count }, (_, index) => {
+      const angle = (2 * Math.PI * index) / count;
+      return at(1000 * Math.cos(angle), 1000 * Math.sin(angle));
+    });
+    expect(
+      evaluateGeofence(location(0, 0), [{ kind: 'allowed', polygon }])
+    ).toEqual(PASS);
+  });
+
   it('reports an unchecked WARN when the accuracy exceeds maxAccuracy', () => {
     expect(DEFAULT_MAX_GEOFENCE_ACCURACY).toBe(50);
     const zones = [square('prohibited', 1000)];
