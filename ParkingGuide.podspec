@@ -13,8 +13,20 @@ Pod::Spec.new do |s|
   s.platforms    = { :ios => min_ios_version_supported }
   s.source       = { :git => "https://github.com/donminzzi/react-native-parking-guide.git", :tag => "v#{s.version}" }
 
-  s.source_files = "ios/**/*.{h,m,mm,swift,cpp}"
-  s.private_header_files = "ios/**/*.h"
+  s.source_files = ["ios/**/*.{h,m,mm,swift,cpp}", "cpp/**/*.h"]
+  s.private_header_files = ["ios/**/*.h", "cpp/**/*.h"]
+
+  # Resolve optional camera dependencies from the consuming app, not this package.
+  app_path = Pod::Config.instance.installation_root.to_s
+  has_camera_worklets = system("node", "-e",
+    "for (const name of ['react-native-vision-camera', 'react-native-worklets-core']) require.resolve(name + '/package.json', { paths: [process.argv[1]] })",
+    app_path, :out => File::NULL, :err => File::NULL)
+  if has_camera_worklets && (!defined?($VCEnableFrameProcessors) || $VCEnableFrameProcessors)
+    s.dependency "VisionCamera/FrameProcessors", "~> 4.7"
+    s.frameworks = "CoreMotion", "CoreVideo", "QuartzCore"
+  else
+    s.exclude_files = "ios/ParkingGuideFrameProcessor.mm"
+  end
 
   install_modules_dependencies(s)
 end
