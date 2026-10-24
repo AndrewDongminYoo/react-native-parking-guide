@@ -84,7 +84,8 @@
   },
   "peerDependencies": {
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "react-native-vision-camera": "^4.7.3"
   },
   "workspaces": [
     "example"
@@ -156,5 +157,10 @@
       "lefthook"
     ],
     "version": "0.64.0"
+  },
+  "peerDependenciesMeta": {
+    "react-native-vision-camera": {
+      "optional": true
+    }
   }
 }
