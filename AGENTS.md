@@ -27,11 +27,11 @@ motorcycles or mopeds. Cars are out of scope. In `VehicleType`, `'auto'` means "
 automatically", not "automobile"; see the TSDoc on `VehicleType` in `src/types.ts`.
 
 Pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, iOS and Android image-quality frame analysis
-(`BLURRY`, `LOW_LIGHT`, `TILTED`), and the native `getModelVersion()` stub are implemented.
-Native model inference is not implemented:
+(`BLURRY`, `LOW_LIGHT`, `TILTED`), the pure TypeScript model-output mapping (`mapModelOutput`), and the native
+`getModelVersion()` stub are implemented. Native model inference is not implemented:
 
 1. Realtime capture guidance via a `react-native-vision-camera` frame processor → `GuidanceState` / `GuidanceIssue`.
-2. On-device inference (CoreML on iOS, TFLite on Android) → per-rule `RuleResult[]`.
+2. On-device inference (CoreML on iOS, TFLite on Android) → `RawModelOutput` → `mapModelOutput` → per-rule `RuleResult[]`.
 3. Pure TypeScript JSON-policy rule engine (`evaluatePolicy`) → final `Verdict` and score.
 
 ## Setup and commands
@@ -62,6 +62,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `src/policy/defaultPolicy.ts` | Default `ParkingPolicy` (weights, severities, `failBelow`, `passThreshold`). |
 | `src/policy/evaluate.ts` | `evaluatePolicy(ruleResults, policy)` — pure, platform-independent. |
 | `src/guidance/` | Pure frame-result reduction and `useParkingGuidance`; frame results must be delivered on the JS thread. |
+| `src/inference/mapping.ts` | `mapModelOutput(output, options)` — pure conversion of `RawModelOutput` to `RuleResult[]`; no model execution. |
 | `src/guidance/frameAnalyzer.ts` | Optional VisionCamera analyzer factory and shared native initialization thresholds. |
 | `ios/ParkingGuideFrameProcessor.mm`, `cpp/CaptureMetrics.h` | iOS image-quality plugin and portable native metrics. |
 | `src/__tests__/` | Jest tests. |
