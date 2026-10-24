@@ -26,7 +26,8 @@ Scope: rentable shared personal mobility only — bicycles, e-bikes, kickboards 
 motorcycles or mopeds. Cars are out of scope. In `VehicleType`, `'auto'` means "detect the vehicle type
 automatically", not "automobile"; see the TSDoc on `VehicleType` in `src/types.ts`.
 
-Planned pipeline (see the `README.md` roadmap). Only step 3 and the native `getModelVersion()` stub are implemented:
+Planned pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, and the native
+`getModelVersion()` stub are implemented; native frame analysis and inference are not:
 
 1. Realtime capture guidance via a `react-native-vision-camera` frame processor → `GuidanceState` / `GuidanceIssue`.
 2. On-device inference (CoreML on iOS, TFLite on Android) → per-rule `RuleResult[]`.
@@ -59,6 +60,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `src/types.ts` | Domain types: `VehicleType`, `Verdict`, `RuleId`, `RuleResult`, `GuidanceState`, `ParkingPolicy`, `VerificationResult`. |
 | `src/policy/defaultPolicy.ts` | Default `ParkingPolicy` (weights, severities, `failBelow`, `passThreshold`). |
 | `src/policy/evaluate.ts` | `evaluatePolicy(ruleResults, policy)` — pure, platform-independent. |
+| `src/guidance/` | Pure frame-result reduction and `useParkingGuidance`; frame results must be delivered on the JS thread. |
 | `src/__tests__/` | Jest tests. |
 | `ios/ParkingGuide.{h,mm}` | Objective-C++ TurboModule implementation. |
 | `android/src/main/java/com/parkingguide/` | Kotlin `ParkingGuideModule` / `ParkingGuidePackage`. |

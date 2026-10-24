@@ -8195,9 +8195,13 @@ __metadata:
   peerDependencies:
     react: "*"
     react-native: "*"
+    react-native-vision-camera: ^4.7.3
   dependenciesMeta:
     lefthook:
       built: true
+  peerDependenciesMeta:
+    react-native-vision-camera:
+      optional: true
   languageName: unknown
   linkType: soft
 
