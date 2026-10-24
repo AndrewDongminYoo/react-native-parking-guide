@@ -431,7 +431,7 @@ export function useParkingFrameProcessor() {
 ```
 
 Pass `frameProcessor` to a VisionCamera `Camera` with `pixelFormat="yuv"`. Mount capture only while the app is
-active and unmount it when capture stops, as in `example/src/App.android.tsx` (Android) and `example/src/App.tsx` (iOS).
+active and unmount it when capture stops, as in `example/src/CaptureScreen.tsx`, which both platforms use.
 
 The Android implementation matches the algorithms and values in `cpp/CaptureMetrics.h` and
 `ios/ParkingGuideFrameProcessor.mm`. `src/guidance/frameAnalyzer.ts` supplies all three thresholds:
@@ -464,13 +464,16 @@ ground visibility, parking compliance, or a `PASS` verdict. Native analysis does
 #### Manual Android verification
 
 Run `yarn example android` with an Android device or emulator providing a camera and rotation-vector sensor.
-The Android example uses `example/src/App.android.tsx`. Allow camera access and select **Start capture**.
+Select a vehicle type, for example **Kickboard**, on the home screen and allow camera access.
 Use a well-lit textured scene with the phone upright, then check each condition for at least three analyzed frames:
 cover the lens for `LOW_LIGHT`, defocus or shake for `BLURRY`, and lean or rotate more than `20` degrees from the
 nearest upright pose for `TILTED`. Multiple issues may appear simultaneously. Check portrait and landscape poses,
-stop capture for at least two seconds, and restart to confirm fresh motion samples and reset guidance history.
-Background the app to confirm capture stops; returning to the app must require **Start capture** again.
+select **Close** (or press the system back button) for at least two seconds, and select the vehicle again to confirm
+fresh motion samples and reset guidance history. Background the app to confirm the camera stops and guidance resets;
+returning to the app restarts the camera with empty guidance history.
 Emulators without a rotation-vector sensor cannot report readiness.
+On Android 17 (API level 37) images, `react-native-vision-camera` 4.7.3 cannot list camera devices and the capture
+screen fails to open (#52); an Android 11 (API level 30) emulator image works.
 
 Device behavior cannot be verified in a cloud session. CI builds the Android example with the plugin enabled and
 runs `:react-native-parking-guide:testDebugUnitTest` for native metric and boundary tests.
@@ -488,11 +491,13 @@ and releases the timer and motion manager when the plugin is destroyed. No frame
 
 #### Manual iOS verification
 
-Run `yarn example ios` with Xcode and a physical iOS device, allow camera access, and select **Start capture**.
+Run `yarn example ios` with Xcode and a physical iOS device, select a vehicle type on the home screen, and allow
+camera access.
 Use a well-lit textured scene with the phone upright, then check each condition for at least three analyzed frames:
 cover the lens for `LOW_LIGHT`, defocus or shake the camera for `BLURRY`, and rotate or lean the phone more than
 `20` degrees away from an upright pose for `TILTED`. Conditions may produce multiple issues simultaneously.
-Select **Stop capture** and restart to check that guidance history resets. Backgrounding the app must close capture.
+Select **Close** and select the vehicle again to check that guidance history resets. Backgrounding the app must stop
+the camera and reset guidance.
 Simulators without a camera or CoreMotion cannot verify all three signals. Native device behavior cannot be
 verified in a Linux cloud session. CI tests the portable native metric implementation and builds the iOS example
 with VisionCamera and Worklets Core, including compilation of `ios/ParkingGuideFrameProcessor.mm`.
