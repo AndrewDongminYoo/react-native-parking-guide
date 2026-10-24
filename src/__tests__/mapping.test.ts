@@ -224,6 +224,27 @@ describe('mapModelOutput', () => {
     }
   );
 
+  it.each([
+    ['CROSSWALK', [0.2, 0, 0.8, 1], [0.74, 0, 0.8, 1], 0.9, 'WARN'],
+    ['CROSSWALK', [0.3, 0, 0.6, 1], [0.57, 0, 0.6, 1], 0.9, 'WARN'],
+    ['PARKING_ZONE', [0.1, 0, 0.4, 1], [0.1, 0, 0.34, 1], 0.8, 'PASS'],
+  ] as [RuleId, ModelBox, ModelBox, number, Verdict][])(
+    'rounds %s decimal-coordinate boundary scores to exact thresholds',
+    (id, vehicleBox, zoneBox, score, verdict) => {
+      const classId = id === 'CROSSWALK' ? 'crosswalk' : 'parking_zone';
+      const output: RawModelOutput = {
+        detections: [
+          { classId: 'vehicle', confidence: 1, box: vehicleBox },
+          { classId, confidence: 1, box: zoneBox },
+        ],
+      };
+      const result = rule(output, id);
+      expect(result.score).toBe(score);
+      expect(result.verdict).toBe(verdict);
+      expect(evaluatePolicy([result], defaultPolicy).verdict).toBe('PASS');
+    }
+  );
+
   it('divides intersection by vehicle area, not union area or zone area', () => {
     expect(rule(compliantScene, 'PARKING_ZONE').score).toBe(1);
     expect(rule(compliantScene, 'ROADWAY').score).toBe(1);

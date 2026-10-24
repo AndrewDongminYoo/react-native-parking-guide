@@ -133,6 +133,16 @@ function hasArea(detection: ModelDetection): boolean {
   );
 }
 
+const GEOMETRIC_SCORE_SCALE = 1e6;
+
+/**
+ * Rounds a geometric score to 6 decimal places so floating-point error in box arithmetic
+ * cannot move a score across a threshold boundary (for example 0.8999999999999999 instead of 0.9).
+ */
+function roundGeometricScore(score: number): number {
+  return Math.round(score * GEOMETRIC_SCORE_SCALE) / GEOMETRIC_SCORE_SCALE;
+}
+
 /** Exact union area of axis-aligned boxes; duplicate zones are not counted twice. */
 function unionArea(boxes: readonly ModelBox[]): number {
   const edges = [...new Set(boxes.flatMap((box) => [box[0], box[2]]))].sort(
@@ -276,7 +286,7 @@ export function mapModelOutput(
       const ratio = overlapRatio(vehicle, zones);
       return result(
         id,
-        id === 'PARKING_ZONE' ? ratio : 1 - ratio,
+        roundGeometricScore(id === 'PARKING_ZONE' ? ratio : 1 - ratio),
         zones.reduce(
           (lowest, zone) => Math.min(lowest, zone.confidence),
           vehicle.confidence
