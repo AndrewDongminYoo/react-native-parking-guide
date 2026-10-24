@@ -1,7 +1,7 @@
 # Copilot code review instructions
 
-Project context, layout, and commands live in `AGENTS.md` — do not repeat them in review comments.
-Write review comments in Korean. Focus reviews on the risks below. Comment only on concrete problems; skip style that ESLint/Prettier already enforce.
+Project context, layout, and commands are in `AGENTS.md`; do not restate them in review comments.
+Write review comments in English. Focus on the risks below. Comment only on concrete problems; do not comment on formatting that ESLint or Prettier already enforces.
 
 ## Rule engine (`src/policy/`)
 
@@ -28,7 +28,11 @@ Write review comments in Korean. Focus reviews on the risks below. Comment only 
 - Photos, location, and device data are sensitive: flag logging of them, uploads without explicit opt-in, or new network calls.
 - No secrets, keys, or hardcoded endpoints in source.
 
-## Do not review / do not edit
+## Out of scope
 
-- `lib/` (generated), native build dirs, and `.github/skills/` (vendored from rn-agents-kit; re-sync upstream instead of editing).
-- Flag new code, comments, or docs that are not written in English.
+- Do not review `lib/` (generated output), native build directories, or the vendored skill directories under `.github/skills/` (they are re-synced from rn-agents-kit upstream). `.github/skills/README.md` is repository-local and is reviewed normally.
+
+## Language and wording
+
+- Flag any code, comment, documentation, commit message, or pull request text that is not in English.
+- Flag documentation wording that is ambiguous, for example vague references instead of exact file/symbol names, or conditions without explicit thresholds.
