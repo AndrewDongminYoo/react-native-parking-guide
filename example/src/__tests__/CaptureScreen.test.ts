@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
-import { isValidElement } from 'react';
+import { isValidElement, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState, BackHandler, Platform } from 'react-native';
 import { Camera, useCameraPermission } from 'react-native-vision-camera';
 
 import App from '../App';
@@ -14,8 +14,8 @@ import {
 } from '../captureCopy';
 
 jest.mock('react-native', () => ({
-  AppState: { currentState: 'active' },
-  BackHandler: {},
+  AppState: { currentState: 'active', addEventListener: jest.fn() },
+  BackHandler: { addEventListener: jest.fn() },
   Platform: { OS: 'ios' },
   StatusBar: {},
   StyleSheet: { create: (styles: unknown) => styles, absoluteFill: {} },
@@ -24,14 +24,17 @@ jest.mock('react-native', () => ({
   View: 'View',
 }));
 
+const mockStateSetters: jest.Mock[] = [];
+
 jest.mock('react', () => ({
   ...jest.requireActual<typeof import('react')>('react'),
   useCallback: (callback: unknown) => callback,
   useEffect: jest.fn(),
-  useState: (initial: unknown) => [
-    typeof initial === 'function' ? initial() : initial,
-    jest.fn(),
-  ],
+  useState: (initial: unknown) => {
+    const setter = jest.fn();
+    mockStateSetters.push(setter);
+    return [typeof initial === 'function' ? initial() : initial, setter];
+  },
 }));
 
 jest.mock('react-native-vision-camera', () => ({
@@ -60,6 +63,8 @@ jest.mock(
 
 afterEach(() => {
   jest.restoreAllMocks();
+  jest.mocked(useEffect).mockClear();
+  mockStateSetters.length = 0;
   Platform.OS = 'ios';
   AppState.currentState = 'active';
 });
@@ -188,4 +193,46 @@ describe('example capture lifecycle', () => {
       expect(names).toContain(mounted ? 'CameraCapture' : 'CaptureHeader');
     }
   );
+});
+
+describe('example capture AppState subscription', () => {
+  it('tracks AppState changes and removes the listener on unmount', () => {
+    const remove = jest.fn();
+    let listener: ((state: string) => void) | undefined;
+    jest
+      .mocked(AppState.addEventListener)
+      .mockImplementation((_type, handler) => {
+        listener = handler as (state: string) => void;
+        return { remove };
+      });
+    jest
+      .mocked(BackHandler.addEventListener)
+      .mockReturnValue({ remove: jest.fn() });
+
+    CaptureScreen({ vehicleType: 'kickboard', onClose: () => undefined });
+    // CaptureScreen calls useState for permissionDenied, then for active.
+    const setActive = mockStateSetters[1]!;
+    const cleanups = jest
+      .mocked(useEffect)
+      .mock.calls.map(([effect]) => effect());
+
+    expect(AppState.addEventListener).toHaveBeenCalledWith(
+      'change',
+      expect.any(Function)
+    );
+    for (const [state, active] of [
+      ['background', false],
+      ['active', true],
+      ['inactive', false],
+    ] as const) {
+      setActive.mockClear();
+      listener!(state);
+      expect(setActive).toHaveBeenCalledWith(active);
+    }
+
+    for (const cleanup of cleanups) {
+      cleanup?.();
+    }
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
 });

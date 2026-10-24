@@ -33,7 +33,12 @@ function Home() {
     <View
       style={[
         styles.container,
-        { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 },
+        {
+          paddingTop: insets.top + 24,
+          paddingBottom: insets.bottom + 24,
+          paddingLeft: insets.left + 24,
+          paddingRight: insets.right + 24,
+        },
       ]}
     >
       <StatusBar barStyle="dark-content" />
