@@ -19,8 +19,12 @@ Guidance for AI coding agents working in this repository.
 ## Project overview
 
 `react-native-parking-guide` is a React Native native package (TurboModule, New Architecture) for iOS and Android.
-It guides users of shared personal mobility vehicles (bicycles, kickboards, e-bikes, motorcycles) while they
-photograph their parked vehicle with the device camera, and returns a parking verdict of `PASS`, `WARN`, or `FAIL`.
+It guides users of rentable shared personal mobility vehicles while they photograph their parked vehicle with
+the device camera, and returns a parking verdict of `PASS`, `WARN`, or `FAIL`.
+
+Scope: rentable shared personal mobility only — bicycles, e-bikes, kickboards (including electric kickboards), and
+motorcycles or mopeds. Cars are out of scope. In `VehicleType`, `'auto'` means "detect the vehicle type
+automatically", not "automobile"; see the TSDoc on `VehicleType` in `src/types.ts`.
 
 Planned pipeline (see the `README.md` roadmap). Only step 3 and the native `getModelVersion()` stub are implemented:
 

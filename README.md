@@ -1,8 +1,11 @@
 # react-native-parking-guide
 
-A React Native TurboModule library for iOS and Android. It guides users of shared personal mobility vehicles
-(bicycles, kickboards, e-bikes, and motorcycles) while they photograph their parked vehicle with the device camera,
-and returns a parking verdict of `PASS`, `WARN`, or `FAIL`.
+A React Native TurboModule library for iOS and Android. It guides users of rentable shared personal mobility
+vehicles while they photograph their parked vehicle with the device camera, and returns a parking verdict of
+`PASS`, `WARN`, or `FAIL`.
+
+Supported vehicles are rentable shared personal mobility only: bicycles, electric-assist bicycles (e-bikes),
+kickboards including electric kickboards, and motorcycles or mopeds. Cars are out of scope.
 
 > **Status:** early scaffold (v0.1). Only the policy evaluation engine (`evaluatePolicy`) and a native
 > `getModelVersion()` stub are implemented. Camera guidance and on-device inference are planned, not implemented.
