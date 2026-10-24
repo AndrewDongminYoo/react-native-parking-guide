@@ -13,6 +13,21 @@ export type {
   GuidanceOptions,
   GuidanceReducerState,
 } from './guidance/reducer';
+export {
+  DEFAULT_MAPPING_THRESHOLDS,
+  mapModelOutput,
+} from './inference/mapping';
+export type {
+  InferenceRuleId,
+  MappingOptions,
+  MappingThresholds,
+  ModelAssessment,
+  ModelBox,
+  ModelClass,
+  ModelDetection,
+  ModelMask,
+  RawModelOutput,
+} from './inference/mapping';
 export { defaultPolicy } from './policy/defaultPolicy';
 export { evaluatePolicy } from './policy/evaluate';
 export { validatePolicy } from './policy/validate';

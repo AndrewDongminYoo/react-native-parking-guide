@@ -5,6 +5,8 @@ import {
   createParkingFrameAnalyzer,
   CAPTURE_GUIDANCE_THRESHOLDS,
   getModelVersion,
+  mapModelOutput,
+  DEFAULT_MAPPING_THRESHOLDS,
   reduceGuidance,
   useParkingGuidance,
 } from '../index';
@@ -31,5 +33,10 @@ describe('guidance public API', () => {
       ).guidance
     ).toEqual({ ready: true, issues: [], progress: 1 });
     expect(getModelVersion()).toBe('0.1.0-dev');
+  });
+
+  it('exports pure inference mapping without loading Vision Camera', () => {
+    expect(mapModelOutput({ detections: [] })[0]?.verdict).toBe('FAIL');
+    expect(DEFAULT_MAPPING_THRESHOLDS.VEHICLE_DETECTED.passAt).toBe(0.8);
   });
 });

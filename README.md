@@ -9,7 +9,8 @@ kickboards including electric kickboards, and motorcycles or mopeds. Cars are ou
 
 > **Status:** the policy evaluation engine (`evaluatePolicy`), JS capture-guidance state processing
 > (`useParkingGuidance`), iOS and Android image-quality frame analysis, and a native `getModelVersion()` stub
-> are implemented. Vehicle detection and on-device inference are not implemented.
+> are implemented. Pure TypeScript model-output mapping (`mapModelOutput`) is implemented;
+> vehicle detection and on-device inference are not implemented.
 
 ## Planned architecture
 
@@ -68,6 +69,89 @@ The package implements policy evaluation, JS guidance state processing, and iOS 
 - `createGuidanceState(): GuidanceReducerState` creates independent smoothing/debounce history.
 - `reduceGuidance(state: GuidanceReducerState, frame: GuidanceFrameResult, options?: GuidanceOptions): GuidanceReducerState`
   processes one frame without I/O, timers, or input mutation.
+- `mapModelOutput(output: RawModelOutput, options?: MappingOptions): RuleResult[]` converts a complete scene prediction
+  into eight rule results without executing a model. See [Model-output mapping](#model-output-mapping).
+- `DEFAULT_MAPPING_THRESHOLDS` contains the immutable score thresholds listed below.
+
+### Model-output mapping
+
+`src/inference/mapping.ts` defines platform-neutral, serializable model output types. Model adapters must supply
+a complete scene prediction: `detections` contains instances of `vehicle`, `tactile_paving`, `crosswalk`, `roadway`,
+`sidewalk_block`, and `parking_zone`. An absent class means no detection, not an unexecuted model head.
+`vehicle` includes only the shared personal mobility categories listed above, not cars. `sidewalk_block`
+represents the model's predicted obstructed pedestrian passage, not every sidewalk surface.
+
+Each `ModelDetection` has `classId`, `confidence`, and `box`. A `ModelBox` is
+`[left, top, right, bottom]`, normalized to `[0, 1]` with the origin at the top-left of the upright image.
+All boxes and masks must describe that same image after orientation correction. An optional `ModelMask` contains
+positive integer `width` and `height` and row-major binary `data` (`0` or `1`) for the **entire image**, not a crop.
+All masks in one output must have identical dimensions; data length must equal `width * height`.
+Zero-area boxes and detections with empty masks are ignored.
+
+Optional `upright: ModelAssessment` on each vehicle measures vehicle uprightness, not camera tilt.
+Optional `imageQuality: ModelAssessment` on `RawModelOutput` measures image suitability; the mapper does not
+derive it from capture-guidance issues. Each assessment has `score` (higher means more compliant) and `confidence`.
+All input scores, confidences, coordinates, and configured thresholds must be finite and in `[0, 1]`.
+Invalid numeric values, inverted boxes, malformed masks, mismatched mask grids, and `failBelow > passAt`
+throw `RangeError`; the mapper never clamps invalid model input.
+
+`minimumConfidence` defaults to `0.5`. Detections and assessments strictly below it are ignored.
+The mapper selects the accepted nonempty vehicle with the highest confidence, retaining the first on ties.
+Only that vehicle's `upright` assessment is used. A returned vehicle `evidence.bbox` is a fresh normalized
+`[left, top, right, bottom]` array.
+
+For each zone class, overlap is `area(vehicle ∩ union(accepted zones)) / area(vehicle)`, not intersection-over-union.
+Overlapping zone instances count only once. If the vehicle and **every accepted instance of that zone class**
+have masks, overlap uses foreground pixels. Otherwise it uses the exact union of box intersections.
+`PARKING_ZONE.score` is overlap; `TACTILE_PAVING`, `CROSSWALK`, `ROADWAY`, and `SIDEWALK_BLOCK` scores are
+`1 - overlap`. With no accepted zone instances, these scores are respectively `0` and `1`.
+These are geometric compliance scores, not calibrated probabilities.
+
+`VEHICLE_DETECTED.score` equals the selected vehicle's confidence. `UPRIGHT.score` and `IMAGE_QUALITY.score`
+come directly from their assessments. Zone confidence is the minimum of the selected vehicle's confidence
+and all accepted instances of that zone class; if none exist, it is the vehicle's confidence.
+Assessment rules retain their assessment confidence. Confidence is diagnostic and does not weight the policy score.
+
+| Rule | `failBelow` | `passAt` |
+| --- | --- | --- |
+| `VEHICLE_DETECTED`, `UPRIGHT`, `PARKING_ZONE`, `IMAGE_QUALITY` | `0.5` | `0.8` |
+| `TACTILE_PAVING`, `CROSSWALK`, `ROADWAY` | `0.9` | `0.99` |
+| `SIDEWALK_BLOCK` | `0.8` | `0.95` |
+
+For an available rule, score strictly below `failBelow` gives `FAIL`; score greater than or equal to `passAt`
+gives `PASS`; all other scores give `WARN`. Override individual pairs through `MappingOptions.thresholds`.
+Without an accepted vehicle, `VEHICLE_DETECTED` is `FAIL` with score/confidence `0`; `UPRIGHT` and the five
+zone rules are `WARN` with score/confidence `0`. Missing or ignored assessments are also `WARN` with
+score/confidence `0`, so unknown evidence cannot increase the overall score.
+`IMAGE_QUALITY` can still be evaluated without a vehicle.
+
+Results always appear in this order: `VEHICLE_DETECTED`, `UPRIGHT`, `TACTILE_PAVING`, `CROSSWALK`, `ROADWAY`,
+`SIDEWALK_BLOCK`, `PARKING_ZONE`, `IMAGE_QUALITY`. `GEOFENCE` is not inferred from image data.
+The mapper is synchronous, deterministic, and does not mutate inputs, perform I/O, or access native APIs.
+`evaluatePolicy` remains unchanged: its configured severity and `failBelow` can hard-fail a mapper `WARN`.
+
+```ts
+import { defaultPolicy, evaluatePolicy, mapModelOutput } from 'react-native-parking-guide';
+import type { RawModelOutput } from 'react-native-parking-guide';
+
+const output: RawModelOutput = {
+  detections: [
+    {
+      classId: 'vehicle',
+      confidence: 0.95,
+      box: [0.2, 0.1, 0.8, 0.9],
+      upright: { score: 0.95, confidence: 0.9 },
+    },
+    { classId: 'parking_zone', confidence: 0.9, box: [0, 0, 1, 1] },
+  ],
+  imageQuality: { score: 0.9, confidence: 0.95 },
+};
+const rules = mapModelOutput(output, {
+  minimumConfidence: 0.5,
+  thresholds: { CROSSWALK: { failBelow: 0.95, passAt: 0.99 } },
+});
+const result = evaluatePolicy(rules, defaultPolicy);
+```
 
 ### Capture guidance
 
