@@ -9,8 +9,8 @@ import {
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
 } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 import {
   Camera,
   runAtTargetFps,
@@ -28,6 +28,12 @@ import {
 import type { VehicleType } from 'react-native-parking-guide';
 
 import { captureTitle, guidanceMessages } from './captureCopy';
+import {
+  GUIDE_FRAME_HINT_GAP,
+  GUIDE_FRAME_HORIZONTAL_MARGIN,
+  fitGuideFrameWidth,
+} from './guideFrameLayout';
+import type { LayoutSize } from './guideFrameLayout';
 import { VehicleSilhouette } from './VehicleSilhouette';
 
 const READY_COLOR = '#34C759';
@@ -49,7 +55,16 @@ function CaptureHeader({
 }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View
+      style={[
+        styles.header,
+        {
+          paddingTop: insets.top + 8,
+          paddingLeft: insets.left + 16,
+          paddingRight: insets.right + 16,
+        },
+      ]}
+    >
       <View style={styles.headerRow}>
         <Pressable
           accessibilityRole="button"
@@ -90,7 +105,8 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
   const [torchOn, setTorchOn] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [status, setStatus] = useState('');
-  const { width } = useWindowDimensions();
+  const [frameArea, setFrameArea] = useState<LayoutSize | null>(null);
+  const [hintHeight, setHintHeight] = useState<number | null>(null);
   const insets = useSafeAreaInsets();
   const analyze = useMemo(
     () => createParkingFrameAnalyzer(VisionCameraProxy),
@@ -129,7 +145,10 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
     guidance.ready && guidance.issues.length === 0 && !capturing;
   const messages = guidanceMessages(guidance.issues);
   const frameColor = guidance.ready ? READY_COLOR : IDLE_COLOR;
-  const frameWidth = Math.min(width - 48, 420);
+  const frameWidth =
+    frameArea && hintHeight !== null
+      ? fitGuideFrameWidth(frameArea, hintHeight)
+      : 0;
 
   async function capturePhoto() {
     if (!canCapture || camera.current == null) {
@@ -167,24 +186,50 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
             : undefined
         }
       />
-      <View style={styles.frameArea} pointerEvents="none">
-        <View
-          style={[
-            styles.guideFrame,
-            { width: frameWidth, borderColor: frameColor },
-          ]}
+      <View
+        style={[
+          styles.frameArea,
+          { marginLeft: insets.left, marginRight: insets.right },
+        ]}
+        pointerEvents="none"
+        onLayout={(event: LayoutChangeEvent) => {
+          const { width, height } = event.nativeEvent.layout;
+          setFrameArea({ width, height });
+        }}
+      >
+        {frameWidth > 0 ? (
+          <View
+            style={[
+              styles.guideFrame,
+              { width: frameWidth, borderColor: frameColor },
+            ]}
+          >
+            <VehicleSilhouette
+              vehicleType={vehicleType}
+              width={frameWidth * 0.7}
+              color={frameColor}
+            />
+          </View>
+        ) : null}
+        <Text
+          style={styles.frameHint}
+          onLayout={(event: LayoutChangeEvent) =>
+            setHintHeight(event.nativeEvent.layout.height)
+          }
         >
-          <VehicleSilhouette
-            vehicleType={vehicleType}
-            width={frameWidth * 0.7}
-            color={frameColor}
-          />
-        </View>
-        <Text style={styles.frameHint}>
           Fit the whole vehicle and the ground around it inside the frame.
         </Text>
       </View>
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+      <View
+        style={[
+          styles.footer,
+          {
+            paddingBottom: insets.bottom + 16,
+            paddingLeft: insets.left + 16,
+            paddingRight: insets.right + 16,
+          },
+        ]}
+      >
         <View style={styles.messages} accessibilityLiveRegion="polite">
           {messages.length > 0 ? (
             messages.map((message) => (
@@ -339,7 +384,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'black',
   },
   header: {
-    paddingHorizontal: 16,
     paddingBottom: 12,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
@@ -383,7 +427,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
   },
   guideFrame: {
     aspectRatio: 4 / 3,
@@ -395,7 +438,8 @@ const styles = StyleSheet.create({
   },
   frameHint: {
     color: 'white',
-    marginTop: 12,
+    marginTop: GUIDE_FRAME_HINT_GAP,
+    paddingHorizontal: GUIDE_FRAME_HORIZONTAL_MARGIN,
     textAlign: 'center',
     textShadowColor: 'black',
     textShadowRadius: 4,
@@ -403,7 +447,6 @@ const styles = StyleSheet.create({
   footer: {
     alignItems: 'center',
     gap: 16,
-    paddingHorizontal: 16,
     paddingTop: 12,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
