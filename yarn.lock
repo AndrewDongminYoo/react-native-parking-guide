@@ -8173,6 +8173,8 @@ __metadata:
   resolution: "react-native-parking-guide-example@workspace:example"
   dependencies:
     "@babel/core": "npm:^7.25.2"
+    "@babel/plugin-proposal-nullish-coalescing-operator": "npm:7.18.6"
+    "@babel/plugin-proposal-optional-chaining": "npm:7.21.0"
     "@babel/preset-env": "npm:^7.25.3"
     "@babel/runtime": "npm:^7.25.0"
     "@react-native-community/cli": "npm:20.2.0"

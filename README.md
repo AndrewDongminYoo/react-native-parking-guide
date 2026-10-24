@@ -8,8 +8,8 @@ Supported vehicles are rentable shared personal mobility only: bicycles, electri
 kickboards including electric kickboards, and motorcycles or mopeds. Cars are out of scope.
 
 > **Status:** the policy evaluation engine (`evaluatePolicy`), JS capture-guidance state processing
-> (`useParkingGuidance`), iOS image-quality frame analysis, and a native `getModelVersion()` stub are implemented.
-> Android frame analysis, vehicle detection, and on-device inference are not implemented.
+> (`useParkingGuidance`), iOS and Android image-quality frame analysis, and a native `getModelVersion()` stub
+> are implemented. Vehicle detection and on-device inference are not implemented.
 
 ## Planned architecture
 
@@ -20,8 +20,8 @@ kickboards including electric kickboards, and motorcycles or mopeds. Cars are ou
 ## Roadmap
 
 - **v0.1 (MVP)**: TurboModule scaffold, typed API skeleton, policy evaluation engine, native model-version stub.
-- **v0.2 (M2)**: JS frame-result handoff, smoothed capture guidance, and iOS native frame analysis are implemented.
-  Android native frame analysis remains planned.
+- **v0.2 (M2)**: JS frame-result handoff, smoothed capture guidance, and iOS and Android image-quality frame analysis
+  are implemented.
 - **v0.5**: prohibited-zone rules (tactile paving, crosswalk, roadway), geofence integration, additional guidance signals.
 - **v1.0**: production on-device model pipeline, attestation support, upload and server-side verification integration.
 
@@ -34,18 +34,22 @@ npm install react-native-parking-guide
 `react-native-vision-camera@^4.7.3` is an optional peer dependency. Install it in the app only when using its
 camera/frame processors; the policy engine and JS guidance logic do not import or require it.
 
-For iOS capture guidance, also install `react-native-worklets-core@^1.6.3`, add
-`react-native-worklets-core/plugin` to the app's Babel `plugins`, set `NSCameraUsageDescription` and
-`NSMotionUsageDescription` in the app's `Info.plist`, and run `pod install`.
-Worklets Core 1.6.3 also requires the Babel development dependencies
+For capture guidance, install `react-native-worklets-core@1.6.3` and add
+`react-native-worklets-core/plugin` to the app's Babel `plugins`. Worklets Core 1.6.3 requires
 `@babel/plugin-proposal-optional-chaining@7.21.0` and
-`@babel/plugin-proposal-nullish-coalescing-operator@7.18.6`.
+`@babel/plugin-proposal-nullish-coalescing-operator@7.18.6` as Babel development dependencies.
+Declare `android.permission.CAMERA` in the app's manifest and request camera permission before mounting `Camera`.
+Do not set `VisionCamera_enableFrameProcessors=false`. `android/build.gradle` includes the plugin only when
+both camera and worklets projects are autolinked and frame processors are enabled; policy-only consumers need neither.
+
+For iOS capture guidance, set `NSCameraUsageDescription` and
+`NSMotionUsageDescription` in the app's `Info.plist`, and run `pod install`.
 `ParkingGuide.podspec` enables the plugin only when both camera and worklets packages resolve from the app
 and `$VCEnableFrameProcessors` is not `false`. Do not disable VisionCamera frame processors when using this API.
 
 ## API
 
-The package implements policy evaluation, JS guidance state processing, and iOS image-quality frame analysis.
+The package implements policy evaluation, JS guidance state processing, and iOS and Android image-quality frame analysis.
 `VerificationResult` describes a planned photo-verification result; no photo verification is implemented.
 
 ### Runtime exports
@@ -57,24 +61,24 @@ The package implements policy evaluation, JS guidance state processing, and iOS 
 - `getModelVersion(): string` returns `"0.1.0-dev"` on iOS and Android.
 - `useParkingGuidance(options?: GuidanceOptions): ParkingGuidance` returns `ready`, `issues`, `progress`,
   `onFrameResult`, and `reset`. See [Capture guidance](#capture-guidance).
-- `createParkingFrameAnalyzer(VisionCameraProxy): ParkingFrameAnalyzer<Frame>` creates an iOS VisionCamera plugin
-  instance on the JS thread and returns a worklet that analyzes one frame. Import `VisionCameraProxy` from
-  `react-native-vision-camera` in the app and pass it explicitly; the library has no runtime import of the
-  optional camera package. The factory throws if the plugin is unavailable.
-- `CAPTURE_GUIDANCE_THRESHOLDS` contains the named initialization values shared by iOS and future Android plugins.
+- `createParkingFrameAnalyzer(VisionCameraProxy): ParkingFrameAnalyzer<Frame>` creates the `parkingGuide` plugin
+  on the JS thread and returns a frame-processor worklet. Pass `VisionCameraProxy` from the app's VisionCamera import;
+  the library does not import optional camera/worklets packages at runtime. Throws if the native plugin is unavailable.
+- `CAPTURE_GUIDANCE_THRESHOLDS` contains the immutable native initialization thresholds listed below.
 - `createGuidanceState(): GuidanceReducerState` creates independent smoothing/debounce history.
 - `reduceGuidance(state: GuidanceReducerState, frame: GuidanceFrameResult, options?: GuidanceOptions): GuidanceReducerState`
   processes one frame without I/O, timers, or input mutation.
 
 ### Capture guidance
 
-`useParkingGuidance` manages JS-side state; `createParkingFrameAnalyzer` supplies iOS native analysis.
+`useParkingGuidance` manages JS state; `createParkingFrameAnalyzer` supplies iOS and Android native image-quality analysis.
 Neither API creates a camera or detects a vehicle. Analysis returns serializable `GuidanceFrameResult` objects
 containing `ready`, `issues`, and `progress`.
 Call `onFrameResult` in frame order on the **JS thread**. A Vision Camera worklet must use the app's
 worklet-to-JS bridge to invoke it; do not call the React callback directly from a worklet or transfer camera
-`Frame` objects to it. The app owns camera permissions, worklet setup, and the bridge. Frames are processed
-synchronously on VisionCamera's frame-processor thread, never retained, saved, logged, or uploaded.
+`Frame` objects to it. The app owns camera permissions, worklet setup, and the bridge. Native analysis runs
+synchronously on VisionCamera's frame-processor thread, not the JS or main thread. It never retains, saves,
+logs, or uploads frames, location, or sensor data.
 
 After configuring VisionCamera 4 and Worklets Core, create one analyzer per capture session:
 
@@ -114,19 +118,49 @@ export function useParkingFrameProcessor() {
 }
 ```
 
-Pass `frameProcessor` to a VisionCamera `Camera` with `pixelFormat="yuv"`. Mount the capture component only while
-capture is active, and unmount it when capture stops or the app enters the background, as in `example/src/App.tsx`.
-The plugin stops CoreMotion updates when its one-second idle timer observes at least one second without frames,
-and releases the timer and motion manager when the plugin is destroyed. No frame is captured by this timer.
+Pass `frameProcessor` to a VisionCamera `Camera` with `pixelFormat="yuv"`. Mount capture only while the app is
+active and unmount it when capture stops, as in `example/src/App.android.tsx` (Android) and `example/src/App.tsx` (iOS).
 
-`src/guidance/frameAnalyzer.ts` defines the single set of thresholds passed into native plugin initialization:
+The Android implementation matches the algorithms and values in `cpp/CaptureMetrics.h` and
+`ios/ParkingGuideFrameProcessor.mm`. `src/guidance/frameAnalyzer.ts` supplies all three thresholds:
 
 | Constant field | Issue condition |
 | --- | --- |
-| `minLaplacianVariance = 100` | `BLURRY` when the four-neighbor Laplacian population variance is strictly below `100`. |
+| `minLaplacianVariance = 100` | `BLURRY` when four-neighbor Laplacian population variance is strictly below `100`. |
 | `minMeanLuminance = 50` | `LOW_LIGHT` when mean luminance is strictly below `50` on the `[0, 255]` scale. |
 | `maxTiltRadians = Math.PI / 9` | `TILTED` when absolute pitch or roll deviation is strictly above `20` degrees. |
 
+`android/src/main/java/com/parkingguide/CaptureMetrics.kt` samples the entire luma plane on a nearest-neighbor
+grid of at most `160 × 120` pixels, excluding grid borders from Laplacian variance. It respects buffer position,
+row padding, and pixel stride. `YUV_420_888` video-range luminance `[16, 235]` is normalized to `[0, 255]`.
+On Android 13+, explicitly full-range image data is used directly; older versions and unspecified data ranges
+are treated as video range. Unsupported formats or invalid planes return `{ ready: false, issues: [], progress: 0 }`.
+These are image-quality heuristics, not calibrated guarantees of sharpness or exposure.
+
+`SensorManager.TYPE_ROTATION_VECTOR` supplies a gravity direction on a dedicated `HandlerThread`. Pitch measures
+deviation from vertical; roll measures deviation from the nearest upright portrait or landscape pose. Lying flat
+is tilted. Missing sensors, samples older than `0.5` seconds, and non-finite motion never produce `ready: true`
+and do not fabricate a `TILTED` issue. Progress is the fraction of the three checks that pass; unavailable motion
+counts as a check not passed. Sensor listeners and their worker thread are released on host pause, host destruction,
+TurboModule invalidation, or after one second without frames. After idle shutdown or host pause, analysis restarts
+sensor updates on the next active-session frame.
+
+`ready: true` means only that these three image-quality checks passed. It does not assert vehicle presence,
+ground visibility, parking compliance, or a `PASS` verdict. ML-based issues remain out of scope.
+
+#### Manual Android verification
+
+Run `yarn example android` with an Android device or emulator providing a camera and rotation-vector sensor.
+The Android example uses `example/src/App.android.tsx`. Allow camera access and select **Start capture**.
+Use a well-lit textured scene with the phone upright, then check each condition for at least three analyzed frames:
+cover the lens for `LOW_LIGHT`, defocus or shake for `BLURRY`, and lean or rotate more than `20` degrees from the
+nearest upright pose for `TILTED`. Multiple issues may appear simultaneously. Check portrait and landscape poses,
+stop capture for at least two seconds, and restart to confirm fresh motion samples and reset guidance history.
+Background the app to confirm capture stops; returning to the app must require **Start capture** again.
+Emulators without a rotation-vector sensor cannot report readiness.
+
+Device behavior cannot be verified in a cloud session. CI builds the Android example with the plugin enabled and
+runs `:react-native-parking-guide:testDebugUnitTest` for native metric and boundary tests.
 `cpp/CaptureMetrics.h` samples the entire luma plane on a nearest-neighbor grid of at most `160 × 120` pixels,
 excludes grid borders from Laplacian variance, respects row padding, and normalizes video-range YUV `[16, 235]`
 to `[0, 255]`. Full-range YUV is used directly. These are image-quality heuristics, not calibrated guarantees
@@ -136,9 +170,8 @@ or landscape pose. A device lying flat is tilted. Motion samples older than `0.5
 unsupported pixel formats never produce `ready: true`. Missing motion does not fabricate a `TILTED` issue.
 Progress is the fraction of the three quality checks that pass; unavailable motion counts as a check not passed.
 An invalid or unsupported image produces `{ ready: false, issues: [], progress: 0 }`.
-
-`ready: true` means only that these three image-quality checks passed. It does not assert vehicle presence,
-ground visibility, parking compliance, or a `PASS` verdict. ML-based guidance remains out of scope.
+The iOS plugin stops CoreMotion updates when its one-second idle timer observes at least one second without frames,
+and releases the timer and motion manager when the plugin is destroyed. No frame is captured by this timer.
 
 #### Manual iOS verification
 

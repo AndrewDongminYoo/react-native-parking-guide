@@ -26,9 +26,9 @@ Scope: rentable shared personal mobility only — bicycles, e-bikes, kickboards 
 motorcycles or mopeds. Cars are out of scope. In `VehicleType`, `'auto'` means "detect the vehicle type
 automatically", not "automobile"; see the TSDoc on `VehicleType` in `src/types.ts`.
 
-Pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, iOS image-quality frame analysis
+Pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, iOS and Android image-quality frame analysis
 (`BLURRY`, `LOW_LIGHT`, `TILTED`), and the native `getModelVersion()` stub are implemented.
-Android frame analysis and native model inference are not:
+Native model inference is not implemented:
 
 1. Realtime capture guidance via a `react-native-vision-camera` frame processor → `GuidanceState` / `GuidanceIssue`.
 2. On-device inference (CoreML on iOS, TFLite on Android) → per-rule `RuleResult[]`.
@@ -67,6 +67,8 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `src/__tests__/` | Jest tests. |
 | `ios/ParkingGuide.{h,mm}` | Objective-C++ TurboModule implementation. |
 | `android/src/main/java/com/parkingguide/` | Kotlin `ParkingGuideModule` / `ParkingGuidePackage`. |
+| `android/src/visionCamera/java/com/parkingguide/` | Optional frame processor and rotation-vector sensor lifecycle. |
+| `android/src/test/java/com/parkingguide/` | Capture metric JUnit tests (`:react-native-parking-guide:testDebugUnitTest`). |
 | `ParkingGuide.podspec`, `android/build.gradle` | Native build configuration. |
 | `example/` | Example app used for manual testing and CI native builds. |
 | `.github/skills/` | React Native agent skills vendored from rn-agents-kit (Apache-2.0). Do not edit, except `README.md`. |

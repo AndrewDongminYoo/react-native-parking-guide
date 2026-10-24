@@ -12,7 +12,7 @@ export interface ParkingFrameAnalyzer<Frame> {
   (frame: Frame): GuidanceFrameResult;
 }
 
-/** Create once per capture session on the JS thread. Currently iOS only. */
+/** Create once per capture session on the JS thread. */
 export function createParkingFrameAnalyzer<Frame>(proxy: {
   initFrameProcessorPlugin(
     name: string,
@@ -25,7 +25,7 @@ export function createParkingFrameAnalyzer<Frame>(proxy: {
   );
   if (plugin == null) {
     throw new Error(
-      'The parkingGuide frame processor is unavailable. Install the iOS plugin and enable VisionCamera frame processors.'
+      'The parkingGuide frame processor is unavailable. Install the native plugin and enable VisionCamera frame processors.'
     );
   }
 

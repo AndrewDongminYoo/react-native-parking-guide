@@ -7,6 +7,10 @@ import com.facebook.react.module.model.ReactModuleInfo
 import com.facebook.react.module.model.ReactModuleInfoProvider
 
 class ParkingGuidePackage : BaseReactPackage() {
+  init {
+    ParkingGuideFrameProcessors.register()
+  }
+
   override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? {
     return if (name == ParkingGuideModule.NAME) {
       ParkingGuideModule(reactContext)

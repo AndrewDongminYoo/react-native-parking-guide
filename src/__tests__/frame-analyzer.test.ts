@@ -23,7 +23,7 @@ beforeEach(() => {
 
 describe('createParkingFrameAnalyzer', () => {
   it('initializes the native plugin with the shared Android/iOS thresholds', () => {
-    createParkingFrameAnalyzer(proxy);
+    const analyze = createParkingFrameAnalyzer(proxy);
     expect(mockInitFrameProcessorPlugin).toHaveBeenCalledWith(
       'parkingGuide',
       CAPTURE_GUIDANCE_THRESHOLDS
@@ -33,12 +33,16 @@ describe('createParkingFrameAnalyzer', () => {
       minMeanLuminance: 50,
       maxTiltRadians: Math.PI / 9,
     });
+    expect(Object.isFrozen(CAPTURE_GUIDANCE_THRESHOLDS)).toBe(true);
+    analyze({} as Frame);
+    analyze({} as Frame);
+    expect(mockInitFrameProcessorPlugin).toHaveBeenCalledTimes(1);
   });
 
   it('fails explicitly when the native plugin is not registered', () => {
     mockInitFrameProcessorPlugin.mockReturnValue(undefined);
     expect(() => createParkingFrameAnalyzer(proxy)).toThrow(
-      /parkingGuide.*iOS/
+      /parkingGuide.*native plugin/
     );
   });
 
