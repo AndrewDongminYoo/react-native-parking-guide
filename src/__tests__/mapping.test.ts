@@ -390,6 +390,8 @@ describe('mapModelOutput', () => {
       { width: 1.5, height: 2, data: [1, 1, 1] },
       { width: 2, height: 2, data: [1] },
       { width: 1, height: 1, data: [0.5] },
+      // eslint-disable-next-line no-sparse-arrays
+      { width: 2, height: 1, data: [1, ,] },
     ]) {
       expect(() =>
         mapModelOutput({

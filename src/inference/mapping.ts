@@ -88,11 +88,21 @@ function validateUnit(value: number): void {
   }
 }
 
-// Iterates every index so sparse array holes are rejected; Array.prototype.forEach skips them.
+// These helpers iterate every index so sparse array holes are rejected;
+// Array.prototype.forEach and Array.prototype.every skip holes.
 function validateCoordinates(box: ModelBox): void {
   for (const value of box) {
     validateUnit(value);
   }
+}
+
+function isBinaryMaskData(data: ModelMask['data']): boolean {
+  for (const value of data) {
+    if (value !== 0 && value !== 1) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function validateAssessment(assessment: ModelAssessment | undefined): void {
@@ -125,7 +135,7 @@ function validateOutput(output: RawModelOutput): void {
       mask.width < 1 ||
       mask.height < 1 ||
       mask.data.length !== mask.width * mask.height ||
-      !mask.data.every((value) => value === 0 || value === 1)
+      !isBinaryMaskData(mask.data)
     ) {
       throw new RangeError(
         'Model masks must have positive dimensions and binary data.'
