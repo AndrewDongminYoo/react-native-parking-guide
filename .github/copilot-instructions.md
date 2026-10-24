@@ -1,7 +1,7 @@
 # Copilot code review instructions
 
 Project context, layout, and commands live in `AGENTS.md` — do not repeat them in review comments.
-Focus reviews on the risks below. Comment only on concrete problems; skip style that ESLint/Prettier already enforce.
+Write review comments in Korean. Focus reviews on the risks below. Comment only on concrete problems; skip style that ESLint/Prettier already enforce.
 
 ## Rule engine (`src/policy/`)
 
@@ -31,4 +31,4 @@ Focus reviews on the risks below. Comment only on concrete problems; skip style 
 ## Do not review / do not edit
 
 - `lib/` (generated), native build dirs, and `.github/skills/` (vendored from rn-agents-kit; re-sync upstream instead of editing).
-- When `README.md` or `AGENTS.md` changes, check that English and Korean sections stay in sync.
+- Flag new code, comments, or docs that are not written in English.

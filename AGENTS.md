@@ -1,16 +1,19 @@
 # AGENTS.md
 
 Guidance for AI coding agents working in this repository.
-이 저장소에서 작업하는 AI 코딩 에이전트를 위한 가이드입니다.
 
-## Project overview / 프로젝트 개요
+## Working rules
+
+- **Language**: talk to the user in Korean. Write everything committed to the repository in English —
+  code, identifiers, comments, docs, commit messages, and PR descriptions.
+- **Pushing**: pushing exposes work externally. Commit locally while working and push the branch only once
+  the task is complete and `yarn typecheck`, `yarn lint`, and `yarn test` pass. Do not push work in progress.
+
+## Project overview
 
 `react-native-parking-guide` is a React Native native package (TurboModule, New Architecture) for iOS and Android.
 It guides shared personal-mobility users (bicycle, kickboard, e-bike, motorcycle, ...) while they photograph their
 parked vehicle with the camera, and decides whether the vehicle is parked properly: `PASS` / `WARN` / `FAIL`.
-
-공유 퍼스널 모빌리티(자전거, 킥보드, 전기자전거, 모터사이클 등) 이용자가 카메라로 주차 상태를 촬영할 때 가이드를 제공하고,
-올바르게 주차했는지 통과 여부(`PASS` / `WARN` / `FAIL`)를 판정하는 iOS/Android용 React Native 네이티브 패키지입니다.
 
 Planned pipeline (see `README.md` roadmap; not all implemented yet):
 
@@ -18,7 +21,7 @@ Planned pipeline (see `README.md` roadmap; not all implemented yet):
 2. On-device inference (CoreML on iOS, TFLite on Android) → per-rule `RuleResult[]`.
 3. Pure TypeScript JSON-policy rule engine (`evaluatePolicy`) → final `Verdict` and score.
 
-## Setup and commands / 개발 명령
+## Setup and commands
 
 - Node: version in `.nvmrc`. Package manager: Yarn 4 (`yarn@4.18.1`, via Corepack).
 - Workspaces: root library + `example/` app.
@@ -36,7 +39,7 @@ yarn example android # run example app on Android
 Before finishing any change, run `yarn typecheck`, `yarn lint`, and `yarn test` — all must pass.
 CI (`.github/workflows/ci.yml`) also builds the library and the example app for Android and iOS.
 
-## Repository layout / 저장소 구조
+## Repository layout
 
 | Path | Purpose |
 | --- | --- |
@@ -53,7 +56,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `.github/skills/` | Vendored React Native agent skills (rn-agents-kit, Apache-2.0). Do not edit. |
 | `lib/` | Generated build output — never edit by hand. |
 
-## Verdict rules / 판정 규칙 (`evaluatePolicy`)
+## Verdict rules (`evaluatePolicy`)
 
 - Rules missing from the policy or with `enabled: false` are ignored.
 - Rule score: `score` clamped to 0..1 if present, otherwise `PASS=1`, `WARN=0.5`, `FAIL=0`.
@@ -63,7 +66,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 
 Keep the engine pure and deterministic, and add or update tests in `src/__tests__/` for any behavior change.
 
-## Changing the native API / 네이티브 API 변경
+## Changing the native API
 
 When adding or changing a method on `Spec` in `src/NativeParkingGuide.ts`, update all of these together:
 
@@ -73,7 +76,7 @@ When adding or changing a method on `Spec` in `src/NativeParkingGuide.ts`, updat
 
 `getModelVersion()` returns `"0.1.0-dev"` on both platforms — keep native values in sync.
 
-## Agent skills / 에이전트 스킬
+## Agent skills
 
 React Native maintenance skills from [AndrewDongminYoo/rn-agents-kit](https://github.com/AndrewDongminYoo/rn-agents-kit)
 are vendored under `.github/skills/` (Apache-2.0). Each skill has a `SKILL.md` describing when and how to use it,
@@ -81,12 +84,10 @@ e.g. `rn-project-snapshot`, `rn-newarch-audit`, `rn-audit`, `rn-upgrade-pulse`, 
 They are audit-first: inspect and report before changing anything. See `.github/skills/README.md` for the full list.
 Do not edit vendored skill files; they are excluded from ESLint.
 
-`.github/skills/`에 rn-agents-kit의 React Native 유지보수 스킬이 포함되어 있습니다. 각 `SKILL.md`를 참고하세요.
-
-## Conventions / 코드 스타일
+## Conventions
 
 - TypeScript `strict`; use `import type` for type-only imports.
 - Prettier: single quotes, 2-space indent, `trailingComma: es5`.
 - Conventional Commits (enforced by commitlint via lefthook), e.g. `feat: ...`, `fix: ...`, `docs: ...`.
-- Docs are bilingual (English/Korean); keep both languages in sync when editing `README.md` or this file.
+- Write new code, comments, and docs in English only (see Working rules).
 - `.github/copilot-instructions.md` is a reviewer-focused checklist only; keep project context here, not there.
