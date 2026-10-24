@@ -34,6 +34,7 @@ export type {
 } from './inference/guidance';
 export {
   DEFAULT_MAPPING_THRESHOLDS,
+  DEFAULT_PROXIMITY_THRESHOLD,
   mapModelOutput,
 } from './inference/mapping';
 export type {
@@ -61,6 +62,7 @@ export type {
   VehicleType,
   VerificationResult,
   Verdict,
+  ZoneProximity,
 } from './types';
 
 export function getModelVersion(): string {

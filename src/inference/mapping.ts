@@ -1,4 +1,4 @@
-import type { RuleId, RuleResult } from '../types';
+import type { RuleId, RuleResult, ZoneProximity } from '../types';
 
 export type ModelClass =
   | 'vehicle'
@@ -57,7 +57,19 @@ export interface MappingOptions {
    * vehicle with the largest intersection is selected.
    */
   readonly guideFrame?: ModelBox;
+  /**
+   * `TACTILE_PAVING` and `CROSSWALK` evidence reports `proximity.near` when the box gap to the nearest accepted zone
+   * instance, divided by the vehicle box's longer side, is at most this value. Finite and >= 0. Default: 1.
+   */
+  readonly proximityThreshold?: number;
 }
+
+export const DEFAULT_PROXIMITY_THRESHOLD = 1;
+
+const PROXIMITY_RULES: ReadonlySet<InferenceRuleId> = new Set<InferenceRuleId>([
+  'TACTILE_PAVING',
+  'CROSSWALK',
+]);
 
 export const DEFAULT_MAPPING_THRESHOLDS: Readonly<
   Record<InferenceRuleId, MappingThresholds>
@@ -258,6 +270,24 @@ function unionArea(boxes: readonly ModelBox[]): number {
   return area;
 }
 
+/** Box gap to the nearest zone divided by the vehicle box's longer side; `0` when touching or overlapping. */
+function zoneProximity(
+  vehicle: ModelDetection,
+  zones: readonly ModelDetection[],
+  threshold: number
+): ZoneProximity {
+  const [left, top, right, bottom] = vehicle.box;
+  const longerSide = Math.max(right - left, bottom - top);
+  let gap = Infinity;
+  for (const zone of zones) {
+    const dx = Math.max(0, zone.box[0] - right, left - zone.box[2]);
+    const dy = Math.max(0, zone.box[1] - bottom, top - zone.box[3]);
+    gap = Math.min(gap, Math.hypot(dx, dy));
+  }
+  const distance = roundGeometricScore(gap / longerSide);
+  return { distance, near: distance <= threshold };
+}
+
 function overlapRatio(
   vehicle: ModelDetection,
   zones: readonly ModelDetection[]
@@ -311,6 +341,11 @@ export function mapModelOutput(
     if (threshold.failBelow > threshold.passAt) {
       throw new RangeError('failBelow must be less than or equal to passAt.');
     }
+  }
+  const proximityThreshold =
+    options.proximityThreshold ?? DEFAULT_PROXIMITY_THRESHOLD;
+  if (!Number.isFinite(proximityThreshold) || proximityThreshold < 0) {
+    throw new RangeError('proximityThreshold must be finite and >= 0.');
   }
   validateOutput(output);
   validateGuideFrame(options.guideFrame);
@@ -367,7 +402,7 @@ export function mapModelOutput(
         (detection) => detection.classId === classId
       );
       const ratio = overlapRatio(vehicle, zones);
-      return result(
+      const zoneResult = result(
         id,
         roundGeometricScore(id === 'PARKING_ZONE' ? ratio : 1 - ratio),
         zones.reduce(
@@ -375,6 +410,14 @@ export function mapModelOutput(
           vehicle.confidence
         )
       );
+      return PROXIMITY_RULES.has(id) && zones.length > 0
+        ? {
+            ...zoneResult,
+            evidence: {
+              proximity: zoneProximity(vehicle, zones, proximityThreshold),
+            },
+          }
+        : zoneResult;
     }),
     assessmentResult('IMAGE_QUALITY', output.imageQuality),
   ];

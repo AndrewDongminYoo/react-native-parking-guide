@@ -32,7 +32,7 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 | Goal step | Implemented | Not implemented |
 | --- | --- | --- |
 | 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), and `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`) | Producing model-based issues from camera frames (requires on-device inference); use of `VehicleType` by any API |
-| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection inside `MappingOptions.guideFrame`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A model and on-device inference (CoreML on iOS, TFLite on Android); `GEOFENCE` evaluation |
+| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection inside `MappingOptions.guideFrame` and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A model and on-device inference (CoreML on iOS, TFLite on Android); `GEOFENCE` evaluation |
 | 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`) | A result screen in the example app; photo capture into `VerificationResult` |
 
 `getModelVersion()` is a native stub that returns `"0.1.0-dev"`.
@@ -107,6 +107,7 @@ and Android image-quality frame analysis.
 - `mapModelOutput(output: RawModelOutput, options?: MappingOptions): RuleResult[]` converts a complete scene prediction
   into eight rule results without executing a model. See [Model-output mapping](#model-output-mapping).
 - `DEFAULT_MAPPING_THRESHOLDS` contains the immutable score thresholds listed below.
+- `DEFAULT_PROXIMITY_THRESHOLD` (`1`) is the default `MappingOptions.proximityThreshold` described below.
 - `mapGuidanceIssues(output: RawModelOutput, options?: GuidanceMappingOptions): GuidanceIssue[]` converts one frame's
   model output into model-based capture guidance issues. See [Model-based capture guidance](#model-based-capture-guidance).
 - `DEFAULT_GUIDANCE_THRESHOLDS` contains the immutable guidance thresholds listed below.
@@ -132,7 +133,8 @@ Zero-area boxes and detections with empty masks are ignored.
 Optional `upright: ModelAssessment` on each vehicle measures vehicle uprightness, not camera tilt.
 Optional `imageQuality: ModelAssessment` on `RawModelOutput` measures image suitability; the mapper does not
 derive it from capture-guidance issues. Each assessment has `score` (higher means more compliant) and `confidence`.
-All input scores, confidences, coordinates, and configured thresholds must be finite and in `[0, 1]`.
+All input scores, confidences, coordinates, `minimumConfidence`, and `failBelow`/`passAt` thresholds must be finite
+and in `[0, 1]`; `proximityThreshold` has its own range, described below.
 Invalid numeric values, inverted boxes, malformed masks, mismatched mask grids, and `failBelow > passAt`
 throw `RangeError`; the mapper never clamps invalid model input.
 
@@ -176,6 +178,22 @@ Without an accepted vehicle, `VEHICLE_DETECTED` is `FAIL` with score/confidence 
 zone rules are `WARN` with score/confidence `0`. Missing or ignored assessments are also `WARN` with
 score/confidence `0`, so unknown evidence cannot increase the overall score.
 `IMAGE_QUALITY` can still be evaluated without a vehicle.
+
+Overlap alone reports nothing for a vehicle parked right beside tactile paving or a crosswalk. For `TACTILE_PAVING`
+and `CROSSWALK` only, when a vehicle is selected and at least one accepted instance of the zone class exists,
+the result has `evidence.proximity: ZoneProximity` with:
+
+- `distance`: the smallest Euclidean gap between the vehicle **box** and an accepted zone **box** (`0` when they touch
+  or overlap), divided by the longer side of the vehicle box, then rounded half up to 6 decimal places like zone
+  scores. Boxes are used even when masks exist. The value is in normalized image coordinates, not meters, and does
+  not correct for perspective or image aspect ratio.
+- `near`: `true` when `distance` is less than or equal to `MappingOptions.proximityThreshold`, otherwise `false`.
+
+`proximityThreshold` defaults to `DEFAULT_PROXIMITY_THRESHOLD` (`1`, one vehicle box longer side). It must be finite
+and greater than or equal to `0`, otherwise the mapper throws `RangeError`; values above `1` are allowed.
+Proximity never changes `score`, `verdict`, or `confidence`, and `evaluatePolicy` and `getParkingFeedback` ignore it.
+The host app decides how to handle `near`, for example by warning the rider about a local rule such as a no-parking
+distance from a crosswalk. Without a selected vehicle or an accepted zone instance of the class, `evidence` is absent.
 
 Results always appear in this order: `VEHICLE_DETECTED`, `UPRIGHT`, `TACTILE_PAVING`, `CROSSWALK`, `ROADWAY`,
 `SIDEWALK_BLOCK`, `PARKING_ZONE`, `IMAGE_QUALITY`. `GEOFENCE` is not inferred from image data.
@@ -462,7 +480,8 @@ stated.
 | `GuidanceReducerState` | Required `guidance: GuidanceState`, `candidate: { ready: boolean; issues: GuidanceIssue[] }`, and `consecutiveFrames: number`. Initialize with `createGuidanceState()`. |
 | `ParkingGuidance` | Extends `GuidanceState` with `onFrameResult(result: GuidanceFrameResult): void` and `reset(): void`. |
 | `ParkingFrameAnalyzer<Frame>` | `(frame: Frame) => GuidanceFrameResult`; `Frame` is inferred from the injected camera proxy. Invoke only inside a VisionCamera frame-processor worklet. |
-| `RuleResult` | Required `id: RuleId`, `verdict: Verdict`, and `confidence: number`; optional `score: number`, `message: string`, and `evidence: { bbox?: number[]; maskUri?: string }`. `evaluatePolicy` clamps a numeric `score` to `[0, 1]`; it does not use `confidence`. |
+| `RuleResult` | Required `id: RuleId`, `verdict: Verdict`, and `confidence: number`; optional `score: number`, `message: string`, and `evidence: { bbox?: number[]; maskUri?: string; proximity?: ZoneProximity }`. `evaluatePolicy` clamps a numeric `score` to `[0, 1]`; it does not use `confidence`. |
+| `ZoneProximity` | Required `distance: number` (`>= 0`) and `near: boolean`. See [Model-output mapping](#model-output-mapping). |
 | `RulePolicy` | Required `enabled: boolean`; optional `weight: number`, `severity: Verdict`, and `failBelow: number`. An omitted `weight` defaults to `1` in `evaluatePolicy`. |
 | `ParkingPolicy` | Required `version: number`, `rules: Partial<Record<RuleId, RulePolicy>>`, and `passThreshold: number`. `evaluatePolicy` does not validate ranges; `validatePolicy` checks them as listed in [Runtime exports](#runtime-exports). |
 | `PolicyValidationResult` | `ParkingPolicy \| string[]`. A `string[]` contains one message per validation error. |
