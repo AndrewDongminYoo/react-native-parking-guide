@@ -1,3 +1,13 @@
+/**
+ * Rentable shared personal mobility vehicle types. Cars are out of scope.
+ *
+ * - `bicycle`: shared bicycle without electric assist.
+ * - `ebike`: shared electric-assist bicycle.
+ * - `kickboard`: shared kickboard, including electric kickboards (e-scooters).
+ * - `motorcycle`: shared motorcycle or moped.
+ * - `auto`: the caller does not specify a vehicle type; it is to be detected automatically.
+ *   `auto` does not mean automobile.
+ */
 export type VehicleType =
   'bicycle' | 'kickboard' | 'ebike' | 'motorcycle' | 'auto';
 
