@@ -41,10 +41,44 @@ interface AttemptOutcome {
   readonly retryable: boolean;
 }
 
-// A host name or IPv4 address without user information, or a bracketed IPv6 address, then an optional port.
-const ENDPOINT_PATTERN =
-  /^https:\/\/(?:\[[0-9a-f:.]+\]|[^\s/?#@\\:[\]]+)(?::\d{1,5})?(?:[/?#]\S*)?$/i;
+const ENDPOINT_PATTERN = /^https:\/\/([^/?#]*)(?:[/?#]\S*)?$/i;
+const AUTHORITY_PATTERN = /^([^:]*)(?::(\d{1,5}))?$/;
+const DNS_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+const NUMERIC_LABEL_PATTERN = /^(?:0x[0-9a-f]*|\d+)$/i;
+const IPV4_PART_PATTERN = /^(?:0|[1-9]\d{0,2})$/;
 const TIMEOUT = Symbol('timeout');
+
+/** Accepts `https://` with a DNS name of letter-digit-hyphen labels or a dotted-decimal IPv4 host and an optional port. */
+function isValidEndpoint(endpoint: unknown): boolean {
+  if (typeof endpoint !== 'string') {
+    return false;
+  }
+  const authority = ENDPOINT_PATTERN.exec(endpoint)?.[1];
+  const parts =
+    authority === undefined ? null : AUTHORITY_PATTERN.exec(authority);
+  if (!parts) {
+    return false;
+  }
+  const host = parts[1]!;
+  const port = parts[2];
+  if (port !== undefined && (Number(port) < 1 || Number(port) > 65535)) {
+    return false;
+  }
+  if (host.length === 0 || host.length > 253) {
+    return false;
+  }
+  const labels = host.split('.');
+  // URL parsers read a host whose last label is numeric as IPv4, so it must be a valid dotted-decimal address.
+  if (NUMERIC_LABEL_PATTERN.test(labels[labels.length - 1]!)) {
+    return (
+      labels.length === 4 &&
+      labels.every(
+        (label) => IPV4_PART_PATTERN.test(label) && Number(label) <= 255
+      )
+    );
+  }
+  return labels.every((label) => DNS_LABEL_PATTERN.test(label));
+}
 
 function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 429 || (status >= 500 && status <= 599);
@@ -55,7 +89,7 @@ function validateOptions(options: UploadOptions): void {
     throw new RangeError('Upload options must be an object.');
   }
   const { endpoint, headers, timeoutMs, retries, retryDelayMs } = options;
-  if (typeof endpoint !== 'string' || !ENDPOINT_PATTERN.test(endpoint)) {
+  if (!isValidEndpoint(endpoint)) {
     throw new RangeError('endpoint must be an https:// URL with a host.');
   }
   if (

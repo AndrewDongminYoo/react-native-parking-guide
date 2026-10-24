@@ -521,11 +521,16 @@ the app calls it: the package never uploads automatically, has no default endpoi
 
 Request:
 
-- `POST` to `options.endpoint`. The endpoint must be `https://`, then a host (a name or IPv4 address that contains
-  none of `@`, `\`, `:`, `[`, `]`, or a bracketed IPv6 address), then an optional `:port` of 1 to 5 digits, then an
-  optional path, query, or fragment starting with `/`, `?`, or `#`. Whitespace is not allowed anywhere, and the scheme
-  is case-insensitive. `http://` and other schemes, an empty host, and user information such as `user:password@` are
-  rejected.
+- `POST` to `options.endpoint`. The endpoint must be `https://` (case-insensitive), then a host, then an optional
+  `:port` from `1` to `65535`, then an optional path, query, or fragment that starts with `/`, `?`, or `#` and contains
+  no whitespace. The host must be one of:
+  - a DNS name of at most 253 characters made of dot-separated labels; each label has 1 to 63 ASCII letters, digits,
+    or hyphens and does not start or end with a hyphen. Write an internationalized name in its `xn--` form.
+  - a dotted-decimal IPv4 address with four parts from `0` to `255` and no leading zeros.
+
+  A host whose last label is numeric must be such an IPv4 address. Everything else is rejected, including `http://`
+  and other schemes, an empty host, user information such as `user:password@`, percent-encoded hosts, IPv6 literals
+  such as `[2001:db8::1]`, and a trailing dot.
 - Body: `JSON.stringify(result)`. Headers: `Content-Type: application/json` and `Accept: application/json`, then
   `options.headers`. A caller header replaces a default header whose name matches case-insensitively.
 
