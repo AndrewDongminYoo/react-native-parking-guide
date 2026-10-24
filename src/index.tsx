@@ -14,6 +14,14 @@ export type {
   GuidanceReducerState,
 } from './guidance/reducer';
 export {
+  DEFAULT_GUIDANCE_THRESHOLDS,
+  mapGuidanceIssues,
+} from './inference/guidance';
+export type {
+  GuidanceMappingOptions,
+  GuidanceThresholds,
+} from './inference/guidance';
+export {
   DEFAULT_MAPPING_THRESHOLDS,
   mapModelOutput,
 } from './inference/mapping';

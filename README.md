@@ -31,7 +31,7 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 
 | Goal step | Implemented | Not implemented |
 | --- | --- | --- |
-| 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, and iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`) | Model-based issues (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`); use of `VehicleType` by any API |
+| 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), and `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`) | Producing model-based issues from camera frames (requires on-device inference); use of `VehicleType` by any API |
 | 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection inside `MappingOptions.guideFrame`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A model and on-device inference (CoreML on iOS, TFLite on Android); `GEOFENCE` evaluation |
 | 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput` | Rider-facing feedback for each failed rule; photo capture into `VerificationResult` |
 
@@ -48,8 +48,8 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 - **v0.1 (MVP)**: TurboModule scaffold, typed API skeleton, policy evaluation engine, native model-version stub.
 - **v0.2 (M2)**: JS frame-result handoff, smoothed capture guidance, and iOS and Android image-quality frame analysis
   are implemented.
-- **v0.5**: a vehicle and prohibited-zone model with on-device inference, model-based capture guidance
-  (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), prohibited-zone rules (tactile paving, crosswalk, roadway, sidewalk block,
+- **v0.5**: a vehicle and prohibited-zone model with on-device inference, model-based capture guidance from camera
+  frames (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), prohibited-zone rules (tactile paving, crosswalk, roadway, sidewalk block,
   parking zone), and geofence integration.
 - **v1.0**: photo capture into `VerificationResult`, rider-facing feedback for each failed rule, attestation support,
   and opt-in upload and server-side verification integration.
@@ -107,6 +107,9 @@ and Android image-quality frame analysis.
 - `mapModelOutput(output: RawModelOutput, options?: MappingOptions): RuleResult[]` converts a complete scene prediction
   into eight rule results without executing a model. See [Model-output mapping](#model-output-mapping).
 - `DEFAULT_MAPPING_THRESHOLDS` contains the immutable score thresholds listed below.
+- `mapGuidanceIssues(output: RawModelOutput, options?: GuidanceMappingOptions): GuidanceIssue[]` converts one frame's
+  model output into model-based capture guidance issues. See [Model-based capture guidance](#model-based-capture-guidance).
+- `DEFAULT_GUIDANCE_THRESHOLDS` contains the immutable guidance thresholds listed below.
 
 ### Model-output mapping
 
@@ -199,6 +202,38 @@ const rules = mapModelOutput(output, {
 const result = evaluatePolicy(rules, defaultPolicy);
 ```
 
+### Model-based capture guidance
+
+`mapGuidanceIssues` is pure and deterministic: it does not execute a model, read the camera, or mutate its input.
+It validates `output`, `minimumConfidence` (default `0.5`), and `guideFrame` exactly as `mapModelOutput` does and
+selects the vehicle exactly as `mapModelOutput` does with the same `minimumConfidence` and `guideFrame`.
+
+- If no vehicle is selected, it returns `['NO_VEHICLE']` and no other issue.
+- Otherwise, let the frame be `guideFrame`, or `[0, 0, 1, 1]` when `guideFrame` is not set.
+  - The fill ratio is the larger of (vehicle box width / frame width) and (vehicle box height / frame height).
+    It uses the larger extent, not the area, so a tall, thin kickboard that spans the frame height is `TOO_CLOSE`.
+    `TOO_FAR` is reported when the fill ratio is strictly below `tooFarBelow`; `TOO_CLOSE` when it is strictly above
+    `tooCloseAbove`.
+  - The ground gap is (frame bottom − vehicle box bottom) / frame height. It is negative when the vehicle box extends
+    below the frame. `GROUND_NOT_VISIBLE` is reported when the ground gap is strictly below `groundMarginBelow`: the
+    vehicle box bottom is then less than `groundMarginBelow` frame heights above the frame bottom, or below it, so too
+    little ground below the vehicle is inside the frame.
+  - Both ratios are rounded half up to 6 decimal places before comparison, like zone scores.
+  - The result lists `TOO_FAR` or `TOO_CLOSE` (at most one) first, then `GROUND_NOT_VISIBLE`. An empty array means no
+    model-based issue.
+
+| Threshold | Default |
+| --- | --- |
+| `tooFarBelow` | `0.4` |
+| `tooCloseAbove` | `0.95` |
+| `groundMarginBelow` | `0.05` |
+
+Override individual values through `GuidanceMappingOptions.thresholds`; an omitted or `undefined` value uses the
+default. `tooFarBelow` and `tooCloseAbove` must be
+finite with `0 <= tooFarBelow <= tooCloseAbove`; `groundMarginBelow` must be finite and in [0, 1]. Otherwise
+`mapGuidanceIssues` throws `RangeError`. Ground visibility is geometric: the model taxonomy has no ground class.
+Native frame analysis does not call `mapGuidanceIssues` yet, because on-device inference is not implemented.
+
 ### Capture guidance
 
 `useParkingGuidance` manages JS state; `createParkingFrameAnalyzer` supplies iOS and Android native image-quality analysis.
@@ -276,8 +311,8 @@ TurboModule invalidation, or after one second without frames. After idle shutdow
 sensor updates on the next active-session frame.
 
 `ready: true` means only that these three image-quality checks passed. It does not assert vehicle presence,
-ground visibility, parking compliance, or a `PASS` verdict. Model-based issues (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`,
-`GROUND_NOT_VISIBLE`) are not produced (not implemented).
+ground visibility, parking compliance, or a `PASS` verdict. Native analysis does not produce model-based issues
+(`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`); see [Model-based capture guidance](#model-based-capture-guidance).
 
 #### Manual Android verification
 
@@ -343,7 +378,7 @@ stated.
 | `VehicleType` | `'bicycle'`, `'ebike'`, `'kickboard'`, `'motorcycle'`, or `'auto'`. `'auto'` means detect the vehicle type automatically; it does not mean automobile. No exported function accepts `VehicleType` yet (not implemented). |
 | `Verdict` | `'PASS'`, `'WARN'`, or `'FAIL'`. |
 | `RuleId` | `'VEHICLE_DETECTED'`, `'UPRIGHT'`, `'TACTILE_PAVING'`, `'CROSSWALK'`, `'ROADWAY'`, `'SIDEWALK_BLOCK'`, `'PARKING_ZONE'`, `'GEOFENCE'`, or `'IMAGE_QUALITY'`. |
-| `GuidanceIssue` | `'NO_VEHICLE'`, `'TOO_CLOSE'`, `'TOO_FAR'`, `'TILTED'`, `'BLURRY'`, `'LOW_LIGHT'`, or `'GROUND_NOT_VISIBLE'`. Native analysis produces only `'TILTED'`, `'BLURRY'`, and `'LOW_LIGHT'`; the other four require a model (not implemented). |
+| `GuidanceIssue` | `'NO_VEHICLE'`, `'TOO_CLOSE'`, `'TOO_FAR'`, `'TILTED'`, `'BLURRY'`, `'LOW_LIGHT'`, or `'GROUND_NOT_VISIBLE'`. Native analysis produces only `'TILTED'`, `'BLURRY'`, and `'LOW_LIGHT'`; `mapGuidanceIssues` produces the other four from model output. |
 | `GuidanceState` | Required `ready: boolean`, `issues: GuidanceIssue[]`, and `progress: number`. Guidance processing returns progress in `[0, 1]`; initial values are `false`, `[]`, and `0`. |
 | `GuidanceFrameResult` | Required `ready: boolean`, `issues: readonly GuidanceIssue[]`, and `progress: number`. Serializable frame-processor output delivered on the JS thread. |
 | `GuidanceOptions` | Optional `smoothingFactor: number` (default `0.25`) and `debounceFrames: number` (default `3`); constraints are specified in [Capture guidance](#capture-guidance). |
@@ -354,6 +389,7 @@ stated.
 | `RulePolicy` | Required `enabled: boolean`; optional `weight: number`, `severity: Verdict`, and `failBelow: number`. An omitted `weight` defaults to `1` in `evaluatePolicy`. |
 | `ParkingPolicy` | Required `version: number`, `rules: Partial<Record<RuleId, RulePolicy>>`, and `passThreshold: number`. `evaluatePolicy` does not validate ranges; `validatePolicy` checks them as listed in [Runtime exports](#runtime-exports). |
 | `PolicyValidationResult` | `ParkingPolicy \| string[]`. A `string[]` contains one message per validation error. |
+| `GuidanceMappingOptions`, `GuidanceThresholds` | Model-based capture guidance types. See [Model-based capture guidance](#model-based-capture-guidance). |
 | `InferenceRuleId`, `MappingOptions`, `MappingThresholds`, `ModelAssessment`, `ModelBox`, `ModelClass`, `ModelDetection`, `ModelMask`, `RawModelOutput` | Model-output mapping types. See [Model-output mapping](#model-output-mapping). |
 | `VerificationResult` | Required `verdict: Verdict`, `score: number`, `rules: RuleResult[]`, `photo: { uri: string; width: number; height: number; sha256: string }`, and `metadata: { capturedAt: string; location?: { lat: number; lng: number; accuracy: number }; heading?: number; deviceTilt: { pitch: number; roll: number }; modelVersion: string; platform: 'ios' \| 'android'; attestation?: string }`. The type defines no additional numeric ranges or defaults. |
 
