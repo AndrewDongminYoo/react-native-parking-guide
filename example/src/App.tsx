@@ -1,12 +1,12 @@
 import { Text, View, StyleSheet } from 'react-native';
-import { multiply } from 'react-native-parking-guide';
+import { getModelVersion } from 'react-native-parking-guide';
 
-const result = multiply(3, 7);
+const modelVersion = getModelVersion();
 
 export default function App() {
   return (
     <View style={styles.container}>
-      <Text>Result: {result}</Text>
+      <Text>Model version: {modelVersion}</Text>
     </View>
   );
 }

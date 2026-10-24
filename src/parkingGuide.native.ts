@@ -1,4 +1,4 @@
-export function multiply(_a: number, _b: number): number {
+export function getModelVersion(): string {
   throw new Error(
     "'react-native-parking-guide' is only supported on native platforms."
   );

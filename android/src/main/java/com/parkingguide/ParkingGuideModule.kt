@@ -5,8 +5,8 @@ import com.facebook.react.bridge.ReactApplicationContext
 class ParkingGuideModule(reactContext: ReactApplicationContext) :
   NativeParkingGuideSpec(reactContext) {
 
-  override fun multiply(a: Double, b: Double): Double {
-    return a * b
+  override fun getModelVersion(): String {
+    return "0.1.0-dev"
   }
 
   companion object {
