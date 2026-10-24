@@ -123,7 +123,9 @@ function CaptureGuidance({ active }: { active: boolean }) {
 
 export default function App() {
   const { hasPermission, requestPermission } = useCameraPermission();
-  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(
+    () => Camera.getCameraPermissionStatus() === 'denied'
+  );
   const [active, setActive] = useState(AppState.currentState === 'active');
 
   useEffect(() => {
