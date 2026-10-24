@@ -6,6 +6,11 @@ buildscript {
         targetSdkVersion = 36
         ndkVersion = "27.1.12297006"
         kotlinVersion = "2.2.0"
+        // react-native-vision-camera 4.7.3 pins CameraX 1.5.0-alpha03, which cannot convert dynamic range
+        // profile 8192 reported by Android 17 (API level 37) and fails to list camera devices.
+        // CameraX 1.5.2 contains the fix. Do not use 1.6.0 or later: VisionCamera 4.7.3 casts to
+        // Camera2CameraInfoImpl, which CameraX 1.6.0 removed when camera-camera2 switched to CameraPipe.
+        cameraxVersion = "1.5.2"
     }
     repositories {
         google()
@@ -15,6 +20,17 @@ buildscript {
         classpath("com.android.tools.build:gradle")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    }
+}
+
+allprojects {
+    configurations.configureEach {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == "androidx.camera") {
+                details.useVersion(rootProject.ext.cameraxVersion)
+                details.because("CameraX 1.5.0-alpha03 fails to list camera devices on Android 17 (API level 37)")
+            }
+        }
     }
 }
 
