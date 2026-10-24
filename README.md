@@ -7,10 +7,35 @@ vehicles while they photograph their parked vehicle with the device camera, and 
 Supported vehicles are rentable shared personal mobility only: bicycles, electric-assist bicycles (e-bikes),
 kickboards including electric kickboards, and motorcycles or mopeds. Cars are out of scope.
 
-> **Status:** the policy evaluation engine (`evaluatePolicy`), JS capture-guidance state processing
-> (`useParkingGuidance`), iOS and Android image-quality frame analysis, and a native `getModelVersion()` stub
-> are implemented. Pure TypeScript model-output mapping (`mapModelOutput`) is implemented;
-> vehicle detection and on-device inference are not implemented.
+## Goal
+
+After a ride, the rider photographs the parked vehicle in the host app.
+The package decides on the device, without a network call, whether the vehicle stands upright in an allowed
+location, so that the host app can give the rider immediate feedback before the rental ends.
+
+The reference capture screen has a title that names the vehicle type (for example "Photograph your parked
+kickboard"), a guide frame with a semi-transparent silhouette of that vehicle type, a shutter button, a torch toggle,
+and a close button. The host app owns this screen, its copy, and its localization; the package supplies guidance
+state, per-rule results, and the verdict. `example/` demonstrates the screen.
+
+1. **Capture guidance**: enable the shutter only when the target vehicle is inside the guide frame at a usable
+   distance, the ground around it is visible, and the image is sharp, bright enough, and level (`GuidanceIssue`).
+2. **Parking judgment**: from the captured photo, decide whether the vehicle is detected (`VEHICLE_DETECTED`),
+   stands upright (`UPRIGHT`), is not on tactile paving, a crosswalk, or a roadway and does not block the pedestrian
+   passage (`TACTILE_PAVING`, `CROSSWALK`, `ROADWAY`, `SIDEWALK_BLOCK`), and is inside a designated parking zone
+   or geofence (`PARKING_ZONE`, `GEOFENCE`).
+3. **Immediate feedback**: return `PASS`, `WARN`, or `FAIL` with the per-rule `RuleResult[]`, so that the host app
+   can tell the rider which rule failed and how to correct the parking.
+
+### Implementation status
+
+| Goal step | Implemented | Not implemented |
+| --- | --- | --- |
+| 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, and iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`) | Model-based issues (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`); target-vehicle selection inside the guide frame; use of `VehicleType` by any API |
+| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A model and on-device inference (CoreML on iOS, TFLite on Android); `GEOFENCE` evaluation |
+| 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput` | Rider-facing feedback for each failed rule; photo capture into `VerificationResult` |
+
+`getModelVersion()` is a native stub that returns `"0.1.0-dev"`.
 
 ## Planned architecture
 
@@ -23,8 +48,11 @@ kickboards including electric kickboards, and motorcycles or mopeds. Cars are ou
 - **v0.1 (MVP)**: TurboModule scaffold, typed API skeleton, policy evaluation engine, native model-version stub.
 - **v0.2 (M2)**: JS frame-result handoff, smoothed capture guidance, and iOS and Android image-quality frame analysis
   are implemented.
-- **v0.5**: prohibited-zone rules (tactile paving, crosswalk, roadway), geofence integration, additional guidance signals.
-- **v1.0**: production on-device model pipeline, attestation support, upload and server-side verification integration.
+- **v0.5**: a vehicle and prohibited-zone model with on-device inference, model-based capture guidance
+  (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), target-vehicle selection inside the guide frame,
+  prohibited-zone rules (tactile paving, crosswalk, roadway, sidewalk block, parking zone), and geofence integration.
+- **v1.0**: photo capture into `VerificationResult`, rider-facing feedback for each failed rule, attestation support,
+  and opt-in upload and server-side verification integration.
 
 ## Installation
 
@@ -50,13 +78,20 @@ and `$VCEnableFrameProcessors` is not `false`. Do not disable VisionCamera frame
 
 ## API
 
-The package implements policy evaluation, JS guidance state processing, and iOS and Android image-quality frame analysis.
+The package implements policy validation and evaluation, model-output mapping, JS guidance state processing, and iOS
+and Android image-quality frame analysis.
 `VerificationResult` describes a planned photo-verification result; no photo verification is implemented.
 
 ### Runtime exports
 
 - `evaluatePolicy(ruleResults: RuleResult[], policy: ParkingPolicy): { verdict: Verdict; score: number }`
   evaluates enabled rules and returns a verdict and score. See [Verdict rules](#verdict-rules).
+- `validatePolicy(input: unknown): PolicyValidationResult` returns a `ParkingPolicy` when `input` is valid, and
+  otherwise a non-empty `string[]` of error messages. It requires a finite `version`, a `passThreshold` in `[0, 1]`,
+  and a `rules` object whose keys are `RuleId` values. Each rule requires a boolean `enabled`; an optional `weight`
+  must be finite and greater than or equal to `0`, an optional `severity` must be a `Verdict`, and an optional
+  `failBelow` must be in `[0, 1]`. Properties other than `version`, `passThreshold`, `rules`, and the four rule
+  fields are not copied to the returned policy.
 - `defaultPolicy: ParkingPolicy` uses `version: 1`, `passThreshold: 0.75`, and the rule settings in the
   [policy example](#policy-format).
 - `getModelVersion(): string` returns `"0.1.0-dev"` on iOS and Android.
@@ -230,7 +265,8 @@ TurboModule invalidation, or after one second without frames. After idle shutdow
 sensor updates on the next active-session frame.
 
 `ready: true` means only that these three image-quality checks passed. It does not assert vehicle presence,
-ground visibility, parking compliance, or a `PASS` verdict. ML-based issues remain out of scope.
+ground visibility, parking compliance, or a `PASS` verdict. Model-based issues (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`,
+`GROUND_NOT_VISIBLE`) are not produced (not implemented).
 
 #### Manual Android verification
 
@@ -293,10 +329,10 @@ stated.
 
 | Type | Values and fields |
 | --- | --- |
-| `VehicleType` | `'bicycle'`, `'ebike'`, `'kickboard'`, `'motorcycle'`, or `'auto'`. `'auto'` means detect the vehicle type automatically; it does not mean automobile. |
+| `VehicleType` | `'bicycle'`, `'ebike'`, `'kickboard'`, `'motorcycle'`, or `'auto'`. `'auto'` means detect the vehicle type automatically; it does not mean automobile. No exported function accepts `VehicleType` yet (not implemented). |
 | `Verdict` | `'PASS'`, `'WARN'`, or `'FAIL'`. |
 | `RuleId` | `'VEHICLE_DETECTED'`, `'UPRIGHT'`, `'TACTILE_PAVING'`, `'CROSSWALK'`, `'ROADWAY'`, `'SIDEWALK_BLOCK'`, `'PARKING_ZONE'`, `'GEOFENCE'`, or `'IMAGE_QUALITY'`. |
-| `GuidanceIssue` | `'NO_VEHICLE'`, `'TOO_CLOSE'`, `'TOO_FAR'`, `'TILTED'`, `'BLURRY'`, `'LOW_LIGHT'`, or `'GROUND_NOT_VISIBLE'`. |
+| `GuidanceIssue` | `'NO_VEHICLE'`, `'TOO_CLOSE'`, `'TOO_FAR'`, `'TILTED'`, `'BLURRY'`, `'LOW_LIGHT'`, or `'GROUND_NOT_VISIBLE'`. Native analysis produces only `'TILTED'`, `'BLURRY'`, and `'LOW_LIGHT'`; the other four require a model (not implemented). |
 | `GuidanceState` | Required `ready: boolean`, `issues: GuidanceIssue[]`, and `progress: number`. Guidance processing returns progress in `[0, 1]`; initial values are `false`, `[]`, and `0`. |
 | `GuidanceFrameResult` | Required `ready: boolean`, `issues: readonly GuidanceIssue[]`, and `progress: number`. Serializable frame-processor output delivered on the JS thread. |
 | `GuidanceOptions` | Optional `smoothingFactor: number` (default `0.25`) and `debounceFrames: number` (default `3`); constraints are specified in [Capture guidance](#capture-guidance). |
@@ -305,7 +341,9 @@ stated.
 | `ParkingFrameAnalyzer<Frame>` | `(frame: Frame) => GuidanceFrameResult`; `Frame` is inferred from the injected camera proxy. Invoke only inside a VisionCamera frame-processor worklet. |
 | `RuleResult` | Required `id: RuleId`, `verdict: Verdict`, and `confidence: number`; optional `score: number`, `message: string`, and `evidence: { bbox?: number[]; maskUri?: string }`. `evaluatePolicy` clamps a numeric `score` to `[0, 1]`; it does not use `confidence`. |
 | `RulePolicy` | Required `enabled: boolean`; optional `weight: number`, `severity: Verdict`, and `failBelow: number`. An omitted `weight` defaults to `1` in `evaluatePolicy`. |
-| `ParkingPolicy` | Required `version: number`, `rules: Partial<Record<RuleId, RulePolicy>>`, and `passThreshold: number`. No version or threshold range validation is defined. |
+| `ParkingPolicy` | Required `version: number`, `rules: Partial<Record<RuleId, RulePolicy>>`, and `passThreshold: number`. `evaluatePolicy` does not validate ranges; `validatePolicy` checks them as listed in [Runtime exports](#runtime-exports). |
+| `PolicyValidationResult` | `ParkingPolicy \| string[]`. A `string[]` contains one message per validation error. |
+| `InferenceRuleId`, `MappingOptions`, `MappingThresholds`, `ModelAssessment`, `ModelBox`, `ModelClass`, `ModelDetection`, `ModelMask`, `RawModelOutput` | Model-output mapping types. See [Model-output mapping](#model-output-mapping). |
 | `VerificationResult` | Required `verdict: Verdict`, `score: number`, `rules: RuleResult[]`, `photo: { uri: string; width: number; height: number; sha256: string }`, and `metadata: { capturedAt: string; location?: { lat: number; lng: number; accuracy: number }; heading?: number; deviceTilt: { pitch: number; roll: number }; modelVersion: string; platform: 'ios' \| 'android'; attestation?: string }`. The type defines no additional numeric ranges or defaults. |
 
 ### Policy format
