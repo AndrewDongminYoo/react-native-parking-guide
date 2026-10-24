@@ -89,4 +89,4 @@ Do not edit vendored skill files; they are excluded from ESLint.
 - Prettier: single quotes, 2-space indent, `trailingComma: es5`.
 - Conventional Commits (enforced by commitlint via lefthook), e.g. `feat: ...`, `fix: ...`, `docs: ...`.
 - Docs are bilingual (English/Korean); keep both languages in sync when editing `README.md` or this file.
-- Keep `.github/copilot-instructions.md` consistent with this file when project guidance changes.
+- `.github/copilot-instructions.md` is a reviewer-focused checklist only; keep project context here, not there.
