@@ -13,6 +13,17 @@ export type {
   GuidanceOptions,
   GuidanceReducerState,
 } from './guidance/reducer';
+export { DEFAULT_FEEDBACK_TEXT, getParkingFeedback } from './feedback/feedback';
+export type {
+  FeedbackInput,
+  FeedbackKey,
+  FeedbackOptions,
+  FeedbackVerdict,
+  GuidanceFeedbackKey,
+  ParkingFeedback,
+  RuleFeedbackKey,
+  RuleFeedbackStatus,
+} from './feedback/feedback';
 export {
   DEFAULT_GUIDANCE_THRESHOLDS,
   mapGuidanceIssues,

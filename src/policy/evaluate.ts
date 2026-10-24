@@ -1,4 +1,4 @@
-import type { ParkingPolicy, RuleResult, Verdict } from '../types';
+import type { ParkingPolicy, RulePolicy, RuleResult, Verdict } from '../types';
 
 const DEFAULT_VERDICT_SCORES: Record<Verdict, number> = {
   PASS: 1,
@@ -18,12 +18,26 @@ function clamp01(value: number): number {
   return value;
 }
 
-function getRuleScore(rule: RuleResult): number {
+export function getRuleScore(rule: RuleResult): number {
   if (typeof rule.score === 'number' && !Number.isNaN(rule.score)) {
     return clamp01(rule.score);
   }
 
   return DEFAULT_VERDICT_SCORES[rule.verdict];
+}
+
+/** True when this rule alone makes `evaluatePolicy` return `FAIL`. Does not check `enabled`. */
+export function isHardFail(
+  result: RuleResult,
+  rulePolicy: RulePolicy
+): boolean {
+  const score = getRuleScore(result);
+  const failBelowTriggered =
+    typeof rulePolicy.failBelow === 'number' && score < rulePolicy.failBelow;
+  return (
+    rulePolicy.severity === 'FAIL' &&
+    (result.verdict === 'FAIL' || failBelowTriggered)
+  );
 }
 
 export function evaluatePolicy(
@@ -47,13 +61,7 @@ export function evaluatePolicy(
     weightedScoreSum += score * weight;
     weightSum += weight;
 
-    const failBelowTriggered =
-      typeof rulePolicy.failBelow === 'number' && score < rulePolicy.failBelow;
-
-    if (
-      rulePolicy.severity === 'FAIL' &&
-      (result.verdict === 'FAIL' || failBelowTriggered)
-    ) {
+    if (isHardFail(result, rulePolicy)) {
       hasHardFail = true;
     }
   }
