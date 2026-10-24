@@ -33,11 +33,13 @@ motorcycles or mopeds. Cars are out of scope. In `VehicleType`, `'auto'` means "
 automatically", not "automobile"; see the TSDoc on `VehicleType` in `src/types.ts`.
 
 Pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, iOS and Android image-quality frame analysis
-(`BLURRY`, `LOW_LIGHT`, `TILTED`), the pure TypeScript model-output mapping (`mapModelOutput`), and the native
+(`BLURRY`, `LOW_LIGHT`, `TILTED`), the pure TypeScript model-output mapping (`mapModelOutput`) and model-based guidance mapping
+(`mapGuidanceIssues`), and the native
 `getModelVersion()` stub are implemented. Native model inference is not implemented:
 
 1. Realtime capture guidance via a `react-native-vision-camera` frame processor → `GuidanceState` / `GuidanceIssue`.
-   Only `BLURRY`, `LOW_LIGHT`, and `TILTED` are produced; model-based issues are not implemented.
+   Native analysis produces only `BLURRY`, `LOW_LIGHT`, and `TILTED`. `mapGuidanceIssues` maps `RawModelOutput` to
+   `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, and `GROUND_NOT_VISIBLE`, but no frame processor calls it yet.
 2. On-device inference (CoreML on iOS, TFLite on Android) → `RawModelOutput` → `mapModelOutput` → per-rule `RuleResult[]`.
 3. Pure TypeScript JSON-policy rule engine (`evaluatePolicy`) → final `Verdict` and score.
 
@@ -70,6 +72,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `src/policy/evaluate.ts` | `evaluatePolicy(ruleResults, policy)` — pure, platform-independent. |
 | `src/guidance/` | Pure frame-result reduction and `useParkingGuidance`; frame results must be delivered on the JS thread. |
 | `src/inference/mapping.ts` | `mapModelOutput(output, options)` — pure conversion of `RawModelOutput` to `RuleResult[]`; no model execution. |
+| `src/inference/guidance.ts` | `mapGuidanceIssues(output, options)` — pure conversion of `RawModelOutput` to model-based `GuidanceIssue[]`. |
 | `src/guidance/frameAnalyzer.ts` | Optional VisionCamera analyzer factory and shared native initialization thresholds. |
 | `ios/ParkingGuideFrameProcessor.mm`, `cpp/CaptureMetrics.h` | iOS image-quality plugin and portable native metrics. |
 | `src/__tests__/` | Jest tests. |

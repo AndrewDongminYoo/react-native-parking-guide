@@ -80,7 +80,7 @@ const ZONE_RULES = [
   ['PARKING_ZONE', 'parking_zone'],
 ] as const;
 
-function validateUnit(value: number): void {
+export function validateUnit(value: number): void {
   if (!Number.isFinite(value) || value < 0 || value > 1) {
     throw new RangeError(
       'Model values and thresholds must be finite and in [0, 1].'
@@ -112,7 +112,7 @@ function validateAssessment(assessment: ModelAssessment | undefined): void {
   }
 }
 
-function validateOutput(output: RawModelOutput): void {
+export function validateOutput(output: RawModelOutput): void {
   let grid: ModelMask | undefined;
   validateAssessment(output.imageQuality);
   for (const detection of output.detections) {
@@ -148,7 +148,7 @@ function validateOutput(output: RawModelOutput): void {
   }
 }
 
-function validateGuideFrame(frame: ModelBox | undefined): void {
+export function validateGuideFrame(frame: ModelBox | undefined): void {
   if (frame === undefined) {
     return;
   }
@@ -159,6 +159,17 @@ function validateGuideFrame(frame: ModelBox | undefined): void {
   if (frame[0] >= frame[2] || frame[1] >= frame[3]) {
     throw new RangeError('guideFrame must have a positive area.');
   }
+}
+
+/** Detections at or above minimumConfidence with a nonempty box and, if present, a nonempty mask. */
+export function acceptedDetections(
+  output: RawModelOutput,
+  minimumConfidence: number
+): ModelDetection[] {
+  return output.detections.filter(
+    (detection) =>
+      detection.confidence >= minimumConfidence && hasArea(detection)
+  );
 }
 
 function hasArea(detection: ModelDetection): boolean {
@@ -177,7 +188,7 @@ const HALFWAY_TOLERANCE = 1e-6;
  * Rounds a geometric score half up to 6 decimal places so floating-point error in box arithmetic
  * cannot move a score across a threshold boundary (for example 0.8999999999999999 instead of 0.9).
  */
-function roundGeometricScore(score: number): number {
+export function roundGeometricScore(score: number): number {
   return (
     Math.round(score * GEOMETRIC_SCORE_SCALE + HALFWAY_TOLERANCE) /
     GEOMETRIC_SCORE_SCALE
@@ -192,16 +203,20 @@ function boxIntersectionArea(a: ModelBox, b: ModelBox): number {
 }
 
 /**
+ * Selects among accepted `vehicle` detections; other classes are skipped.
  * Without a guide frame: highest confidence, first on ties. With a guide frame: largest positive
  * box intersection with the frame (rounded like geometric scores), then highest confidence, then first.
  */
-function selectVehicle(
-  vehicles: readonly ModelDetection[],
+export function selectVehicle(
+  detections: readonly ModelDetection[],
   guideFrame: ModelBox | undefined
 ): ModelDetection | undefined {
   let best: ModelDetection | undefined;
   let bestArea = 0;
-  for (const vehicle of vehicles) {
+  for (const vehicle of detections) {
+    if (vehicle.classId !== 'vehicle') {
+      continue;
+    }
     const area = guideFrame ? boxIntersectionArea(vehicle.box, guideFrame) : 0;
     if (guideFrame && area === 0) {
       continue;
@@ -332,14 +347,8 @@ export function mapModelOutput(
       : unknown(id);
   }
 
-  const detections = output.detections.filter(
-    (detection) =>
-      detection.confidence >= minimumConfidence && hasArea(detection)
-  );
-  const vehicle = selectVehicle(
-    detections.filter((detection) => detection.classId === 'vehicle'),
-    options.guideFrame
-  );
+  const detections = acceptedDetections(output, minimumConfidence);
+  const vehicle = selectVehicle(detections, options.guideFrame);
   const vehicleResult: RuleResult = vehicle
     ? {
         ...result('VEHICLE_DETECTED', vehicle.confidence, vehicle.confidence),
