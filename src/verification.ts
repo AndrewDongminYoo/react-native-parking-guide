@@ -21,7 +21,10 @@ export interface VerifyParkingOptions {
     /** Pixel height; an integer > 0. */
     readonly height: number;
   };
-  /** Rule results for this photo, for example from `mapModelOutput` and `evaluateGeofence`. */
+  /**
+   * Rule results for this photo, for example from `mapModelOutput` and `evaluateGeofence`. At least one must have an
+   * `id` that `policy` enables.
+   */
   readonly ruleResults: readonly RuleResult[];
   /** Must pass `validatePolicy`. Default: `defaultPolicy`. */
   readonly policy?: ParkingPolicy;
@@ -92,6 +95,18 @@ function validateOptions(options: VerifyParkingOptions): ParkingPolicy {
   const policy = validatePolicy(options.policy ?? defaultPolicy);
   if (Array.isArray(policy)) {
     throw new RangeError(`Invalid policy: ${policy.join(' ')}`);
+  }
+  // evaluatePolicy scores a set with no enabled rule as 1, which would be PASS for a photo nothing evaluated.
+  if (
+    !ruleResults.some(
+      (rule: RuleResult) =>
+        Object.prototype.hasOwnProperty.call(policy.rules, rule.id) &&
+        policy.rules[rule.id]?.enabled === true
+    )
+  ) {
+    throw new RangeError(
+      'ruleResults must contain a result for at least one rule that the policy enables.'
+    );
   }
   if (
     !isRecord(deviceTilt) ||

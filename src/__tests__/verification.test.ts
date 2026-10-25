@@ -227,6 +227,26 @@ describe('verifyParking', () => {
         ] as never,
       }),
     ],
+    ['empty rules array', options({ ruleResults: [] })],
+    [
+      'only rules without a policy entry',
+      options({
+        ruleResults: [
+          invalid({ id: 'NOT_A_RULE', verdict: 'PASS', confidence: 1 }),
+          invalid({ id: '__proto__', verdict: 'PASS', confidence: 1 }),
+        ] as never,
+      }),
+    ],
+    [
+      'only rules that the policy disables',
+      options({
+        ruleResults: [{ id: 'UPRIGHT', verdict: 'PASS', confidence: 1 }],
+        policy: {
+          ...defaultPolicy,
+          rules: { ...defaultPolicy.rules, UPRIGHT: { enabled: false } },
+        },
+      }),
+    ],
     ['invalid policy', options({ policy: invalid({ version: 1 }) as never })],
     [
       'pitch above pi',
