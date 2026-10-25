@@ -38,6 +38,11 @@ export interface VerifyParkingOptions {
   readonly capturedAt?: Date;
   /** Device attestation token, copied as-is. Omitted from the result when absent. */
   readonly attestation?: string;
+  /**
+   * Version of the host-supplied model that produced `ruleResults`, copied as-is to `metadata.modelVersion`. The host
+   * supplies the model file, so it also supplies its version; a non-empty string.
+   */
+  readonly modelVersion: string;
 }
 
 const VERDICTS: readonly unknown[] = [
@@ -146,6 +151,12 @@ function validateOptions(options: VerifyParkingOptions): ParkingPolicy {
   ) {
     throw new RangeError('attestation must be a string.');
   }
+  if (
+    typeof options.modelVersion !== 'string' ||
+    options.modelVersion.length === 0
+  ) {
+    throw new RangeError('modelVersion must be a non-empty string.');
+  }
   return policy;
 }
 
@@ -162,8 +173,15 @@ export async function verifyParking(
   if (platform !== 'ios' && platform !== 'android') {
     throw new Error('verifyParking supports only iOS and Android.');
   }
-  const { photo, ruleResults, deviceTilt, heading, location, attestation } =
-    options;
+  const {
+    photo,
+    ruleResults,
+    deviceTilt,
+    heading,
+    location,
+    attestation,
+    modelVersion,
+  } = options;
   const capturedAt = options.capturedAt?.getTime() ?? calledAt;
   // Copy everything before the await: the caller can mutate its objects while the hash is pending.
   // shortcut: `evidence` stays shared with the caller; evaluatePolicy does not read it. Deep-copy it if it ever does.
@@ -186,7 +204,7 @@ export async function verifyParking(
           }),
       ...(heading === undefined ? {} : { heading }),
       deviceTilt: { pitch: deviceTilt.pitch, roll: deviceTilt.roll },
-      modelVersion: ParkingGuide.getModelVersion(),
+      modelVersion,
       platform,
       ...(attestation === undefined ? {} : { attestation }),
     },

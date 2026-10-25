@@ -14,7 +14,7 @@ Write review comments in English. Focus on the risks below. Comment only on conc
 
 - A change to `Spec` in `src/NativeParkingGuide.ts` must be mirrored in `ios/ParkingGuide.mm`, `android/src/main/java/com/parkingguide/ParkingGuideModule.kt`, and `src/index.tsx`. Flag any missing side.
 - Types must be codegen-compatible (no unions of objects, generics, or `any` in `Spec`).
-- iOS and Android must return identical values/shapes (e.g. `getModelVersion()`).
+- iOS and Android must return identical values/shapes (e.g. `runDetector()`).
 - Flag blocking work on the JS thread or main thread (camera frames, model inference) and leaked native resources.
 
 ## Public API & types

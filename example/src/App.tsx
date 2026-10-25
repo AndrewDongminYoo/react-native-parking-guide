@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import { Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
-import { getModelVersion } from 'react-native-parking-guide';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
@@ -9,8 +8,6 @@ import type { VehicleType } from 'react-native-parking-guide';
 
 import { CaptureScreen } from './CaptureScreen';
 import { CAPTURE_VEHICLE_TYPES, vehicleLabel } from './captureCopy';
-
-const modelVersion = getModelVersion();
 
 export default function App() {
   return (
@@ -60,7 +57,6 @@ function Home() {
           </Pressable>
         ))}
       </View>
-      <Text style={styles.version}>Model version: {modelVersion}</Text>
     </View>
   );
 }
@@ -99,9 +95,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: 'black',
-  },
-  version: {
-    fontSize: 12,
-    color: '#8E8E93',
   },
 });

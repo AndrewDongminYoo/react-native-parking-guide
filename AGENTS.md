@@ -34,8 +34,8 @@ automatically", not "automobile"; see the TSDoc on `VehicleType` in `src/types.t
 
 Pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, iOS and Android image-quality frame analysis
 (`BLURRY`, `LOW_LIGHT`, `TILTED`), the pure TypeScript model-output mapping (`mapModelOutput`) and model-based guidance mapping
-(`mapGuidanceIssues`), the detector output decoding (`decodeDetectorOutput`), photo verification (`verifyParking` with the native `getFileSha256`), native photo inference of a host-supplied
-detector (`runDetector`), and the native `getModelVersion()` stub are implemented. Frame-level inference, the reference
+(`mapGuidanceIssues`), the detector output decoding (`decodeDetectorOutput`), photo verification (`verifyParking` with the native `getFileSha256`), and native photo inference of a host-supplied
+detector (`runDetector`) are implemented. Frame-level inference, the reference
 model, and the uprightness classifier are not implemented:
 
 1. Realtime capture guidance via a `react-native-vision-camera` frame processor → `GuidanceState` / `GuidanceIssue`.
@@ -121,7 +121,7 @@ When adding or changing a method on `Spec` in `src/NativeParkingGuide.ts`, updat
 2. `android/src/main/java/com/parkingguide/ParkingGuideModule.kt`
 3. JS wrapper and exports in `src/index.tsx`
 
-`getModelVersion()` returns `"0.1.0-dev"` on both platforms — keep native values in sync.
+Keep iOS and Android return values and shapes identical (for example the `runDetector` output).
 
 ## Agent skills
 

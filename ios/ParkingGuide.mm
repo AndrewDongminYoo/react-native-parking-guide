@@ -74,10 +74,6 @@ static NSString *ParkingGuideSha256Hex(NSURL *url)
   return self;
 }
 
-- (NSString *)getModelVersion {
-  return @"0.1.0-dev";
-}
-
 - (void)getFileSha256:(NSString *)uri
               resolve:(RCTPromiseResolveBlock)resolve
                reject:(RCTPromiseRejectBlock)reject

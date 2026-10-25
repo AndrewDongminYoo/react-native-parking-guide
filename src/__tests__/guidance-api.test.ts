@@ -4,7 +4,6 @@ import {
   createGuidanceState,
   createParkingFrameAnalyzer,
   CAPTURE_GUIDANCE_THRESHOLDS,
-  getModelVersion,
   mapModelOutput,
   DEFAULT_MAPPING_THRESHOLDS,
   reduceGuidance,
@@ -13,7 +12,7 @@ import {
 
 jest.mock('../NativeParkingGuide', () => ({
   __esModule: true,
-  default: { getModelVersion: () => '0.1.0-dev' },
+  default: {},
 }));
 
 jest.mock('react-native-vision-camera', () => {
@@ -32,7 +31,6 @@ describe('guidance public API', () => {
         { debounceFrames: 1, smoothingFactor: 1 }
       ).guidance
     ).toEqual({ ready: true, issues: [], progress: 1 });
-    expect(getModelVersion()).toBe('0.1.0-dev');
   });
 
   it('exports pure inference mapping without loading Vision Camera', () => {
