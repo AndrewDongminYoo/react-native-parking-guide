@@ -1,12 +1,8 @@
 package com.parkingguide
 
-import android.net.Uri
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
-import java.io.File
-import java.io.FileInputStream
-import java.io.InputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
@@ -15,7 +11,6 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
   NativeParkingGuideSpec(reactContext) {
 
   private val fileExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-  private val detector = ParkingDetector(::openPhoto)
 
   override fun getFileSha256(uri: String, promise: Promise) {
     val source = FileSha256.resolve(uri)
@@ -29,7 +24,7 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
     try {
       fileExecutor.execute {
         try {
-          val hex = openPhoto(source)?.use { FileSha256.hex(it) }
+          val hex = ParkingDetectors.openSource(reactApplicationContext, source)?.use { FileSha256.hex(it) }
           if (hex == null) {
             promise.reject("E_PHOTO_READ", "Could not read the photo file.")
           } else {
@@ -57,7 +52,7 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
     try {
       fileExecutor.execute {
         try {
-          val output = detector.run(photo, model)
+          val output = ParkingDetectors.forContext(reactApplicationContext).run(photo, model)
           val map = Arguments.createMap()
           for ((name, values) in output) {
             val array = Arguments.createArray()
@@ -76,15 +71,9 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
     }
   }
 
-  private fun openPhoto(source: PhotoSource): InputStream? = when (source) {
-    is PhotoSource.File -> FileInputStream(File(source.path))
-    is PhotoSource.Content -> reactApplicationContext.contentResolver.openInputStream(Uri.parse(source.uri))
-    PhotoSource.Invalid -> null
-  }
-
   override fun invalidate() {
     fileExecutor.shutdownNow()
-    detector.close()
+    ParkingDetectors.close(reactApplicationContext)
     ParkingGuideFrameProcessors.invalidate(reactApplicationContext)
     super.invalidate()
   }

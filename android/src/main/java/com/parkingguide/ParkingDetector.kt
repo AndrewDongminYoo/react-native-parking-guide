@@ -24,9 +24,17 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
   private var modelKey: PhotoSource? = null
   private var interpreter: Interpreter? = null
 
-  /** Returns the flattened `boxes`, `scores`, and `classes` outputs, or throws [Failure]. */
+  /** Returns the flattened `boxes`, `scores`, and `classes` outputs for a photo, or throws [Failure]. */
   @Synchronized
-  fun run(photo: PhotoSource, model: PhotoSource): Map<String, DoubleArray> {
+  fun run(photo: PhotoSource, model: PhotoSource): Map<String, DoubleArray> =
+    runWith(model) { readPixels(photo) ?: throw Failure(E_PHOTO_READ, "Could not read the photo file.") }
+
+  /** Same as [run] for 512 x 512 upright ARGB pixels, for example from [FramePixels.toArgb]. */
+  @Synchronized
+  fun runPixels(pixels: IntArray, model: PhotoSource): Map<String, DoubleArray> = runWith(model) { pixels }
+
+  /** Loads [model] and checks its contract before [pixels] is called, so model errors take precedence. */
+  private fun runWith(model: PhotoSource, pixels: () -> IntArray): Map<String, DoubleArray> {
     val interpreter = load(model)
     val key = interpreter.signatureKeys.singleOrNull() ?: throw contractFailure()
     val inputName = interpreter.getSignatureInputs(key).singleOrNull() ?: throw contractFailure()
@@ -46,10 +54,10 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
     }
     if (DetectorTensors.OUTPUT_NAMES.any { kinds[it] == null }) throw contractFailure()
 
-    val pixels = readPixels(photo) ?: throw Failure(E_PHOTO_READ, "Could not read the photo file.")
+    val argb = pixels()
     val inputBuffer = ByteBuffer.allocateDirect(4 * 3 * DetectorTensors.INPUT_SIZE * DetectorTensors.INPUT_SIZE)
       .order(ByteOrder.nativeOrder())
-    DetectorTensors.fillInput(pixels, layout, inputBuffer.asFloatBuffer())
+    DetectorTensors.fillInput(argb, layout, inputBuffer.asFloatBuffer())
     try {
       // No preallocated outputs: a model may return a different detection count per photo, so each output is read
       // after inference with the shape it resolved to.

@@ -14,6 +14,7 @@ import android.os.SystemClock
 import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.common.LifecycleState
+import com.mrousavy.camera.core.types.Orientation
 import com.mrousavy.camera.frameprocessors.Frame
 import com.mrousavy.camera.frameprocessors.FrameProcessorPlugin
 import com.mrousavy.camera.frameprocessors.FrameProcessorPluginRegistry
@@ -33,6 +34,9 @@ internal object ParkingGuideFrameProcessors {
         motionTrackers.add(WeakReference(motion))
       }
       ParkingGuideFrameProcessor(CaptureThresholds.from(options), motion)
+    }
+    FrameProcessorPluginRegistry.addFrameProcessorPlugin("parkingDetector") { proxy, options ->
+      ParkingDetectorFrameProcessor(proxy.context, FileSha256.resolve(options?.get("modelUri") as? String ?: ""))
     }
     registered = true
   }
@@ -72,6 +76,54 @@ private class ParkingGuideFrameProcessor(
       }
     }
     return CaptureMetrics.assess(metrics, tilt, thresholds)
+  }
+}
+
+/** Runs the shared [ParkingDetector] on one camera frame; call it inside `runAsync`. Returns tensors or `error`. */
+private class ParkingDetectorFrameProcessor(
+  private val context: ReactApplicationContext,
+  private val model: PhotoSource
+) : FrameProcessorPlugin() {
+  override fun callback(frame: Frame, params: Map<String, Any>?): Any {
+    check(Looper.myLooper() != Looper.getMainLooper() && !context.isOnJSQueueThread) {
+      "parkingDetector must run on a frame processor thread."
+    }
+    if (model == PhotoSource.Invalid) return mapOf("error" to "E_INVALID_URI")
+    if (!frame.isValid) return mapOf("error" to ParkingDetector.E_PHOTO_READ)
+    val image = frame.image
+    if (image.format != ImageFormat.YUV_420_888 || image.planes.size < 3) {
+      return mapOf("error" to ParkingDetector.E_PHOTO_READ)
+    }
+    // Frame.orientation is the reverse of CameraX's rotationDegrees (see VisionCamera's Frame.getOrientation), so
+    // map it back to the clockwise rotation that makes the frame upright. CameraX itself is not on this classpath.
+    val rotation = when (frame.orientation) {
+      Orientation.PORTRAIT -> 0
+      Orientation.LANDSCAPE_RIGHT -> 90
+      Orientation.PORTRAIT_UPSIDE_DOWN -> 180
+      Orientation.LANDSCAPE_LEFT -> 270
+    }
+    val (y, u, v) = image.planes
+    val videoRange = Build.VERSION.SDK_INT < 33 ||
+      android.hardware.DataSpace.getRange(image.dataSpace) != android.hardware.DataSpace.RANGE_FULL
+    val pixels = FramePixels.toArgb(
+      y.buffer, u.buffer, v.buffer, image.width, image.height, y.rowStride, u.rowStride, u.pixelStride,
+      rotation, frame.isMirrored, videoRange
+    )
+    val (frameWidth, frameHeight) = FramePixels.uprightSize(image.width, image.height, rotation)
+    return try {
+      val output = ParkingDetectors.forContext(context).runPixels(pixels, model)
+      mapOf(
+        "boxes" to output.getValue("boxes").toList(),
+        "scores" to output.getValue("scores").toList(),
+        "classes" to output.getValue("classes").toList(),
+        "frameWidth" to frameWidth.toDouble(),
+        "frameHeight" to frameHeight.toDouble()
+      )
+    } catch (e: ParkingDetector.Failure) {
+      mapOf("error" to e.code)
+    } catch (e: Exception) {
+      mapOf("error" to ParkingDetector.E_INFERENCE)
+    }
   }
 }
 
