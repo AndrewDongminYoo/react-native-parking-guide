@@ -52,7 +52,7 @@ The package bundles no model weights. The host app supplies the model file, and 
 output contract: `RawModelOutput` in [Model-output mapping](#model-output-mapping), and the detector input and output
 tensors in [Detector model contract](#detector-model-contract). The decision, including the class
 list, input resolution, and licenses, is recorded in
-[the #32 decision comment](https://github.com/donminzzi/react-native-parking-guide/issues/32#issuecomment-6390993023).
+[the #32 decision comment](https://github.com/AndrewDongminYoo/react-native-parking-guide/issues/32#issuecomment-6390993023).
 
 - Classes: a model adapter maps the model classes `kickboard`, `bicycle` (including e-bikes), and `motorcycle`
   (including mopeds) to `classId` `vehicle`, and maps `tactile_paving`, `crosswalk`, `roadway`, `sidewalk_block`, and
@@ -63,7 +63,7 @@ list, input resolution, and licenses, is recorded in
 - Licenses: the reference model uses only Apache-2.0, MIT, or BSD code and weights. Ultralytics YOLO (AGPL-3.0) and
   weights pretrained on non-commercial data are excluded.
 - Reference model: RF-DETR-Seg (Apache-2.0), distributed separately from this package. Training and publishing it is
-  tracked in [#56](https://github.com/donminzzi/react-native-parking-guide/issues/56); it is not published yet.
+  tracked in [#56](https://github.com/AndrewDongminYoo/react-native-parking-guide/issues/56); it is not published yet.
 
 ## Roadmap
 
@@ -71,7 +71,7 @@ list, input resolution, and licenses, is recorded in
 - **v0.2 (M2)**: JS frame-result handoff, smoothed capture guidance, and iOS and Android image-quality frame analysis
   are implemented.
 - **v0.5**: on-device inference of a host-supplied vehicle and prohibited-zone model, a separately distributed
-  reference model ([#56](https://github.com/donminzzi/react-native-parking-guide/issues/56)), model-based capture guidance from camera
+  reference model ([#56](https://github.com/AndrewDongminYoo/react-native-parking-guide/issues/56)), model-based capture guidance from camera
   frames (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), prohibited-zone rules (tactile paving, crosswalk, roadway, sidewalk block,
   parking zone), and geofence integration.
 - **v1.0**: photo capture into `VerificationResult` (`verifyParking` is implemented), a rider-facing result screen in the example app, attestation support,

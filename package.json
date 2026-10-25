@@ -47,14 +47,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/donminzzi/react-native-parking-guide.git"
+    "url": "git+https://github.com/AndrewDongminYoo/react-native-parking-guide.git"
   },
   "author": "donminzzi <donminzzi@example.com> (https://github.com/donminzzi)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/donminzzi/react-native-parking-guide/issues"
+    "url": "https://github.com/AndrewDongminYoo/react-native-parking-guide/issues"
   },
-  "homepage": "https://github.com/donminzzi/react-native-parking-guide#readme",
+  "homepage": "https://github.com/AndrewDongminYoo/react-native-parking-guide#readme",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
