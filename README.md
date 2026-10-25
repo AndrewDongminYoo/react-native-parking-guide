@@ -703,8 +703,9 @@ with VisionCamera and Worklets Core, including compilation of `ios/ParkingGuideF
 `runDetector`. The native plugin converts each frame to the same 512 × 512 RGB tensor as `runDetector` (applying the
 frame orientation and mirroring), and shares the loaded model with `runDetector` for the same URI: one copy is in
 memory and calls run one at a time, so frame detection pauses briefly while a photo is analyzed.
-Each call returns `{ boxes, scores, classes, frameWidth, frameHeight }`, where the frame size is upright, or
-`{ error }` with a `runDetector` error code. Call it inside VisionCamera's `runAsync` at a low rate so that inference
+Each call returns `{ boxes, scores, classes, frameWidth, frameHeight, capturedAt }`, where the frame size is upright
+and `capturedAt` is `Date.now()` taken before inference, or `{ error, capturedAt }` with a `runDetector` error code.
+Freshness (`staleAfterMs`) is measured from `capturedAt`, so slow inference cannot make an old frame count as fresh. Call it inside VisionCamera's `runAsync` at a low rate so that inference
 never blocks the camera; `runAsync` drops frames while a call is running.
 
 Pass each result to `onDetectorResult` on the JS thread and set the hook's `detection` option:
@@ -748,7 +749,10 @@ const frameProcessor = useFrameProcessor((frame) => {
 ```
 
 `example/src/CaptureScreen.tsx` combines this with the quality analyzer when `example/src/detectorModel.ts` sets
-`DETECTOR_MODEL_URI`, and offers an **Auto capture** switch.
+`DETECTOR_MODEL_URI`, and offers an **Auto capture** switch. Turning auto capture off clears its hold, so turning it
+on again starts a new hold. The example drops a result whose frame size differs from the previous one (the first
+result, or after a rotation), because its guide frame was mapped for the old size; guidance stays not ready until the
+next result.
 
 Device smoke test with the synthetic fixture (its row-0 score is the scene's mean red value, and its box is fixed at
 `[0.1, 0.2, 0.6, 0.9]`):
@@ -763,8 +767,11 @@ Device smoke test with the synthetic fixture (its row-0 score is the scene's mea
   distance or ground issue relative to the guide frame; any other scene yields `NO_VEHICLE` and a disabled shutter.
   A missing model file yields `detectorError` and a disabled shutter without the "no vehicle" text.
 
-The fixtures are solid-color, so automated checks cover the frame size per orientation but not whether frame content
-is rotated correctly; the device smoke test is where a wrong rotation would show.
+The fixture model's score is rotation-invariant, so the iOS harness checks rotation separately: it maps each VisionCamera
+`Frame.orientation` to the upright transform (VisionCamera defines it as the frame's own orientation, so Left and Right
+swap; its snapshot code applies the same reversal) and renders a two-tone pixel buffer to confirm where each half
+lands. The Android JVM tests check `FramePixels` content for every rotation. Mirroring is verified only at rotation 0
+and only for the back camera, which the example uses.
 
 ### Photo verification
 
