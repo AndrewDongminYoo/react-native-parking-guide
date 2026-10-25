@@ -33,12 +33,13 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 | --- | --- | --- |
 | 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), and `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`) | Producing model-based issues from camera frames (requires on-device inference) |
 | 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection by `MappingOptions.vehicleType` and inside `MappingOptions.guideFrame`, and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | On-device inference of a host-supplied model (CoreML on iOS, TFLite on Android) and a published reference model (see [Model source](#model-source)); reading device location or fetching zone data |
-| 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`) | A result screen in the example app; photo capture into `VerificationResult` |
+| 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`); `verifyParking` (native photo SHA-256, caller-supplied rule results, and capture metadata → `VerificationResult`) | A result screen in the example app; producing rule results from the photo inside `verifyParking` (requires on-device inference) |
 
 Outside the three goal steps, `uploadVerification` (an opt-in upload of a `VerificationResult` to a caller-owned
 endpoint) is implemented; the package provides no server.
 
-`getModelVersion()` is a native stub that returns `"0.1.0-dev"`.
+`getModelVersion()` is a native stub that returns `"0.1.0-dev"`. `getFileSha256(uri)` is implemented natively on iOS and
+Android.
 
 ## Planned architecture
 
@@ -73,7 +74,7 @@ list, input resolution, and licenses, is recorded in
   reference model ([#56](https://github.com/donminzzi/react-native-parking-guide/issues/56)), model-based capture guidance from camera
   frames (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), prohibited-zone rules (tactile paving, crosswalk, roadway, sidewalk block,
   parking zone), and geofence integration.
-- **v1.0**: photo capture into `VerificationResult`, a rider-facing result screen in the example app, attestation support,
+- **v1.0**: photo capture into `VerificationResult` (`verifyParking` is implemented), a rider-facing result screen in the example app, attestation support,
   and opt-in upload and server-side verification integration.
 
 ## Installation
@@ -124,7 +125,8 @@ Do not force CameraX `1.6.0` or later with VisionCamera 4.7.3: VisionCamera 4.7.
 
 The package implements policy validation and evaluation, model-output mapping, JS guidance state processing, and iOS
 and Android image-quality frame analysis.
-`VerificationResult` describes a planned photo-verification result; no photo verification is implemented.
+`verifyParking` assembles a `VerificationResult` from a captured photo and caller-supplied rule results; it does not run
+a model. See [Photo verification](#photo-verification).
 
 ### Runtime exports
 
@@ -165,6 +167,10 @@ and Android image-quality frame analysis.
   as JSON to a caller-owned `https://` endpoint, only when called. See [Opt-in upload](#opt-in-upload).
 - `DEFAULT_UPLOAD_TIMEOUT_MS` (`10000`), `DEFAULT_UPLOAD_RETRIES` (`2`), and `DEFAULT_UPLOAD_RETRY_DELAY_MS` (`500`) are
   the `UploadOptions` defaults.
+- `verifyParking(options: VerifyParkingOptions): Promise<VerificationResult>` hashes the photo and assembles a
+  `VerificationResult`. See [Photo verification](#photo-verification).
+- `getFileSha256(uri: string): Promise<string>` returns the lowercase hexadecimal SHA-256 of a file, computed natively
+  off the JS thread. See [Photo verification](#photo-verification).
 
 ### Model-output mapping
 
@@ -569,6 +575,67 @@ with VisionCamera and Worklets Core, including compilation of `ios/ParkingGuideF
 - `onFrameResult` retains its identity while the two option values are unchanged; `reset` retains its identity
   for the lifetime of the hook.
 
+### Photo verification
+
+`verifyParking(options)` turns one captured photo into a `VerificationResult`:
+
+1. It validates `options`. An invalid value rejects with `RangeError` before the photo is read.
+2. It computes `photo.sha256` with `getFileSha256(options.photo.uri)`.
+3. It computes `verdict` and `score` with `evaluatePolicy(options.ruleResults, policy)`.
+4. It fills `metadata`: `capturedAt`, `deviceTilt`, `modelVersion` from `getModelVersion()`, `platform` from
+   `Platform.OS`, and `location`, `heading`, and `attestation` only when they are passed.
+
+The package does not run a model yet, so the caller passes the rule results, for example
+`[...mapModelOutput(output, mappingOptions), evaluateGeofence(location, zones)]`. `rules` in the result is a copy of
+`options.ruleResults` in the same order, including rules that the policy ignores.
+
+| Option | Default | Constraint | Meaning |
+| --- | --- | --- | --- |
+| `photo` | none (required) | `uri`: non-empty string; `width`, `height`: integers `> 0` | The captured photo, for example `{ uri: photo.path, width: photo.width, height: photo.height }` from VisionCamera `takePhoto()`. |
+| `ruleResults` | none (required) | array; every item has `verdict` `'PASS'`, `'WARN'`, or `'FAIL'` | Rule results for this photo. |
+| `policy` | `defaultPolicy` | passes `validatePolicy` | Policy for `evaluatePolicy`. An invalid policy rejects with `RangeError` that lists the `validatePolicy` messages. |
+| `deviceTilt` | none (required) | `pitch`, `roll`: finite radians in `[-π, π]` | Device tilt at capture time. |
+| `heading` | omitted | finite degrees in `[0, 360)`, clockwise from true north | Device heading at capture time. |
+| `location` | omitted | `GeoLocation`: `lat` in `[-90, 90]`, `lng` in `[-180, 180]`, `accuracy` finite and `>= 0` meters | Rider location. Pass it only after the rider consents; the package never reads the device location. |
+| `capturedAt` | the time `verifyParking` is called | valid `Date` | Written as an ISO 8601 UTC string, for example `2026-10-25T01:02:03.004Z`. |
+| `attestation` | omitted | string | Device attestation token, copied as-is. |
+
+Other errors: `verifyParking` rejects with `Error` when `Platform.OS` is neither `'ios'` nor `'android'`, when
+`getFileSha256` rejects, and when the native digest is not 64 lowercase hexadecimal digits.
+
+`getFileSha256(uri)` reads the file in 64 KiB chunks on a background thread. It accepts these `uri` forms:
+
+- On iOS and Android, an absolute path that starts with `/`. The path is used as-is, without percent-decoding.
+- On iOS and Android, a `file:///` URI (empty host). The text after `file://` is percent-decoded as UTF-8: each `%XX`
+  (two ASCII hexadecimal digits) becomes one byte, and every other character is kept literally. For example,
+  `file:///data/a%20b.jpg` and `file:///data/a b.jpg` both read `/data/a b.jpg`.
+- On Android only, a `content://` URI with at least one character after `content://`.
+
+It rejects with code `E_INVALID_URI` for any other form, including `file://host/...` and `file://photo.jpg`, and for a
+`file:///` URI that contains a malformed `%` sequence or decodes to invalid UTF-8. It rejects with `E_PHOTO_READ` when
+the file cannot be opened or read. Error messages do not contain the path.
+
+Privacy. `verifyParking` and `getFileSha256` log nothing and make no network call; the photo bytes stay on the device.
+
+```ts
+import {
+  evaluateGeofence,
+  mapModelOutput,
+  verifyParking,
+} from 'react-native-parking-guide';
+
+const photo = await camera.current.takePhoto();
+const result = await verifyParking({
+  photo: { uri: photo.path, width: photo.width, height: photo.height },
+  ruleResults: [
+    ...mapModelOutput(modelOutput, { vehicleType: 'kickboard' }),
+    evaluateGeofence(location, zones),
+  ],
+  deviceTilt: { pitch, roll },
+  location,
+});
+```
+
 ### Opt-in upload
 
 `uploadVerification(result, options)` sends one `VerificationResult` to a server that the app owns. It runs only when
@@ -662,8 +729,9 @@ stated.
 | `GuidanceMappingOptions`, `GuidanceThresholds` | Model-based capture guidance types. See [Model-based capture guidance](#model-based-capture-guidance). |
 | `GeoLocation`, `GeoPoint`, `GeofenceOptions`, `GeofenceZone`, `GeofenceZoneKind` | Geofence types. See [Geofence](#geofence). |
 | `UploadErrorKind`, `UploadOptions`, `UploadResult<T>` | Opt-in upload types. See [Opt-in upload](#opt-in-upload). |
+| `VerifyParkingOptions` | Photo verification options. See [Photo verification](#photo-verification). |
 | `InferenceRuleId`, `MappingOptions`, `MappingThresholds`, `ModelAssessment`, `ModelBox`, `ModelClass`, `ModelDetection`, `ModelMask`, `RawModelOutput` | Model-output mapping types. See [Model-output mapping](#model-output-mapping). |
-| `VerificationResult` | Required `verdict: Verdict`, `score: number`, `rules: RuleResult[]`, `photo: { uri: string; width: number; height: number; sha256: string }`, and `metadata: { capturedAt: string; location?: { lat: number; lng: number; accuracy: number }; heading?: number; deviceTilt: { pitch: number; roll: number }; modelVersion: string; platform: 'ios' \| 'android'; attestation?: string }`. The type defines no additional numeric ranges or defaults. |
+| `VerificationResult` | Required `verdict: Verdict`, `score: number`, `rules: RuleResult[]`, `photo: { uri: string; width: number; height: number; sha256: string }`, and `metadata: { capturedAt: string; location?: { lat: number; lng: number; accuracy: number }; heading?: number; deviceTilt: { pitch: number; roll: number }; modelVersion: string; platform: 'ios' \| 'android'; attestation?: string }`. The type defines no additional numeric ranges or defaults; `verifyParking` produces values in the ranges listed in [Photo verification](#photo-verification). |
 
 ### Policy format
 
