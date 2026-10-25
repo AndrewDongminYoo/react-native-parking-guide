@@ -31,8 +31,8 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 
 | Goal step | Implemented | Not implemented |
 | --- | --- | --- |
-| 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), and `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`) | Producing model-based issues from camera frames (requires on-device inference); use of `VehicleType` by any API |
-| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection inside `MappingOptions.guideFrame` and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | On-device inference of a host-supplied model (CoreML on iOS, TFLite on Android) and a published reference model (see [Model source](#model-source)); reading device location or fetching zone data |
+| 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), and `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`) | Producing model-based issues from camera frames (requires on-device inference) |
+| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection by `MappingOptions.vehicleType` and inside `MappingOptions.guideFrame`, and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | On-device inference of a host-supplied model (CoreML on iOS, TFLite on Android) and a published reference model (see [Model source](#model-source)); reading device location or fetching zone data |
 | 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`) | A result screen in the example app; photo capture into `VerificationResult` |
 
 Outside the three goal steps, `uploadVerification` (an opt-in upload of a `VerificationResult` to a caller-owned
@@ -55,8 +55,8 @@ list, input resolution, and licenses, is recorded in
 
 - Classes: a model adapter maps the model classes `kickboard`, `bicycle` (including e-bikes), and `motorcycle`
   (including mopeds) to `classId` `vehicle`, and maps `tactile_paving`, `crosswalk`, `roadway`, `sidewalk_block`, and
-  `parking_zone` to the `classId` of the same name. `RawModelOutput` does not carry the vehicle type yet
-  ([#34](https://github.com/donminzzi/react-native-parking-guide/issues/34)). Vehicle uprightness is reported as
+  `parking_zone` to the `classId` of the same name. The adapter reports the vehicle model class as
+  `ModelDetection.vehicleType` (`'kickboard'`, `'bicycle'`, or `'motorcycle'`). Vehicle uprightness is reported as
   `ModelDetection.upright`.
 - Input resolution of the reference model: 512 × 512 RGB.
 - Licenses: the reference model uses only Apache-2.0, MIT, or BSD code and weights. Ultralytics YOLO (AGPL-3.0) and
@@ -160,14 +160,22 @@ All masks in one output must have identical dimensions; data length must equal `
 Zero-area boxes and detections with empty masks are ignored.
 
 Optional `upright: ModelAssessment` on each vehicle measures vehicle uprightness, not camera tilt.
+Optional `vehicleType` on each vehicle is the type predicted by the model: `'bicycle'`, `'ebike'`, `'kickboard'`, or
+`'motorcycle'` (not `'auto'`). Omit it when the model does not distinguish vehicle types. The mapper ignores
+`vehicleType` on detections of other classes, but validates it on every detection.
 Optional `imageQuality: ModelAssessment` on `RawModelOutput` measures image suitability; the mapper does not
 derive it from capture-guidance issues. Each assessment has `score` (higher means more compliant) and `confidence`.
 All input scores, confidences, coordinates, `minimumConfidence`, and `failBelow`/`passAt` thresholds must be finite
 and in `[0, 1]`; `proximityThreshold` has its own range, described below.
-Invalid numeric values, inverted boxes, malformed masks, mismatched mask grids, and `failBelow > passAt`
+Invalid numeric values, inverted boxes, malformed masks, mismatched mask grids, `failBelow > passAt`, a detection
+`vehicleType` outside the four detected types, and a `MappingOptions.vehicleType` outside the five `VehicleType` values
 throw `RangeError`; the mapper never clamps invalid model input.
 
 `minimumConfidence` defaults to `0.5`. Detections and assessments strictly below it are ignored.
+`MappingOptions.vehicleType` is the vehicle type of the rental and defaults to `'auto'`. When it is not `'auto'`, a
+vehicle detection whose `vehicleType` is set and differs from it is not a candidate, except that `'bicycle'` and
+`'ebike'` match each other because appearance rarely separates them. A vehicle detection without `vehicleType` remains
+a candidate. The rules below select only among candidates; if every vehicle is excluded, no vehicle is selected.
 Without `MappingOptions.guideFrame`, the mapper selects the accepted nonempty vehicle with the highest confidence,
 retaining the first on ties. `guideFrame` is the capture guide frame as a `ModelBox` in the same image space; it must
 have a positive area (`left < right`, `top < bottom`), otherwise the mapper throws `RangeError`. With `guideFrame`,
@@ -240,6 +248,7 @@ const output: RawModelOutput = {
       confidence: 0.95,
       box: [0.2, 0.1, 0.8, 0.9],
       upright: { score: 0.95, confidence: 0.9 },
+      vehicleType: 'kickboard',
     },
     { classId: 'parking_zone', confidence: 0.9, box: [0, 0, 1, 1] },
   ],
@@ -248,6 +257,7 @@ const output: RawModelOutput = {
 const rules = mapModelOutput(output, {
   minimumConfidence: 0.5,
   thresholds: { CROSSWALK: { failBelow: 0.95, passAt: 0.99 } },
+  vehicleType: 'kickboard',
 });
 const result = evaluatePolicy(rules, defaultPolicy);
 ```
@@ -297,8 +307,9 @@ returns `rule.GEOFENCE.WARN`. To skip the geofence check, do not pass a `GEOFENC
 ### Model-based capture guidance
 
 `mapGuidanceIssues` is pure and deterministic: it does not execute a model, read the camera, or mutate its input.
-It validates `output`, `minimumConfidence` (default `0.5`), and `guideFrame` exactly as `mapModelOutput` does and
-selects the vehicle exactly as `mapModelOutput` does with the same `minimumConfidence` and `guideFrame`.
+It validates `output`, `minimumConfidence` (default `0.5`), `guideFrame`, and `vehicleType` (default `'auto'`) exactly
+as `mapModelOutput` does and selects the vehicle exactly as `mapModelOutput` does with the same `minimumConfidence`,
+`guideFrame`, and `vehicleType`.
 
 - If no vehicle is selected, it returns `['NO_VEHICLE']` and no other issue.
 - Otherwise, let the frame be `guideFrame`, or `[0, 0, 1, 1]` when `guideFrame` is not set.
@@ -612,7 +623,7 @@ stated.
 
 | Type | Values and fields |
 | --- | --- |
-| `VehicleType` | `'bicycle'`, `'ebike'`, `'kickboard'`, `'motorcycle'`, or `'auto'`. `'auto'` means detect the vehicle type automatically; it does not mean automobile. No exported function accepts `VehicleType` yet (not implemented). |
+| `VehicleType` | `'bicycle'`, `'ebike'`, `'kickboard'`, `'motorcycle'`, or `'auto'`. `'auto'` means detect the vehicle type automatically; it does not mean automobile. `MappingOptions.vehicleType` and `GuidanceMappingOptions.vehicleType` accept it; `ModelDetection.vehicleType` accepts every value except `'auto'`. |
 | `Verdict` | `'PASS'`, `'WARN'`, or `'FAIL'`. |
 | `RuleId` | `'VEHICLE_DETECTED'`, `'UPRIGHT'`, `'TACTILE_PAVING'`, `'CROSSWALK'`, `'ROADWAY'`, `'SIDEWALK_BLOCK'`, `'PARKING_ZONE'`, `'GEOFENCE'`, or `'IMAGE_QUALITY'`. |
 | `GuidanceIssue` | `'NO_VEHICLE'`, `'TOO_CLOSE'`, `'TOO_FAR'`, `'TILTED'`, `'BLURRY'`, `'LOW_LIGHT'`, or `'GROUND_NOT_VISIBLE'`. Native analysis produces only `'TILTED'`, `'BLURRY'`, and `'LOW_LIGHT'`; `mapGuidanceIssues` produces the other four from model output. |

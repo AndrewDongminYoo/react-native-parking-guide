@@ -1,4 +1,4 @@
-import type { GuidanceIssue } from '../types';
+import type { GuidanceIssue, VehicleType } from '../types';
 import {
   acceptedDetections,
   roundGeometricScore,
@@ -6,6 +6,7 @@ import {
   validateGuideFrame,
   validateOutput,
   validateUnit,
+  validateVehicleType,
 } from './mapping';
 import type { ModelBox, RawModelOutput } from './mapping';
 
@@ -33,6 +34,8 @@ export interface GuidanceMappingOptions {
    */
   readonly guideFrame?: ModelBox;
   readonly thresholds?: Partial<GuidanceThresholds>;
+  /** Selects the vehicle exactly as `MappingOptions.vehicleType` does. Default: `'auto'`. */
+  readonly vehicleType?: VehicleType;
 }
 
 export const DEFAULT_GUIDANCE_THRESHOLDS: Readonly<GuidanceThresholds> =
@@ -84,10 +87,12 @@ export function mapGuidanceIssues(
   validateThresholds(thresholds);
   validateOutput(output);
   validateGuideFrame(options.guideFrame);
+  validateVehicleType(options.vehicleType);
 
   const vehicle = selectVehicle(
     acceptedDetections(output, minimumConfidence),
-    options.guideFrame
+    options.guideFrame,
+    options.vehicleType
   );
   if (!vehicle) {
     return ['NO_VEHICLE'];

@@ -194,4 +194,24 @@ describe('mapGuidanceIssues', () => {
     expect(second).toEqual(first);
     expect(second).not.toBe(first);
   });
+
+  it('selects the vehicle with the same vehicleType filter as mapModelOutput', () => {
+    const output = scene(
+      { ...vehicle([0.1, 0.1, 0.9, 0.9], 0.9), vehicleType: 'motorcycle' },
+      { ...vehicle([0.3, 0.2, 0.6, 0.8], 0.6), vehicleType: 'ebike' }
+    );
+    expect(mapGuidanceIssues(output, { guideFrame: frame })).toEqual([
+      'TOO_CLOSE',
+      'GROUND_NOT_VISIBLE',
+    ]);
+    expect(
+      mapGuidanceIssues(output, { guideFrame: frame, vehicleType: 'bicycle' })
+    ).toEqual([]);
+    expect(
+      mapGuidanceIssues(output, { guideFrame: frame, vehicleType: 'kickboard' })
+    ).toEqual(['NO_VEHICLE']);
+    expect(() =>
+      mapGuidanceIssues(output, { vehicleType: 'car' as never })
+    ).toThrow(RangeError);
+  });
 });
