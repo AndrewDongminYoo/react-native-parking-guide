@@ -706,3 +706,113 @@ describe('zone proximity', () => {
     ).not.toThrow();
   });
 });
+
+describe('mapModelOutput vehicleType', () => {
+  function typed(
+    vehicleType: ModelDetection['vehicleType'],
+    confidence: number,
+    uprightScore: number
+  ): ModelDetection {
+    return {
+      classId: 'vehicle',
+      confidence,
+      box: [0.2, 0.2, 0.6, 0.6],
+      upright: { score: uprightScore, confidence: 1 },
+      ...(vehicleType ? { vehicleType } : {}),
+    };
+  }
+
+  function uprightOf(output: RawModelOutput, options: MappingOptions) {
+    return rule(output, 'UPRIGHT', options).score;
+  }
+
+  it('selects as before when vehicleType is unset or auto', () => {
+    const output: RawModelOutput = {
+      detections: [typed('motorcycle', 0.9, 1), typed('kickboard', 0.6, 0.6)],
+    };
+    expect(uprightOf(output, {})).toBe(1);
+    expect(uprightOf(output, { vehicleType: 'auto' })).toBe(1);
+  });
+
+  it('skips a higher-confidence vehicle of an incompatible type', () => {
+    const output: RawModelOutput = {
+      detections: [typed('motorcycle', 0.9, 0.6), typed('kickboard', 0.6, 1)],
+    };
+    expect(uprightOf(output, { vehicleType: 'kickboard' })).toBe(1);
+  });
+
+  it('selects no vehicle when every typed vehicle is incompatible', () => {
+    const output: RawModelOutput = {
+      detections: [typed('motorcycle', 0.9, 1)],
+    };
+    expect(
+      rule(output, 'VEHICLE_DETECTED', { vehicleType: 'bicycle' })
+    ).toEqual({
+      id: 'VEHICLE_DETECTED',
+      verdict: 'FAIL',
+      score: 0,
+      confidence: 0,
+    });
+  });
+
+  it('treats bicycle and ebike as compatible in both directions', () => {
+    const bicycle: RawModelOutput = { detections: [typed('bicycle', 0.9, 1)] };
+    const ebike: RawModelOutput = { detections: [typed('ebike', 0.9, 1)] };
+    expect(uprightOf(bicycle, { vehicleType: 'ebike' })).toBe(1);
+    expect(uprightOf(ebike, { vehicleType: 'bicycle' })).toBe(1);
+    expect(uprightOf(ebike, { vehicleType: 'ebike' })).toBe(1);
+    expect(
+      rule(bicycle, 'VEHICLE_DETECTED', { vehicleType: 'kickboard' }).verdict
+    ).toBe('FAIL');
+  });
+
+  it('keeps a vehicle without a vehicleType as a candidate', () => {
+    const output: RawModelOutput = {
+      detections: [typed(undefined, 0.6, 1), typed('motorcycle', 0.9, 0.6)],
+    };
+    expect(uprightOf(output, { vehicleType: 'kickboard' })).toBe(1);
+  });
+
+  it('applies the vehicleType filter before guide-frame selection', () => {
+    const guideFrame: ModelBox = [0.25, 0.25, 0.75, 0.75];
+    const output: RawModelOutput = {
+      detections: [
+        { ...typed('motorcycle', 1, 0.6), box: [0.25, 0.25, 0.75, 0.75] },
+        { ...typed('kickboard', 0.6, 1), box: [0.3, 0.3, 0.4, 0.4] },
+      ],
+    };
+    expect(uprightOf(output, { guideFrame, vehicleType: 'kickboard' })).toBe(1);
+  });
+
+  it('ignores vehicleType on non-vehicle detections', () => {
+    const output: RawModelOutput = {
+      detections: [
+        typed('kickboard', 0.9, 1),
+        {
+          classId: 'crosswalk',
+          confidence: 1,
+          box: [0.2, 0.2, 0.6, 0.6],
+          vehicleType: 'motorcycle',
+        },
+      ],
+    };
+    expect(rule(output, 'CROSSWALK', { vehicleType: 'kickboard' }).score).toBe(
+      0
+    );
+  });
+
+  it('rejects an unknown vehicleType in options or detections', () => {
+    const output: RawModelOutput = { detections: [typed('kickboard', 0.9, 1)] };
+    expect(() =>
+      mapModelOutput(output, { vehicleType: 'car' as never })
+    ).toThrow(RangeError);
+    for (const vehicleType of ['auto', 'car', '']) {
+      const invalid: RawModelOutput = {
+        detections: [
+          { ...typed('kickboard', 0.9, 1), vehicleType: vehicleType as never },
+        ],
+      };
+      expect(() => mapModelOutput(invalid)).toThrow(RangeError);
+    }
+  });
+});

@@ -1,4 +1,4 @@
-import type { RuleId, RuleResult, ZoneProximity } from '../types';
+import type { RuleId, RuleResult, VehicleType, ZoneProximity } from '../types';
 
 export type ModelClass =
   | 'vehicle'
@@ -31,6 +31,11 @@ export interface ModelDetection {
   readonly mask?: ModelMask;
   /** Vehicle uprightness, not camera tilt. Used only for classId: 'vehicle'. */
   readonly upright?: ModelAssessment;
+  /**
+   * Vehicle type predicted by the model. Used only for classId: 'vehicle'. Absent means the model does not
+   * distinguish vehicle types.
+   */
+  readonly vehicleType?: Exclude<VehicleType, 'auto'>;
 }
 
 /** A complete scene prediction; an absent detection means that class was not detected. */
@@ -62,6 +67,11 @@ export interface MappingOptions {
    * instance, divided by the vehicle box's longer side, is at most this value. Finite and >= 0. Default: 1.
    */
   readonly proximityThreshold?: number;
+  /**
+   * Vehicle type of the rental. When not `'auto'`, a vehicle detection whose `vehicleType` is set and incompatible
+   * is not a candidate; `'bicycle'` and `'ebike'` are compatible. Default: `'auto'`.
+   */
+  readonly vehicleType?: VehicleType;
 }
 
 export const DEFAULT_PROXIMITY_THRESHOLD = 1;
@@ -91,6 +101,42 @@ const ZONE_RULES = [
   ['SIDEWALK_BLOCK', 'sidewalk_block'],
   ['PARKING_ZONE', 'parking_zone'],
 ] as const;
+
+const DETECTED_VEHICLE_TYPES: ReadonlySet<unknown> = new Set<
+  Exclude<VehicleType, 'auto'>
+>(['bicycle', 'ebike', 'kickboard', 'motorcycle']);
+
+export function validateVehicleType(
+  vehicleType: VehicleType | undefined
+): void {
+  if (
+    vehicleType !== undefined &&
+    vehicleType !== 'auto' &&
+    !DETECTED_VEHICLE_TYPES.has(vehicleType)
+  ) {
+    throw new RangeError(
+      "vehicleType must be 'bicycle', 'ebike', 'kickboard', 'motorcycle', or 'auto'."
+    );
+  }
+}
+
+function isBicycleLike(vehicleType: VehicleType): boolean {
+  return vehicleType === 'bicycle' || vehicleType === 'ebike';
+}
+
+/** `'auto'` and untyped detections are compatible with everything; bicycle and ebike are compatible. */
+function isCompatibleVehicle(
+  detection: ModelDetection,
+  vehicleType: VehicleType
+): boolean {
+  const detected = detection.vehicleType;
+  return (
+    vehicleType === 'auto' ||
+    detected === undefined ||
+    detected === vehicleType ||
+    (isBicycleLike(detected) && isBicycleLike(vehicleType))
+  );
+}
 
 export function validateUnit(value: number): void {
   if (!Number.isFinite(value) || value < 0 || value > 1) {
@@ -130,6 +176,14 @@ export function validateOutput(output: RawModelOutput): void {
   for (const detection of output.detections) {
     validateUnit(detection.confidence);
     validateAssessment(detection.upright);
+    if (
+      detection.vehicleType !== undefined &&
+      !DETECTED_VEHICLE_TYPES.has(detection.vehicleType)
+    ) {
+      throw new RangeError(
+        "Detection vehicleType must be 'bicycle', 'ebike', 'kickboard', or 'motorcycle'."
+      );
+    }
     const { box, mask } = detection;
     if (box.length !== 4) {
       throw new RangeError('Model boxes must have four coordinates.');
@@ -215,18 +269,22 @@ function boxIntersectionArea(a: ModelBox, b: ModelBox): number {
 }
 
 /**
- * Selects among accepted `vehicle` detections; other classes are skipped.
+ * Selects among accepted `vehicle` detections compatible with `vehicleType`; other classes are skipped.
  * Without a guide frame: highest confidence, first on ties. With a guide frame: largest positive
  * box intersection with the frame (rounded like geometric scores), then highest confidence, then first.
  */
 export function selectVehicle(
   detections: readonly ModelDetection[],
-  guideFrame: ModelBox | undefined
+  guideFrame: ModelBox | undefined,
+  vehicleType: VehicleType = 'auto'
 ): ModelDetection | undefined {
   let best: ModelDetection | undefined;
   let bestArea = 0;
   for (const vehicle of detections) {
-    if (vehicle.classId !== 'vehicle') {
+    if (
+      vehicle.classId !== 'vehicle' ||
+      !isCompatibleVehicle(vehicle, vehicleType)
+    ) {
       continue;
     }
     const area = guideFrame ? boxIntersectionArea(vehicle.box, guideFrame) : 0;
@@ -349,6 +407,7 @@ export function mapModelOutput(
   }
   validateOutput(output);
   validateGuideFrame(options.guideFrame);
+  validateVehicleType(options.vehicleType);
 
   function result(
     id: InferenceRuleId,
@@ -383,7 +442,11 @@ export function mapModelOutput(
   }
 
   const detections = acceptedDetections(output, minimumConfidence);
-  const vehicle = selectVehicle(detections, options.guideFrame);
+  const vehicle = selectVehicle(
+    detections,
+    options.guideFrame,
+    options.vehicleType
+  );
   const vehicleResult: RuleResult = vehicle
     ? {
         ...result('VEHICLE_DETECTED', vehicle.confidence, vehicle.confidence),
