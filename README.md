@@ -98,6 +98,28 @@ For iOS capture guidance, set `NSCameraUsageDescription` and
 `ParkingGuide.podspec` enables the plugin only when both camera and worklets packages resolve from the app
 and `$VCEnableFrameProcessors` is not `false`. Do not disable VisionCamera frame processors when using this API.
 
+On Android, `react-native-vision-camera` 4.7.3 depends on CameraX `1.5.0-alpha03`. On Android 17 (API level 37),
+that CameraX version cannot convert dynamic range profile `8192`, VisionCamera fails to list camera devices
+(`Dynamic range profile cannot be converted to a DynamicRange object: 8192`), and `useCameraDevice('back')` throws
+`TypeError: Cannot read property 'CameraDevices' of undefined`.
+Force CameraX `1.5.2`, which contains the fix, in the app's root `android/build.gradle`, as
+`example/android/build.gradle` does:
+
+```groovy
+allprojects {
+  configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+      if (details.requested.group == "androidx.camera") {
+        details.useVersion("1.5.2")
+      }
+    }
+  }
+}
+```
+
+Do not force CameraX `1.6.0` or later with VisionCamera 4.7.3: VisionCamera 4.7.3 casts to
+`androidx.camera.camera2.internal.Camera2CameraInfoImpl`, which CameraX `1.6.0` removed.
+
 ## API
 
 The package implements policy validation and evaluation, model-output mapping, JS guidance state processing, and iOS
@@ -502,8 +524,6 @@ select **Close** (or press the system back button) for at least two seconds, and
 fresh motion samples and reset guidance history. Background the app to confirm the camera stops and guidance resets;
 returning to the app restarts the camera with empty guidance history.
 Emulators without a rotation-vector sensor cannot report readiness.
-On Android 17 (API level 37) images, `react-native-vision-camera` 4.7.3 cannot list camera devices and the capture
-screen fails to open (#52); an Android 11 (API level 30) emulator image works.
 
 Device behavior cannot be verified in a cloud session. CI builds the Android example with the plugin enabled and
 runs `:react-native-parking-guide:testDebugUnitTest` for native metric and boundary tests.
