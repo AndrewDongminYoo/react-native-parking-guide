@@ -35,6 +35,16 @@ assert o["classes"] == [0, 3], o
   fi
 done
 
+# A precompiled .mlmodelc, the form an app bundle ships, loads without compiling and is not deleted by reset.
+xcrun coremlcompiler compile "$root/fixtures/detector/detector-nhwc.mlpackage" "$out" > /dev/null
+if "$out/harness" "$root/fixtures/detector/solid.png" "$out/detector-nhwc.mlmodelc" | grep -q '"scores":\[0.7999' &&
+  test -d "$out/detector-nhwc.mlmodelc"; then
+  echo "PASS precompiled .mlmodelc"
+else
+  echo "FAIL precompiled .mlmodelc"
+  status=1
+fi
+
 # A model that does not follow the contract (a TFLite file) must fail with E_MODEL_LOAD, not crash.
 if "$out/harness" "$root/fixtures/detector/solid.png" "$root/fixtures/detector/detector-nhwc.tflite" | grep -q E_MODEL_LOAD; then
   echo "PASS unsupported model file"
