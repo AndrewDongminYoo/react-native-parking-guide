@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   BackHandler,
   Pressable,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -77,9 +78,14 @@ export function ResultScreen({
       ]}
     >
       <StatusBar barStyle="dark-content" />
-      <View style={styles.body} accessibilityLiveRegion="polite">
+      {/* The body scrolls so that many reasons or large text never push Retake and Done off screen. */}
+      <ScrollView
+        style={styles.body}
+        contentContainerStyle={styles.bodyContent}
+        accessibilityLiveRegion="polite"
+      >
         <JudgmentBody judgment={judgment} />
-      </View>
+      </ScrollView>
       <View style={styles.actions}>
         {/* Retake stays enabled while checking: the effect cleanup discards a result that arrives after leaving. */}
         <Pressable
@@ -167,10 +173,13 @@ function JudgmentBody({ judgment }: { judgment: ParkingJudgment | null }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    justifyContent: 'space-between',
+    gap: 16,
     backgroundColor: 'white',
   },
   body: {
+    flex: 1,
+  },
+  bodyContent: {
     gap: 12,
   },
   verdict: {
