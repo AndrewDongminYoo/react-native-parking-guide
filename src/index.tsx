@@ -66,6 +66,8 @@ export {
   uploadVerification,
 } from './upload';
 export type { UploadErrorKind, UploadOptions, UploadResult } from './upload';
+export { verifyParking } from './verification';
+export type { VerifyParkingOptions } from './verification';
 export { defaultPolicy } from './policy/defaultPolicy';
 export { evaluatePolicy } from './policy/evaluate';
 export { validatePolicy } from './policy/validate';
@@ -85,4 +87,13 @@ export type {
 
 export function getModelVersion(): string {
   return ParkingGuide.getModelVersion();
+}
+
+/**
+ * Lowercase hexadecimal SHA-256 of the file at `uri`, computed off the JS thread. Accepts an absolute path, a
+ * `file:///` URI (percent-decoded as UTF-8), and on Android also a `content://` URI. See the README section
+ * "Photo verification" for the exact rule.
+ */
+export function getFileSha256(uri: string): Promise<string> {
+  return ParkingGuide.getFileSha256(uri);
 }

@@ -34,7 +34,7 @@ automatically", not "automobile"; see the TSDoc on `VehicleType` in `src/types.t
 
 Pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, iOS and Android image-quality frame analysis
 (`BLURRY`, `LOW_LIGHT`, `TILTED`), the pure TypeScript model-output mapping (`mapModelOutput`) and model-based guidance mapping
-(`mapGuidanceIssues`), and the native
+(`mapGuidanceIssues`), photo verification (`verifyParking` with the native `getFileSha256`), and the native
 `getModelVersion()` stub are implemented. Native model inference is not implemented:
 
 1. Realtime capture guidance via a `react-native-vision-camera` frame processor → `GuidanceState` / `GuidanceIssue`.
@@ -78,14 +78,15 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `src/feedback/feedback.ts` | `getParkingFeedback(input, options)` — stable rider-facing feedback keys and default English text. |
 | `src/geofence/geofence.ts` | `evaluateGeofence(location, zones)` — pure `GEOFENCE` `RuleResult` from a caller-supplied location and zones. |
 | `src/upload.ts` | `uploadVerification(result, options)` — opt-in JSON upload of a `VerificationResult` to a caller-owned `https://` endpoint, with timeout and retries. The only network call in the package; never call it automatically. |
+| `src/verification.ts` | `verifyParking(options)` — native photo SHA-256 plus caller-supplied rule results and metadata → `VerificationResult`. Includes `location` only when the caller passes it; logs nothing. |
 | `src/inference/guidance.ts` | `mapGuidanceIssues(output, options)` — pure conversion of `RawModelOutput` to model-based `GuidanceIssue[]`. |
 | `src/guidance/frameAnalyzer.ts` | Optional VisionCamera analyzer factory and shared native initialization thresholds. |
 | `ios/ParkingGuideFrameProcessor.mm`, `cpp/CaptureMetrics.h` | iOS image-quality plugin and portable native metrics. |
 | `src/__tests__/` | Jest tests. |
 | `ios/ParkingGuide.{h,mm}` | Objective-C++ TurboModule implementation. |
-| `android/src/main/java/com/parkingguide/` | Kotlin `ParkingGuideModule` / `ParkingGuidePackage`. |
+| `android/src/main/java/com/parkingguide/` | Kotlin `ParkingGuideModule` / `ParkingGuidePackage`, and `FileSha256` (file hashing for `getFileSha256`). |
 | `android/src/visionCamera/java/com/parkingguide/` | Optional frame processor and rotation-vector sensor lifecycle. |
-| `android/src/test/java/com/parkingguide/` | Capture metric JUnit tests (`:react-native-parking-guide:testDebugUnitTest`). |
+| `android/src/test/java/com/parkingguide/` | Capture metric and `FileSha256` JUnit tests (`:react-native-parking-guide:testDebugUnitTest`). |
 | `ParkingGuide.podspec`, `android/build.gradle` | Native build configuration. |
 | `example/` | Example app used for manual testing and CI native builds. |
 | `.github/skills/` | React Native agent skills vendored from rn-agents-kit (Apache-2.0). Do not edit, except `README.md`. |
