@@ -33,17 +33,18 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 | --- | --- | --- |
 | 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), and live detection on camera frames with `createParkingDetector` and auto capture (see [Live detector guidance](#live-detector-guidance)) | Device acceptance with a trained model (requires the reference model, #56) |
 | 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection by `MappingOptions.vehicleType` and inside `MappingOptions.guideFrame`, and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `runDetector` (native inference of a host-supplied CoreML or LiteRT/TFLite detector on a photo, see [Native detector inference](#native-detector-inference)), `decodeDetectorOutput` (detector output tensors → model output, see [Detector model contract](#detector-model-contract)), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A published reference model (see [Model source](#model-source)) and an uprightness classifier; reading device location or fetching zone data |
-| 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`); `verifyParking` (native photo SHA-256, caller-supplied rule results, and capture metadata → `VerificationResult`) | A result screen in the example app; producing rule results from the photo inside `verifyParking` (requires on-device inference) |
+| 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`); `verifyParking` (native photo SHA-256, caller-supplied rule results, and capture metadata → `VerificationResult`) | A result screen in the example app; producing rule results from the photo inside `verifyParking` |
 
 Outside the three goal steps, `uploadVerification` (an opt-in upload of a `VerificationResult` to a caller-owned
 endpoint) is implemented; the package provides no server.
 
 `getFileSha256(uri)` and `runDetector(photoUri, modelUri)` are implemented natively on iOS and Android.
 
-## Planned architecture
+## Architecture
 
 - Realtime capture guidance: a `react-native-vision-camera` frame processor.
-- On-device inference of a host-supplied model: CoreML on iOS, TFLite on Android. See [Model source](#model-source).
+- On-device inference of a host-supplied model: CoreML on iOS, LiteRT/TFLite on Android (`runDetector`,
+  `createParkingDetector`). See [Model source](#model-source).
 - Final verdict: a TypeScript rule engine (`evaluatePolicy`) driven by a JSON policy.
 
 ## Model source
@@ -67,13 +68,16 @@ list, input resolution, and licenses, is recorded in
 
 ## Roadmap
 
-- **v0.1 (MVP)**: TurboModule scaffold, typed API skeleton, policy evaluation engine, native model-version stub.
+- **v0.1 (MVP)**: TurboModule scaffold, typed API skeleton, policy evaluation engine, native model-version stub
+  (removed in #66; the host supplies `modelVersion`).
 - **v0.2 (M2)**: JS frame-result handoff, smoothed capture guidance, and iOS and Android image-quality frame analysis
   are implemented.
 - **v0.5**: on-device inference of a host-supplied vehicle and prohibited-zone model, a separately distributed
   reference model ([#56](https://github.com/AndrewDongminYoo/react-native-parking-guide/issues/56)), model-based capture guidance from camera
   frames (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), prohibited-zone rules (tactile paving, crosswalk, roadway, sidewalk block,
-  parking zone), and geofence integration.
+  parking zone), and geofence integration. On-device inference (`runDetector`), model-based guidance from camera
+  frames (`createParkingDetector`), the zone rules (`mapModelOutput`), and `evaluateGeofence` are implemented; the
+  reference model is not published yet.
 - **v1.0**: photo capture into `VerificationResult` (`verifyParking` is implemented), a rider-facing result screen in the example app, attestation support,
   and opt-in upload and server-side verification integration.
 
@@ -123,8 +127,9 @@ Do not force CameraX `1.6.0` or later with VisionCamera 4.7.3: VisionCamera 4.7.
 
 ## API
 
-The package implements policy validation and evaluation, model-output mapping, JS guidance state processing, and iOS
-and Android image-quality frame analysis.
+The package implements policy validation and evaluation, model-output mapping, detector output decoding, native
+detector inference on photos and live frames, JS guidance state processing, and iOS and Android image-quality frame
+analysis.
 `verifyParking` assembles a `VerificationResult` from a captured photo and caller-supplied rule results; it does not run
 a model. See [Photo verification](#photo-verification).
 
@@ -381,8 +386,10 @@ const ruleResults = mapModelOutput(decodeDetectorOutput(tensors), { vehicleType:
 - `modelUri` accepts the same forms. On Android it is a LiteRT/TFLite flatbuffer (`.tflite`) with exactly one
   signature. On iOS it is a compiled `.mlmodelc` directory, or an `.mlmodel` or `.mlpackage` that is compiled on the
   first call; the path extension selects the form.
-- Each platform caches the last loaded model and reuses it while `modelUri` stays the same string. A different
-  `modelUri` releases the cached model first; module invalidation (for example a JS reload) releases it too.
+- Each platform caches the last loaded model and reuses it while `modelUri` resolves to the same file (an absolute
+  path and its `file:///` form are the same model; on Android a `content://` URI is compared as its exact string).
+  A different `modelUri` releases the cached model first; module invalidation (for example a JS reload) releases it
+  too, but a `parkingDetector` frame processor that keeps running loads it again on its next frame.
 - Calls run one at a time: on Android on the same single background thread as `getFileSha256`, on iOS on a serial
   background queue.
 
@@ -399,7 +406,8 @@ It rejects with these codes. Messages do not contain file paths.
 On Android, the package depends on `com.google.ai.edge.litert:litert:1.4.2` (the LiteRT Interpreter API), which adds
 native libraries for `arm64-v8a`, `armeabi-v7a`, `x86`, and `x86_64` to the app. LiteRT 2.x is not used: its Kotlin
 metadata (version 2.3 and later) does not compile with the Kotlin 2.1 toolchain of React Native 0.86. On iOS, the pod
-links the system `CoreML`, `ImageIO`, and `CoreGraphics` frameworks.
+links the system `CoreML`, `CoreImage`, `ImageIO`, and `CoreGraphics` frameworks, plus `CoreMotion`, `CoreVideo`, and
+`QuartzCore` when the frame processor plugins are enabled.
 
 Synthetic fixtures in `fixtures/detector/` verify both platforms: `scripts/make-fixture-models.py` generates
 NHWC and NCHW `.tflite` and `.mlpackage` models that return a mean-red score, a `.tflite` model whose detection count
@@ -480,7 +488,8 @@ Override individual values through `GuidanceMappingOptions.thresholds`; an omitt
 default. `tooFarBelow` and `tooCloseAbove` must be
 finite with `0 <= tooFarBelow <= tooCloseAbove`; `groundMarginBelow` must be finite and in [0, 1]. Otherwise
 `mapGuidanceIssues` throws `RangeError`. Ground visibility is geometric: the model taxonomy has no ground class.
-Native frame analysis does not call `mapGuidanceIssues` yet, because on-device inference is not implemented.
+Native frame analysis does not call `mapGuidanceIssues`; with the `detection` option, `useParkingGuidance` calls it on
+the JS thread for each `parkingDetector` result (see [Live detector guidance](#live-detector-guidance)).
 
 ### Rider feedback
 
@@ -752,7 +761,8 @@ const frameProcessor = useFrameProcessor((frame) => {
 `DETECTOR_MODEL_URI`, and offers an **Auto capture** switch. Turning auto capture off clears its hold, so turning it
 on again starts a new hold. The example drops a result whose frame size differs from the previous one (the first
 result, or after a rotation), because its guide frame was mapped for the old size; guidance stays not ready until the
-next result.
+next result. After a rotation (not for the first result) it also calls `reset()`, so the previous detection and the
+auto-capture hold are discarded.
 
 Device smoke test with the synthetic fixture (its row-0 score is the scene's mean red value, and its box is fixed at
 `[0.1, 0.2, 0.6, 0.9]`):
