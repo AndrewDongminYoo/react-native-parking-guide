@@ -10,13 +10,11 @@ import { verifyParking, type VerifyParkingOptions } from '../verification';
 const HASH = 'a'.repeat(64);
 
 const mockGetFileSha256 = jest.fn<(uri: string) => Promise<string>>();
-const mockGetModelVersion = jest.fn<() => string>();
 
 jest.mock('../NativeParkingGuide', () => ({
   __esModule: true,
   default: {
     getFileSha256: (uri: string) => mockGetFileSha256(uri),
-    getModelVersion: () => mockGetModelVersion(),
   },
 }));
 
@@ -34,6 +32,7 @@ function options(
     ruleResults: RULES,
     deviceTilt: { pitch: 0.1, roll: -0.2 },
     capturedAt: new Date('2026-10-25T01:02:03.004Z'),
+    modelVersion: 'detector-1.2.0',
     ...overrides,
   };
 }
@@ -45,8 +44,6 @@ function invalid(value: unknown): VerifyParkingOptions {
 beforeEach(() => {
   mockGetFileSha256.mockReset();
   mockGetFileSha256.mockResolvedValue(HASH);
-  mockGetModelVersion.mockReset();
-  mockGetModelVersion.mockReturnValue('0.1.0-dev');
 });
 
 describe('verifyParking', () => {
@@ -67,7 +64,7 @@ describe('verifyParking', () => {
       metadata: {
         capturedAt: '2026-10-25T01:02:03.004Z',
         deviceTilt: { pitch: 0.1, roll: -0.2 },
-        modelVersion: '0.1.0-dev',
+        modelVersion: 'detector-1.2.0',
         platform: 'ios',
       },
     });
@@ -267,6 +264,11 @@ describe('verifyParking', () => {
     ['invalid capturedAt', options({ capturedAt: new Date(Number.NaN) })],
     ['capturedAt string', invalid({ ...options(), capturedAt: '2026' })],
     ['non-string attestation', invalid({ ...options(), attestation: 1 })],
+    [
+      'missing modelVersion',
+      invalid({ ...options(), modelVersion: undefined }),
+    ],
+    ['empty modelVersion', options({ modelVersion: '' })],
   ])('rejects with RangeError before hashing: %s', async (_, input) => {
     await expect(verifyParking(input)).rejects.toBeInstanceOf(RangeError);
     expect(mockGetFileSha256).not.toHaveBeenCalled();

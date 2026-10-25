@@ -38,8 +38,7 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 Outside the three goal steps, `uploadVerification` (an opt-in upload of a `VerificationResult` to a caller-owned
 endpoint) is implemented; the package provides no server.
 
-`getModelVersion()` is a native stub that returns `"0.1.0-dev"`. `getFileSha256(uri)` and `runDetector(photoUri, modelUri)`
-are implemented natively on iOS and Android.
+`getFileSha256(uri)` and `runDetector(photoUri, modelUri)` are implemented natively on iOS and Android.
 
 ## Planned architecture
 
@@ -141,7 +140,6 @@ a model. See [Photo verification](#photo-verification).
   fields are not copied to the returned policy.
 - `defaultPolicy: ParkingPolicy` uses `version: 1`, `passThreshold: 0.75`, and the rule settings in the
   [policy example](#policy-format).
-- `getModelVersion(): string` returns `"0.1.0-dev"` on iOS and Android.
 - `useParkingGuidance(options?: GuidanceOptions): ParkingGuidance` returns `ready`, `issues`, `progress`,
   `onFrameResult`, and `reset`. See [Capture guidance](#capture-guidance).
 - `createParkingFrameAnalyzer(VisionCameraProxy): ParkingFrameAnalyzer<Frame>` creates the `parkingGuide` plugin
@@ -692,12 +690,13 @@ with VisionCamera and Worklets Core, including compilation of `ios/ParkingGuideF
 1. It validates `options`. An invalid value rejects with `RangeError` before the photo is read.
 2. It computes `photo.sha256` with `getFileSha256(options.photo.uri)`.
 3. It computes `verdict` and `score` with `evaluatePolicy(options.ruleResults, policy)`.
-4. It fills `metadata`: `capturedAt`, `deviceTilt`, `modelVersion` from `getModelVersion()`, `platform` from
+4. It fills `metadata`: `capturedAt`, `deviceTilt`, `modelVersion` from `options.modelVersion`, `platform` from
    `Platform.OS`, and `location`, `heading`, and `attestation` only when they are passed.
 
-The package does not run a model yet, so the caller passes the rule results, for example
-`[...mapModelOutput(output, mappingOptions), evaluateGeofence(location, zones)]`. `rules` in the result is a copy of
-`options.ruleResults` in the same order, including rules that the policy ignores.
+`verifyParking` does not run the model, so the caller passes the rule results and the version of the model that
+produced them, for example from `runDetector`, `decodeDetectorOutput`, `mapModelOutput`, and `evaluateGeofence`. The
+host supplies the model file, so it also knows its version; the package does not read a version from the model.
+`rules` in the result is a copy of `options.ruleResults` in the same order, including rules that the policy ignores.
 
 | Option | Default | Constraint | Meaning |
 | --- | --- | --- | --- |
@@ -709,6 +708,7 @@ The package does not run a model yet, so the caller passes the rule results, for
 | `location` | omitted | `GeoLocation`: `lat` in `[-90, 90]`, `lng` in `[-180, 180]`, `accuracy` finite and `>= 0` meters | Rider location. Pass it only after the rider consents; the package never reads the device location. |
 | `capturedAt` | the time `verifyParking` is called | valid `Date` | Written as an ISO 8601 UTC string, for example `2026-10-25T01:02:03.004Z`. |
 | `attestation` | omitted | string | Device attestation token, copied as-is. |
+| `modelVersion` | none (required) | non-empty string | Version of the host-supplied model that produced `ruleResults`, copied as-is to `metadata.modelVersion`. |
 
 Other errors: `verifyParking` rejects with `Error` when `Platform.OS` is neither `'ios'` nor `'android'`, when
 `getFileSha256` rejects, and when the native digest is not 64 lowercase hexadecimal digits.
@@ -743,6 +743,7 @@ const result = await verifyParking({
   ],
   deviceTilt: { pitch, roll },
   location,
+  modelVersion: '2026.10.1',
 });
 ```
 
@@ -872,20 +873,15 @@ This JSON object matches `ParkingPolicy` and has the same values as `defaultPoli
 Use the exported API from TypeScript:
 
 ```ts
-import {
-  defaultPolicy,
-  evaluatePolicy,
-  getModelVersion,
-} from 'react-native-parking-guide';
+import { defaultPolicy, evaluatePolicy } from 'react-native-parking-guide';
 import type { RuleResult } from 'react-native-parking-guide';
 
 const ruleResults: RuleResult[] = [
   { id: 'VEHICLE_DETECTED', verdict: 'PASS', confidence: 0.98 },
 ];
 const evaluation = evaluatePolicy(ruleResults, defaultPolicy);
-const modelVersion = getModelVersion();
 
-export { evaluation, modelVersion };
+export { evaluation };
 ```
 
 ### Verdict rules

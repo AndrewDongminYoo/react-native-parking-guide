@@ -54,10 +54,7 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock(
   'react-native-parking-guide',
-  () => ({
-    ...jest.requireActual<object>('../../../src/feedback/feedback'),
-    getModelVersion: () => '0.1.0-dev',
-  }),
+  () => jest.requireActual<object>('../../../src/feedback/feedback'),
   { virtual: true }
 );
 
@@ -134,7 +131,6 @@ describe('example home screen', () => {
     for (const label of ['Kickboard', 'Bicycle', 'E-bike', 'Motorcycle']) {
       expect(screen).toContain(label);
     }
-    expect(screen).toContain('Model version: ');
   });
 });
 

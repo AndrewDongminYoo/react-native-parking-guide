@@ -17,10 +17,6 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
   private val fileExecutor: ExecutorService = Executors.newSingleThreadExecutor()
   private val detector = ParkingDetector(::openPhoto)
 
-  override fun getModelVersion(): String {
-    return "0.1.0-dev"
-  }
-
   override fun getFileSha256(uri: String, promise: Promise) {
     val source = FileSha256.resolve(uri)
     if (source == PhotoSource.Invalid) {

@@ -88,10 +88,6 @@ export type {
   ZoneProximity,
 } from './types';
 
-export function getModelVersion(): string {
-  return ParkingGuide.getModelVersion();
-}
-
 /**
  * Lowercase hexadecimal SHA-256 of the file at `uri`, computed off the JS thread. Accepts an absolute path, a
  * `file:///` URI (percent-decoded as UTF-8), and on Android also a `content://` URI. See the README section
