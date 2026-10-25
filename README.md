@@ -32,7 +32,7 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 | Goal step | Implemented | Not implemented |
 | --- | --- | --- |
 | 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), and `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`) | Producing model-based issues from camera frames (requires on-device inference) |
-| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection by `MappingOptions.vehicleType` and inside `MappingOptions.guideFrame`, and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | On-device inference of a host-supplied model (CoreML on iOS, TFLite on Android) and a published reference model (see [Model source](#model-source)); reading device location or fetching zone data |
+| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection by `MappingOptions.vehicleType` and inside `MappingOptions.guideFrame`, and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `decodeDetectorOutput` (detector output tensors → model output, see [Detector model contract](#detector-model-contract)), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | On-device inference of a host-supplied model (CoreML on iOS, TFLite on Android) and a published reference model (see [Model source](#model-source)); reading device location or fetching zone data |
 | 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`); `verifyParking` (native photo SHA-256, caller-supplied rule results, and capture metadata → `VerificationResult`) | A result screen in the example app; producing rule results from the photo inside `verifyParking` (requires on-device inference) |
 
 Outside the three goal steps, `uploadVerification` (an opt-in upload of a `VerificationResult` to a caller-owned
@@ -50,7 +50,8 @@ Android.
 ## Model source
 
 The package bundles no model weights. The host app supplies the model file, and the package defines the model
-output contract: `RawModelOutput` in [Model-output mapping](#model-output-mapping). The decision, including the class
+output contract: `RawModelOutput` in [Model-output mapping](#model-output-mapping), and the detector input and output
+tensors in [Detector model contract](#detector-model-contract). The decision, including the class
 list, input resolution, and licenses, is recorded in
 [the #32 decision comment](https://github.com/donminzzi/react-native-parking-guide/issues/32#issuecomment-6390993023).
 
@@ -153,6 +154,9 @@ a model. See [Photo verification](#photo-verification).
 - `mapModelOutput(output: RawModelOutput, options?: MappingOptions): RuleResult[]` converts a complete scene prediction
   into eight rule results without executing a model. See [Model-output mapping](#model-output-mapping).
 - `DEFAULT_MAPPING_THRESHOLDS` contains the immutable score thresholds listed below.
+- `decodeDetectorOutput(output: DetectorOutput): RawModelOutput` converts the post-processed output tensors of a
+  host-supplied detector model. See [Detector model contract](#detector-model-contract).
+- `DETECTOR_CLASSES` is the immutable detector class order that `DetectorOutput.classes` indexes.
 - `DEFAULT_PROXIMITY_THRESHOLD` (`1`) is the default `MappingOptions.proximityThreshold` described below.
 - `mapGuidanceIssues(output: RawModelOutput, options?: GuidanceMappingOptions): GuidanceIssue[]` converts one frame's
   model output into model-based capture guidance issues. See [Model-based capture guidance](#model-based-capture-guidance).
@@ -289,6 +293,61 @@ const rules = mapModelOutput(output, {
 });
 const result = evaluatePolicy(rules, defaultPolicy);
 ```
+
+### Detector model contract
+
+This section defines what a host-supplied detector model must accept and produce.
+`decodeDetectorOutput(output: DetectorOutput): RawModelOutput` converts the model output to the `RawModelOutput` that
+`mapModelOutput` and `mapGuidanceIssues` accept.
+The native inference that runs the model ([#8](https://github.com/donminzzi/react-native-parking-guide/issues/8) on
+iOS, [#9](https://github.com/donminzzi/react-native-parking-guide/issues/9) on Android) is not implemented yet.
+
+Input:
+
+- One RGB image of 512 × 512 pixels. The native layer resizes the orientation-corrected photo or frame to 512 × 512
+  without preserving the aspect ratio (no letterbox), so normalized output coordinates apply directly to the original
+  image.
+- Pixel values in `[0, 1]`. The model applies its own mean and standard-deviation normalization.
+- The input tensor layout and element type on each platform are defined with the native inference in #8 and #9.
+
+Output: three tensors for N detections. N can be a fixed, padded count.
+
+| Tensor | Shape | Values |
+| --- | --- | --- |
+| `boxes` | N × 4 | Normalized `[left, top, right, bottom]`, each in `[0, 1]`, with `left <= right` and `top <= bottom`. |
+| `scores` | N | Confidence in `[0, 1]`. |
+| `classes` | N | Integer index into `DETECTOR_CLASSES` (table below). |
+
+Post-processing is part of the exported model, not of this package: score activation, conversion to corner
+coordinates, clamping to `[0, 1]`, and duplicate suppression.
+
+| Index | Detector class | `classId` | `vehicleType` |
+| --- | --- | --- | --- |
+| 0 | `kickboard` | `vehicle` | `'kickboard'` |
+| 1 | `bicycle` (includes e-bikes) | `vehicle` | `'bicycle'` |
+| 2 | `motorcycle` (includes mopeds) | `vehicle` | `'motorcycle'` |
+| 3 | `tactile_paving` | `tactile_paving` | – |
+| 4 | `crosswalk` | `crosswalk` | – |
+| 5 | `roadway` | `roadway` | – |
+| 6 | `sidewalk_block` | `sidewalk_block` | – |
+| 7 | `parking_zone` | `parking_zone` | – |
+
+`DetectorOutput` holds the three tensors flattened row-major as `number[]`: `boxes` has `4 × N` values and row `i` is
+`boxes[4i]` to `boxes[4i + 3]`.
+`decodeDetectorOutput` is pure and deterministic. It keeps every row, including zero-score padding rows;
+`mapModelOutput` and `mapGuidanceIssues` ignore rows below `minimumConfidence` and rows with a zero-area box.
+Padding rows must still be valid rows: a class index in `[0, 7]`, a box in `[0, 1]` with `left <= right` and
+`top <= bottom` (for example `[0, 0, 0, 0]`), and a score in `[0, 1]`. One invalid padding row makes the whole call
+throw.
+It throws `RangeError` when `boxes.length` is not `4 × scores.length`, when `classes.length` is not `scores.length`,
+when a class index is not an integer in `[0, 7]`, and for any value that `mapModelOutput` rejects. It never clamps.
+
+The contract does not cover masks (`ModelMask`), vehicle uprightness from the separate classifier
+(`ModelDetection.upright`), or `imageQuality`. The decoded output contains none of them, so `mapModelOutput` reports
+`UPRIGHT` and `IMAGE_QUALITY` as `WARN` with score/confidence `0`.
+With `defaultPolicy`, `UPRIGHT` has `severity: 'FAIL'` and `failBelow: 0.7`, so `evaluatePolicy` returns `FAIL` for
+every decoded output until a host merges an `upright` assessment into the vehicle detection. To evaluate decoded
+output before that, pass a policy that disables `UPRIGHT` or sets its `severity` to `'WARN'`.
 
 ### Geofence
 
@@ -729,6 +788,7 @@ stated.
 | `GuidanceMappingOptions`, `GuidanceThresholds` | Model-based capture guidance types. See [Model-based capture guidance](#model-based-capture-guidance). |
 | `GeoLocation`, `GeoPoint`, `GeofenceOptions`, `GeofenceZone`, `GeofenceZoneKind` | Geofence types. See [Geofence](#geofence). |
 | `UploadErrorKind`, `UploadOptions`, `UploadResult<T>` | Opt-in upload types. See [Opt-in upload](#opt-in-upload). |
+| `DetectorOutput` | Required `boxes`, `scores`, and `classes` (`readonly number[]`). See [Detector model contract](#detector-model-contract). |
 | `VerifyParkingOptions` | Photo verification options. See [Photo verification](#photo-verification). |
 | `InferenceRuleId`, `MappingOptions`, `MappingThresholds`, `ModelAssessment`, `ModelBox`, `ModelClass`, `ModelDetection`, `ModelMask`, `RawModelOutput` | Model-output mapping types. See [Model-output mapping](#model-output-mapping). |
 | `VerificationResult` | Required `verdict: Verdict`, `score: number`, `rules: RuleResult[]`, `photo: { uri: string; width: number; height: number; sha256: string }`, and `metadata: { capturedAt: string; location?: { lat: number; lng: number; accuracy: number }; heading?: number; deviceTilt: { pitch: number; roll: number }; modelVersion: string; platform: 'ios' \| 'android'; attestation?: string }`. The type defines no additional numeric ranges or defaults; `verifyParking` produces values in the ranges listed in [Photo verification](#photo-verification). |

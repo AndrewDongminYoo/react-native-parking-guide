@@ -32,6 +32,8 @@ export type {
   GuidanceMappingOptions,
   GuidanceThresholds,
 } from './inference/guidance';
+export { DETECTOR_CLASSES, decodeDetectorOutput } from './inference/detector';
+export type { DetectorOutput } from './inference/detector';
 export {
   DEFAULT_MAPPING_THRESHOLDS,
   DEFAULT_PROXIMITY_THRESHOLD,
