@@ -702,7 +702,7 @@ The package does not run a model yet, so the caller passes the rule results, for
 | Option | Default | Constraint | Meaning |
 | --- | --- | --- | --- |
 | `photo` | none (required) | `uri`: non-empty string; `width`, `height`: integers `> 0` | The captured photo, for example `{ uri: photo.path, width: photo.width, height: photo.height }` from VisionCamera `takePhoto()`. |
-| `ruleResults` | none (required) | array; every item has `verdict` `'PASS'`, `'WARN'`, or `'FAIL'` | Rule results for this photo. |
+| `ruleResults` | none (required) | array; every item has `verdict` `'PASS'`, `'WARN'`, or `'FAIL'`; at least one item has an `id` whose policy entry has `enabled: true` | Rule results for this photo. An empty array, or one in which the policy ignores every item, rejects with `RangeError`: `evaluatePolicy` would score it `1` and return `PASS` for a photo that nothing evaluated. |
 | `policy` | `defaultPolicy` | passes `validatePolicy` | Policy for `evaluatePolicy`. An invalid policy rejects with `RangeError` that lists the `validatePolicy` messages. |
 | `deviceTilt` | none (required) | `pitch`, `roll`: finite radians in `[-π, π]` | Device tilt at capture time. |
 | `heading` | omitted | finite degrees in `[0, 360)`, clockwise from true north | Device heading at capture time. |
