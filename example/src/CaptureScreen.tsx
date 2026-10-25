@@ -7,12 +7,14 @@ import {
   Pressable,
   StatusBar,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 import {
   Camera,
+  runAsync,
   runAtTargetFps,
   useCameraDevice,
   useCameraPermission,
@@ -22,18 +24,32 @@ import {
 import { Worklets } from 'react-native-worklets-core';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  DEFAULT_AUTO_CAPTURE_HOLD_MS,
+  createParkingDetector,
   createParkingFrameAnalyzer,
+  screenRectToFrameBox,
   useParkingGuidance,
 } from 'react-native-parking-guide';
-import type { VehicleType } from 'react-native-parking-guide';
+import type {
+  DetectorFrameResult,
+  ScreenRect,
+  Size,
+  VehicleType,
+} from 'react-native-parking-guide';
 
-import { captureTitle, guidanceMessages } from './captureCopy';
+import {
+  captureDisclaimer,
+  captureMessages,
+  captureTitle,
+} from './captureCopy';
+import { DETECTOR_MODEL_URI } from './detectorModel';
 import {
   GUIDE_FRAME_HINT_GAP,
   GUIDE_FRAME_HORIZONTAL_MARGIN,
   fitGuideFrameWidth,
+  frameSizeChange,
+  usableGuideBox,
 } from './guideFrameLayout';
-import type { LayoutSize } from './guideFrameLayout';
 import { VehicleSilhouette } from './VehicleSilhouette';
 
 const READY_COLOR = '#34C759';
@@ -100,21 +116,77 @@ function CaptureHeader({
 function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
   const camera = useRef<Camera>(null);
   const device = useCameraDevice('back');
-  const guidance = useParkingGuidance();
-  const { onFrameResult } = guidance;
   const [torchOn, setTorchOn] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [status, setStatus] = useState('');
-  const [frameArea, setFrameArea] = useState<LayoutSize | null>(null);
+  const [frameArea, setFrameArea] = useState<ScreenRect | null>(null);
+  const [guideRect, setGuideRect] = useState<ScreenRect | null>(null);
+  const [cameraView, setCameraView] = useState<Size | null>(null);
+  const [frameSize, setFrameSize] = useState<Size | null>(null);
+  const frameSizeRef = useRef<Size | null>(null);
   const [hintHeight, setHintHeight] = useState<number | null>(null);
+  const [autoCapture, setAutoCapture] = useState(false);
   const insets = useSafeAreaInsets();
+  const detectorConfigured = DETECTOR_MODEL_URI !== undefined;
+  // The guide frame in camera-frame coordinates, once the layouts and the first detection's frame size are known.
+  const guideFrame =
+    frameArea && guideRect && cameraView && frameSize
+      ? usableGuideBox(
+          screenRectToFrameBox(
+            {
+              x: frameArea.x + guideRect.x,
+              y: frameArea.y + guideRect.y,
+              width: guideRect.width,
+              height: guideRect.height,
+            },
+            cameraView,
+            frameSize
+          )
+        )
+      : undefined;
+  const guidance = useParkingGuidance({
+    detection: detectorConfigured ? { guideFrame, vehicleType } : undefined,
+    autoCapture:
+      detectorConfigured && autoCapture
+        ? { holdMs: DEFAULT_AUTO_CAPTURE_HOLD_MS }
+        : undefined,
+  });
+  const { onFrameResult, onDetectorResult, reset: resetGuidance } = guidance;
   const analyze = useMemo(
     () => createParkingFrameAnalyzer(VisionCameraProxy),
+    []
+  );
+  const detect = useMemo(
+    () =>
+      DETECTOR_MODEL_URI === undefined
+        ? undefined
+        : createParkingDetector(VisionCameraProxy, {
+            modelUri: DETECTOR_MODEL_URI,
+          }),
     []
   );
   const deliver = useMemo(
     () => Worklets.createRunOnJS(onFrameResult),
     [onFrameResult]
+  );
+  const deliverDetection = useMemo(
+    () =>
+      Worklets.createRunOnJS((result: DetectorFrameResult) => {
+        const previous = frameSizeRef.current;
+        const changed = frameSizeChange(previous, result);
+        if (changed !== null) {
+          // This result was mapped against the guide frame for the old size; drop it and let the next one count.
+          frameSizeRef.current = changed;
+          setFrameSize(changed);
+          if (previous !== null) {
+            // After a rotation, the previous detection and the auto-capture hold describe the old orientation.
+            resetGuidance();
+          }
+          return;
+        }
+        onDetectorResult(result);
+      }),
+    [onDetectorResult, resetGuidance]
   );
   const frameProcessor = useFrameProcessor(
     (frame) => {
@@ -123,9 +195,27 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
         'worklet';
         deliver(analyze(frame));
       });
+      if (detect !== undefined) {
+        runAtTargetFps(2, () => {
+          'worklet';
+          runAsync(frame, () => {
+            'worklet';
+            deliverDetection(detect(frame));
+          });
+        });
+      }
     },
-    [analyze, deliver]
+    [analyze, deliver, detect, deliverDetection]
   );
+  const { autoCaptureDue, acknowledgeAutoCapture } = guidance;
+  // Holds the latest capturePhoto, which is declared after the early return below.
+  const captureRef = useRef<() => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    if (autoCaptureDue) {
+      acknowledgeAutoCapture();
+      captureRef.current();
+    }
+  }, [autoCaptureDue, acknowledgeAutoCapture]);
 
   const title = captureTitle(vehicleType);
   if (!device) {
@@ -143,7 +233,7 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
 
   const canCapture =
     guidance.ready && guidance.issues.length === 0 && !capturing;
-  const messages = guidanceMessages(guidance.issues);
+  const messages = captureMessages(guidance.issues, guidance.detectorError);
   const frameColor = guidance.ready ? READY_COLOR : IDLE_COLOR;
   const frameWidth =
     frameArea && hintHeight !== null
@@ -165,8 +255,16 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
     }
   }
 
+  captureRef.current = capturePhoto;
+
   return (
-    <View style={styles.screen}>
+    <View
+      style={styles.screen}
+      onLayout={(event: LayoutChangeEvent) => {
+        const { width, height } = event.nativeEvent.layout;
+        setCameraView({ width, height });
+      }}
+    >
       <Camera
         ref={camera}
         style={StyleSheet.absoluteFill}
@@ -193,8 +291,8 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
         ]}
         pointerEvents="none"
         onLayout={(event: LayoutChangeEvent) => {
-          const { width, height } = event.nativeEvent.layout;
-          setFrameArea({ width, height });
+          const { x, y, width, height } = event.nativeEvent.layout;
+          setFrameArea({ x, y, width, height });
         }}
       >
         {frameWidth > 0 ? (
@@ -203,6 +301,10 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
               styles.guideFrame,
               { width: frameWidth, borderColor: frameColor },
             ]}
+            onLayout={(event: LayoutChangeEvent) => {
+              const { x, y, width, height } = event.nativeEvent.layout;
+              setGuideRect({ x, y, width, height });
+            }}
           >
             <VehicleSilhouette
               vehicleType={vehicleType}
@@ -245,9 +347,18 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
             </Text>
           )}
           {status ? <Text style={styles.status}>{status}</Text> : null}
+          {detectorConfigured ? (
+            <View style={styles.autoCapture}>
+              <Text style={styles.status}>Auto capture</Text>
+              <Switch
+                accessibilityLabel="Auto capture"
+                value={autoCapture}
+                onValueChange={setAutoCapture}
+              />
+            </View>
+          ) : null}
           <Text style={styles.disclaimer}>
-            Checks image quality only. Vehicle detection and the parking result
-            are not available yet.
+            {captureDisclaimer(detectorConfigured)}
           </Text>
         </View>
         <Pressable
@@ -463,6 +574,12 @@ const styles = StyleSheet.create({
   status: {
     color: READY_COLOR,
     textAlign: 'center',
+  },
+  autoCapture: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
   disclaimer: {
     color: 'rgba(255, 255, 255, 0.7)',

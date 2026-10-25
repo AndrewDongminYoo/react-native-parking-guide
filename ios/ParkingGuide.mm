@@ -5,20 +5,6 @@
 
 static const NSUInteger kSha256ChunkSize = 64 * 1024;
 
-// Same rule as `FileSha256.resolve` on Android: an absolute path, or a `file:///` URI whose text after `file://` is
-// strictly percent-decoded as UTF-8 (nil for a malformed sequence or invalid UTF-8).
-static NSURL *ParkingGuideFileURL(NSString *uri)
-{
-  if ([uri hasPrefix:@"/"]) {
-    return [NSURL fileURLWithPath:uri];
-  }
-  if ([uri hasPrefix:@"file:///"]) {
-    NSString *path = [[uri substringFromIndex:@"file://".length] stringByRemovingPercentEncoding];
-    return path == nil ? nil : [NSURL fileURLWithPath:path];
-  }
-  return nil;
-}
-
 // Returns nil when the file cannot be opened or read.
 static NSString *ParkingGuideSha256Hex(NSURL *url)
 {
@@ -60,19 +46,7 @@ static NSString *ParkingGuideSha256Hex(NSURL *url)
   return hex;
 }
 
-@implementation ParkingGuide {
-  ParkingGuideDetector *_detector;
-  dispatch_queue_t _detectorQueue;
-}
-
-- (instancetype)init
-{
-  if (self = [super init]) {
-    _detector = [ParkingGuideDetector new];
-    _detectorQueue = dispatch_queue_create("com.parkingguide.detector", DISPATCH_QUEUE_SERIAL);
-  }
-  return self;
-}
+@implementation ParkingGuide
 
 - (void)getFileSha256:(NSString *)uri
               resolve:(RCTPromiseResolveBlock)resolve
@@ -104,8 +78,8 @@ static NSString *ParkingGuideSha256Hex(NSURL *url)
     reject(@"E_INVALID_URI", @"The photo and model URIs must be absolute paths or file:/// URIs.", nil);
     return;
   }
-  ParkingGuideDetector *detector = _detector;
-  dispatch_async(_detectorQueue, ^{
+  ParkingGuideDetector *detector = [ParkingGuideDetector shared];
+  dispatch_async([ParkingGuideDetector sharedQueue], ^{
     NSString *code = nil;
     NSString *message = nil;
     NSDictionary *output = [detector runWithPhotoURL:photoURL modelURL:modelURL errorCode:&code message:&message];
@@ -119,8 +93,8 @@ static NSString *ParkingGuideSha256Hex(NSURL *url)
 
 - (void)invalidate
 {
-  ParkingGuideDetector *detector = _detector;
-  dispatch_async(_detectorQueue, ^{
+  ParkingGuideDetector *detector = [ParkingGuideDetector shared];
+  dispatch_async([ParkingGuideDetector sharedQueue], ^{
     [detector reset];
   });
 }

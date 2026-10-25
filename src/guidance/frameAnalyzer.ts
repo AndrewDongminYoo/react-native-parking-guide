@@ -1,3 +1,4 @@
+import type { DetectorFrameResult } from './detection';
 import type { GuidanceFrameResult } from './reducer';
 
 /** Shared initialization values for iOS and Android frame processor plugins. */
@@ -38,5 +39,42 @@ export function createParkingFrameAnalyzer<Frame>(proxy: {
         progress: 0,
       }
     );
+  };
+}
+
+export interface ParkingDetector<Frame> {
+  /** Invoke only in a VisionCamera frame-processor worklet, preferably inside `runAsync`; it runs the model. */
+  (frame: Frame): DetectorFrameResult;
+}
+
+/**
+ * Create once per capture session on the JS thread. `modelUri` accepts the same forms as `runDetector`, and the
+ * native side shares the loaded model with `runDetector` for the same URI.
+ */
+export function createParkingDetector<Frame>(
+  proxy: {
+    initFrameProcessorPlugin(
+      name: string,
+      options: Record<string, string | number>
+    ): { call(frame: Frame): unknown } | undefined;
+  },
+  options: { modelUri: string }
+): ParkingDetector<Frame> {
+  const plugin = proxy.initFrameProcessorPlugin('parkingDetector', {
+    modelUri: options.modelUri,
+  });
+  if (plugin == null) {
+    throw new Error(
+      'The parkingDetector frame processor is unavailable. Install the native plugin and enable VisionCamera frame processors.'
+    );
+  }
+
+  return (frame: Frame): DetectorFrameResult => {
+    'worklet';
+    // Date the detection before inference, so its age includes the inference time.
+    const capturedAt = Date.now();
+    const result = plugin.call(frame) as unknown as
+      DetectorFrameResult | undefined;
+    return { ...(result ?? { error: 'E_INFERENCE' }), capturedAt };
   };
 }

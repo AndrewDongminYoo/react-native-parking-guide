@@ -9,7 +9,7 @@ trap 'rm -rf "$out"' EXIT
 
 clang++ -std=c++17 -fobjc-arc -Wall -Werror -I"$root/ios" \
   "$root/scripts/detector-harness/main.mm" "$root/ios/ParkingGuideDetector.mm" \
-  -framework Foundation -framework CoreML -framework CoreGraphics -framework ImageIO \
+  -framework Foundation -framework CoreML -framework CoreGraphics -framework ImageIO -framework CoreImage -framework CoreVideo \
   -o "$out/harness"
 
 status=0
@@ -31,6 +31,55 @@ assert o["classes"] == [0, 3], o
     echo "PASS $layout: $result"
   else
     echo "FAIL $layout: $result"
+    status=1
+  fi
+done
+
+# The camera-frame path: a solid (204, 102, 51) 640 x 480 YUV pixel buffer, oriented with a CGImagePropertyOrientation
+# (1 up, 6 right, 5 left-mirrored), must give the same mean-red score as the photo and the upright frame size.
+for layout in nhwc nchw; do
+  for orientation in 1 6 5; do
+    result=$("$out/harness" --pixel-buffer 204 102 51 "$orientation" \
+      "$root/fixtures/detector/detector-$layout.mlpackage") || {
+      echo "FAIL pixel buffer $layout/$orientation: $result"
+      status=1
+      continue
+    }
+    if printf '%s' "$result" | ORIENTATION=$orientation /usr/bin/python3 -c '
+import json, os, sys
+o = json.load(sys.stdin)
+size = (640, 480) if os.environ["ORIENTATION"] == "1" else (480, 640)
+assert abs(o["scores"][0] - 0.8) < 2e-2 and o["scores"][1] == 0, o
+assert (o["frameWidth"], o["frameHeight"]) == size, o
+'; then
+      echo "PASS pixel buffer $layout/$orientation: scores=$(printf '%s' "$result" | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)["scores"])')"
+    else
+      echo "FAIL pixel buffer $layout/$orientation: $result"
+      status=1
+    fi
+  done
+done
+
+# VisionCamera's iOS Frame.orientation is the frame's own orientation, the reverse of the upright transform (its
+# snapshot code applies Orientation.portrait.relativeTo(frame orientation)), so Left and Right swap.
+expected='{"0":1,"1":3,"2":6,"3":8,"4":1,"5":3,"6":6,"7":8,"m0":2,"m1":4,"m2":7,"m3":5}'
+table=$("$out/harness" --orientation-table)
+if [ "$table" = "$expected" ]; then
+  echo "PASS orientation table"
+else
+  echo "FAIL orientation table: $table"
+  status=1
+fi
+
+# Content check: a buffer whose left half is red and right half blue. Applying orientation 6 (rotate 90 degrees
+# clockwise to display) puts the red half on top; 8 (counterclockwise) puts it at the bottom; 1 keeps it on the left.
+for case in "1 red blue red" "6 red red blue" "8 blue blue red"; do
+  set -- $case
+  probe=$("$out/harness" --probe "$1")
+  if [ "$probe" = "$2 $3 $4" ]; then
+    echo "PASS probe orientation $1"
+  else
+    echo "FAIL probe orientation $1: got '$probe', want '$2 $3 $4' (top-left top-right bottom-left)"
     status=1
   fi
 done

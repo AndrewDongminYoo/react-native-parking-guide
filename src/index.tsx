@@ -5,9 +5,30 @@ export { useParkingGuidance } from './guidance/useParkingGuidance';
 export type { ParkingGuidance } from './guidance/useParkingGuidance';
 export {
   CAPTURE_GUIDANCE_THRESHOLDS,
+  createParkingDetector,
   createParkingFrameAnalyzer,
 } from './guidance/frameAnalyzer';
-export type { ParkingFrameAnalyzer } from './guidance/frameAnalyzer';
+export type {
+  ParkingDetector,
+  ParkingFrameAnalyzer,
+} from './guidance/frameAnalyzer';
+export { DEFAULT_DETECTION_STALE_MS } from './guidance/detection';
+export type {
+  DetectionOptions,
+  DetectorFrameResult,
+} from './guidance/detection';
+export { DEFAULT_AUTO_CAPTURE_HOLD_MS } from './guidance/autoCapture';
+export { screenRectToFrameBox } from './guidance/screenRect';
+export type { ScreenRect, Size } from './guidance/screenRect';
+export {
+  createGuidanceSession,
+  reduceGuidanceSession,
+} from './guidance/session';
+export type {
+  GuidanceSessionEvent,
+  GuidanceSessionOptions,
+  GuidanceSessionState,
+} from './guidance/session';
 export { createGuidanceState, reduceGuidance } from './guidance/reducer';
 export type {
   GuidanceFrameResult,

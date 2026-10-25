@@ -1,6 +1,7 @@
 #import "ParkingGuideDetector.h"
 
 #import <CoreGraphics/CoreGraphics.h>
+#import <CoreImage/CoreImage.h>
 #import <CoreML/CoreML.h>
 #import <ImageIO/ImageIO.h>
 
@@ -11,6 +12,35 @@ NSString *const ParkingGuideDetectorErrorModelContract = @"E_MODEL_CONTRACT";
 NSString *const ParkingGuideDetectorErrorPhotoRead = @"E_PHOTO_READ";
 NSString *const ParkingGuideDetectorErrorInference = @"E_INFERENCE";
 
+// Same rule as `FileSha256.resolve` on Android: an absolute path, or a `file:///` URI whose text after `file://` is
+// strictly percent-decoded as UTF-8 (nil for a malformed sequence or invalid UTF-8).
+NSURL *ParkingGuideFileURL(NSString *uri)
+{
+  if ([uri hasPrefix:@"/"]) {
+    return [NSURL fileURLWithPath:uri];
+  }
+  if ([uri hasPrefix:@"file:///"]) {
+    NSString *path = [[uri substringFromIndex:@"file://".length] stringByRemovingPercentEncoding];
+    return path == nil ? nil : [NSURL fileURLWithPath:path];
+  }
+  return nil;
+}
+
+CGImagePropertyOrientation ParkingGuideUprightOrientation(NSInteger frameOrientation, BOOL mirrored)
+{
+  // UIImageOrientation raw values: Up 0, Down 1, Left 2, Right 3, then the same four mirrored.
+  switch (frameOrientation % 4) {
+    case 1:
+      return mirrored ? kCGImagePropertyOrientationDownMirrored : kCGImagePropertyOrientationDown;
+    case 2:
+      return mirrored ? kCGImagePropertyOrientationRightMirrored : kCGImagePropertyOrientationRight;
+    case 3:
+      return mirrored ? kCGImagePropertyOrientationLeftMirrored : kCGImagePropertyOrientationLeft;
+    default:
+      return mirrored ? kCGImagePropertyOrientationUpMirrored : kCGImagePropertyOrientationUp;
+  }
+}
+
 static const NSInteger kInputSize = 512;
 static NSArray<NSString *> *const kOutputNames = @[ @"boxes", @"scores", @"classes" ];
 
@@ -18,6 +48,27 @@ static NSArray<NSString *> *const kOutputNames = @[ @"boxes", @"scores", @"class
   NSURL *_modelURL;
   MLModel *_model;
   NSURL *_compiledURL;
+  CIContext *_ciContext;
+}
+
++ (ParkingGuideDetector *)shared
+{
+  static ParkingGuideDetector *detector;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    detector = [ParkingGuideDetector new];
+  });
+  return detector;
+}
+
++ (dispatch_queue_t)sharedQueue
+{
+  static dispatch_queue_t queue;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    queue = dispatch_queue_create("com.parkingguide.detector", DISPATCH_QUEUE_SERIAL);
+  });
+  return queue;
 }
 
 - (void)reset
@@ -127,6 +178,78 @@ static NSArray<NSNumber *> *ParkingGuideFlatten(MLMultiArray *array)
                                                           errorCode:(NSString **)errorCode
                                                             message:(NSString **)message
 {
+  return [self runWithModelURL:modelURL
+                     errorCode:errorCode
+                       message:message
+                        pixels:^BOOL(std::vector<uint8_t> &rgbx) {
+                          return ParkingGuideReadPixels(photoURL, rgbx);
+                        }];
+}
+
+- (NSDictionary<NSString *, id> *)runWithPixelBuffer:(CVPixelBufferRef)buffer
+                                         orientation:(CGImagePropertyOrientation)orientation
+                                            modelURL:(NSURL *)modelURL
+                                           errorCode:(NSString **)errorCode
+                                             message:(NSString **)message
+{
+  __block CGSize upright = CGSizeZero;
+  NSDictionary *tensors = [self runWithModelURL:modelURL
+                                      errorCode:errorCode
+                                        message:message
+                                         pixels:^BOOL(std::vector<uint8_t> &rgbx) {
+                                           return [self readPixelBuffer:buffer
+                                                            orientation:orientation
+                                                                   into:rgbx
+                                                                upright:&upright];
+                                         }];
+  if (tensors == nil) {
+    return nil;
+  }
+  NSMutableDictionary *output = [tensors mutableCopy];
+  output[@"frameWidth"] = @(upright.width);
+  output[@"frameHeight"] = @(upright.height);
+  return output;
+}
+
+/// Orients the frame, stretches it to 512 x 512, and renders it as RGBX with one reused Core Image context.
+- (BOOL)readPixelBuffer:(CVPixelBufferRef)buffer
+            orientation:(CGImagePropertyOrientation)orientation
+                   into:(std::vector<uint8_t> &)rgbx
+                upright:(CGSize *)upright
+{
+  if (buffer == NULL) {
+    return NO;
+  }
+  CIImage *image = [[CIImage imageWithCVPixelBuffer:buffer] imageByApplyingCGOrientation:orientation];
+  CGRect extent = image.extent;
+  if (CGRectIsEmpty(extent) || CGRectIsInfinite(extent)) {
+    return NO;
+  }
+  *upright = extent.size;
+  CGAffineTransform toInput = CGAffineTransformMakeScale(kInputSize / extent.size.width, kInputSize / extent.size.height);
+  image = [[image imageByApplyingTransform:CGAffineTransformMakeTranslation(-extent.origin.x, -extent.origin.y)]
+      imageByApplyingTransform:toInput];
+  if (_ciContext == nil) {
+    _ciContext = [CIContext contextWithOptions:nil];
+  }
+  rgbx.assign(kInputSize * kInputSize * 4, 0);
+  CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+  [_ciContext render:image
+            toBitmap:rgbx.data()
+            rowBytes:kInputSize * 4
+              bounds:CGRectMake(0, 0, kInputSize, kInputSize)
+              format:kCIFormatRGBA8
+          colorSpace:colorSpace];
+  CGColorSpaceRelease(colorSpace);
+  return YES;
+}
+
+/// Loads the model and checks its contract before `pixels` runs, so model errors take precedence over input errors.
+- (NSDictionary<NSString *, NSArray<NSNumber *> *> *)runWithModelURL:(NSURL *)modelURL
+                                                          errorCode:(NSString **)errorCode
+                                                            message:(NSString **)message
+                                                             pixels:(BOOL (^)(std::vector<uint8_t> &))pixels
+{
   MLModel *model = [self loadModel:modelURL];
   if (model == nil) {
     *errorCode = ParkingGuideDetectorErrorModelLoad;
@@ -153,7 +276,7 @@ static NSArray<NSNumber *> *ParkingGuideFlatten(MLMultiArray *array)
   }
 
   std::vector<uint8_t> rgbx;
-  if (!ParkingGuideReadPixels(photoURL, rgbx)) {
+  if (!pixels(rgbx)) {
     *errorCode = ParkingGuideDetectorErrorPhotoRead;
     *message = @"Could not read the photo file.";
     return nil;

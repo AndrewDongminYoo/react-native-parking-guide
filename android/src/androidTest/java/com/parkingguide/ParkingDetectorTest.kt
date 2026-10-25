@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.io.FileInputStream
+import java.nio.ByteBuffer
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Test
@@ -46,6 +47,21 @@ class ParkingDetectorTest {
       assertEquals(photo, rows * 4, output.getValue("boxes").size)
       assertEquals(photo, rows, output.getValue("scores").size)
       assertEquals(photo, rows, output.getValue("classes").size)
+    }
+  }
+
+  @Test fun runsAFramePixelPathWithTheSharedFixture() {
+    // solid.png's RGB (204, 102, 51) as full-range BT.601 YUV, in a 64 x 48 frame that needs a 90-degree turn.
+    val width = 64
+    val height = 48
+    val y = ByteBuffer.wrap(ByteArray(width * height) { 127.toByte() })
+    val u = ByteBuffer.wrap(ByteArray(width * height / 4) { 85.toByte() })
+    val v = ByteBuffer.wrap(ByteArray(width * height / 4) { 183.toByte() })
+    val pixels = FramePixels.toArgb(y, u, v, width, height, width, width / 2, 1, 90, false, false)
+    for (layout in listOf("nhwc", "nchw")) {
+      val output = detector.runPixels(pixels, fixture("detector-$layout.tflite"))
+      assertEquals(layout, 0.8, output.getValue("scores")[0], 2e-2)
+      assertArrayEquals(layout, doubleArrayOf(0.1, 0.2, 0.6, 0.9, 0.0, 0.0, 0.0, 0.0), output.getValue("boxes"), 1e-6)
     }
   }
 

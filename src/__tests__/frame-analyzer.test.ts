@@ -7,6 +7,7 @@ import type {
 
 import {
   CAPTURE_GUIDANCE_THRESHOLDS,
+  createParkingDetector,
   createParkingFrameAnalyzer,
 } from '../guidance/frameAnalyzer';
 import { createGuidanceState, reduceGuidance } from '../guidance/reducer';
@@ -71,6 +72,44 @@ describe('createParkingFrameAnalyzer', () => {
       ready: false,
       issues: [],
       progress: 0,
+    });
+  });
+});
+
+describe('createParkingDetector', () => {
+  it('initializes the parkingDetector plugin with the model URI and returns its result', () => {
+    const result = {
+      boxes: [0.1, 0.2, 0.6, 0.9],
+      scores: [0.8],
+      classes: [0],
+      frameWidth: 480,
+      frameHeight: 640,
+    };
+    // The native result holds number arrays, which VisionCamera's ParameterType does not model.
+    call.mockReturnValue(result as never);
+    const detect = createParkingDetector(proxy, { modelUri: '/m.tflite' });
+    expect(mockInitFrameProcessorPlugin).toHaveBeenCalledWith(
+      'parkingDetector',
+      { modelUri: '/m.tflite' }
+    );
+    jest.spyOn(Date, 'now').mockReturnValue(1234);
+    expect(detect({} as Frame)).toEqual({ ...result, capturedAt: 1234 });
+  });
+
+  it('fails explicitly when the native plugin is not registered', () => {
+    mockInitFrameProcessorPlugin.mockReturnValue(undefined);
+    expect(() =>
+      createParkingDetector(proxy, { modelUri: '/m.tflite' })
+    ).toThrow(/parkingDetector.*native plugin/);
+  });
+
+  it('reports E_INFERENCE when the plugin returns nothing', () => {
+    call.mockReturnValue(undefined);
+    const detect = createParkingDetector(proxy, { modelUri: '/m.tflite' });
+    jest.spyOn(Date, 'now').mockReturnValue(5);
+    expect(detect({} as Frame)).toEqual({
+      error: 'E_INFERENCE',
+      capturedAt: 5,
     });
   });
 });

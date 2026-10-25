@@ -31,7 +31,7 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 
 | Goal step | Implemented | Not implemented |
 | --- | --- | --- |
-| 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), and `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`) | Producing model-based issues from camera frames (requires on-device inference) |
+| 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), and live detection on camera frames with `createParkingDetector` and auto capture (see [Live detector guidance](#live-detector-guidance)) | Device acceptance with a trained model (requires the reference model, #56) |
 | 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection by `MappingOptions.vehicleType` and inside `MappingOptions.guideFrame`, and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `runDetector` (native inference of a host-supplied CoreML or LiteRT/TFLite detector on a photo, see [Native detector inference](#native-detector-inference)), `decodeDetectorOutput` (detector output tensors → model output, see [Detector model contract](#detector-model-contract)), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A published reference model (see [Model source](#model-source)) and an uprightness classifier; reading device location or fetching zone data |
 | 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`); `verifyParking` (native photo SHA-256, caller-supplied rule results, and capture metadata → `VerificationResult`) | A result screen in the example app; producing rule results from the photo inside `verifyParking` (requires on-device inference) |
 
@@ -140,8 +140,17 @@ a model. See [Photo verification](#photo-verification).
   fields are not copied to the returned policy.
 - `defaultPolicy: ParkingPolicy` uses `version: 1`, `passThreshold: 0.75`, and the rule settings in the
   [policy example](#policy-format).
-- `useParkingGuidance(options?: GuidanceOptions): ParkingGuidance` returns `ready`, `issues`, `progress`,
-  `onFrameResult`, and `reset`. See [Capture guidance](#capture-guidance).
+- `useParkingGuidance(options?: GuidanceSessionOptions): ParkingGuidance` returns `ready`, `issues`, `progress`,
+  `onFrameResult`, `onDetectorResult`, `detectorError`, `autoCaptureDue`, `acknowledgeAutoCapture`, and `reset`.
+  See [Capture guidance](#capture-guidance) and [Live detector guidance](#live-detector-guidance).
+- `createParkingDetector(VisionCameraProxy, { modelUri }): ParkingDetector<Frame>` creates the `parkingDetector`
+  plugin on the JS thread and returns a frame-processor worklet that runs the detector. Throws if the native plugin
+  is unavailable. See [Live detector guidance](#live-detector-guidance).
+- `screenRectToFrameBox(rect: ScreenRect, view: Size, frame: Size): ModelBox` maps an on-screen rectangle over a
+  `resizeMode="cover"` preview to normalized upright frame coordinates.
+- `createGuidanceSession()` and `reduceGuidanceSession(state, event, options)` are the pure session reducer behind
+  `useParkingGuidance`. `DEFAULT_DETECTION_STALE_MS` (`1500`) and `DEFAULT_AUTO_CAPTURE_HOLD_MS` (`800`) are its
+  defaults.
 - `createParkingFrameAnalyzer(VisionCameraProxy): ParkingFrameAnalyzer<Frame>` creates the `parkingGuide` plugin
   on the JS thread and returns a frame-processor worklet. Pass `VisionCameraProxy` from the app's VisionCamera import;
   the library does not import optional camera/worklets packages at runtime. Throws if the native plugin is unavailable.
@@ -550,7 +559,8 @@ declaration order (`VEHICLE_DETECTED`, `UPRIGHT`, `TACTILE_PAVING`, `CROSSWALK`,
 ### Capture guidance
 
 `useParkingGuidance` manages JS state; `createParkingFrameAnalyzer` supplies iOS and Android native image-quality analysis.
-Neither API creates a camera or detects a vehicle. Analysis returns serializable `GuidanceFrameResult` objects
+Neither API creates a camera or detects a vehicle; `createParkingDetector` adds vehicle detection (see
+[Live detector guidance](#live-detector-guidance)). Analysis returns serializable `GuidanceFrameResult` objects
 containing `ready`, `issues`, and `progress`.
 Call `onFrameResult` in frame order on the **JS thread**. A Vision Camera worklet must use the app's
 worklet-to-JS bridge to invoke it; do not call the React callback directly from a worklet or transfer camera
@@ -623,9 +633,10 @@ counts as a check not passed. Sensor listeners and their worker thread are relea
 TurboModule invalidation, or after one second without frames. After idle shutdown or host pause, analysis restarts
 sensor updates on the next active-session frame.
 
-`ready: true` means only that these three image-quality checks passed. It does not assert vehicle presence,
-ground visibility, parking compliance, or a `PASS` verdict. Native analysis does not produce model-based issues
-(`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`); see [Model-based capture guidance](#model-based-capture-guidance).
+Without the `detection` option, `ready: true` means only that these three image-quality checks passed. It does not
+assert vehicle presence, ground visibility, parking compliance, or a `PASS` verdict. The `parkingGuide` analysis does
+not produce model-based issues (`NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`); with the `detection`
+option, the `parkingDetector` results add them (see [Live detector guidance](#live-detector-guidance)).
 
 #### Manual Android verification
 
@@ -678,10 +689,89 @@ with VisionCamera and Worklets Core, including compilation of `ios/ParkingGuideF
   readiness. Until then, retain the previously committed issues.
 - A frame is ready only if its `ready` field is `true` and its issue set is empty. Output `ready` becomes `true`
   after `debounceFrames` consecutive ready frames. A non-ready frame revokes readiness immediately.
-- Invalid options throw `RangeError` when processing a frame. Options apply to subsequent frames; use `reset()`
-  when changing options if the previous smoothing/debounce history must be discarded.
-- `onFrameResult` retains its identity while the two option values are unchanged; `reset` retains its identity
-  for the lifetime of the hook.
+- Invalid `smoothingFactor` or `debounceFrames` values throw `RangeError` when processing a frame; invalid
+  `detection` or `autoCapture` options throw `RangeError` during render. Options apply to subsequent frames; use
+  `reset()` when changing options if the previous history must be discarded.
+- `onFrameResult`, `acknowledgeAutoCapture`, and `reset` retain their identity for the lifetime of the hook and read
+  the latest options. `onDetectorResult` changes identity on each `reset()`, and a callback obtained before a reset
+  is ignored afterwards.
+
+#### Live detector guidance
+
+`createParkingDetector(VisionCameraProxy, { modelUri })` runs a host-supplied detector that follows the
+[Detector model contract](#detector-model-contract) on live frames. `modelUri` accepts the same forms as
+`runDetector`. The native plugin converts each frame to the same 512 × 512 RGB tensor as `runDetector` (applying the
+frame orientation and mirroring), and shares the loaded model with `runDetector` for the same URI: one copy is in
+memory and calls run one at a time, so frame detection pauses briefly while a photo is analyzed.
+Each call returns `{ boxes, scores, classes, frameWidth, frameHeight, capturedAt }`, where the frame size is upright
+and `capturedAt` is `Date.now()` taken before inference, or `{ error, capturedAt }` with a `runDetector` error code.
+Freshness (`staleAfterMs`) is measured from `capturedAt`, so slow inference cannot make an old frame count as fresh. Call it inside VisionCamera's `runAsync` at a low rate so that inference
+never blocks the camera; `runAsync` drops frames while a call is running.
+
+Pass each result to `onDetectorResult` on the JS thread and set the hook's `detection` option:
+
+- `detection: { guideFrame?, vehicleType?, thresholds?, minimumConfidence?, staleAfterMs? }` takes the
+  `mapGuidanceIssues` options plus `staleAfterMs` (default `1500` ms, provisional until a trained model's latency is
+  measured). `guideFrame` is in normalized upright frame coordinates; `screenRectToFrameBox` converts an on-screen
+  guide rectangle using the latest result's `frameWidth` and `frameHeight`.
+- Each quality frame then merges the latest detection. A fresh successful detection adds its issues (`NO_VEHICLE`
+  when no vehicle was selected). A missing detection, or one older than `staleAfterMs`, adds no issue but keeps
+  `ready` false. A failed detection (an `error` result, or output that `decodeDetectorOutput` rejects, reported as
+  `E_MODEL_CONTRACT`) adds no issue, keeps `ready` false, and sets `detectorError` to the error code, so the app can
+  report a model problem instead of "no vehicle".
+- `autoCapture: { holdMs? }` (default `800` ms) sets `autoCaptureDue` once per continuous `ready` period, after
+  `ready` has held for `holdMs`. Take the photo when it becomes true, then call `acknowledgeAutoCapture()`. The
+  library never takes the photo itself.
+
+```tsx
+const detect = useMemo(
+  () => createParkingDetector(VisionCameraProxy, { modelUri }),
+  [modelUri]
+);
+const guidance = useParkingGuidance({
+  detection: { guideFrame, vehicleType: 'kickboard' },
+  autoCapture: { holdMs: DEFAULT_AUTO_CAPTURE_HOLD_MS },
+});
+const deliverDetection = useMemo(
+  () => Worklets.createRunOnJS(guidance.onDetectorResult),
+  [guidance.onDetectorResult]
+);
+const frameProcessor = useFrameProcessor((frame) => {
+  'worklet';
+  runAtTargetFps(2, () => {
+    'worklet';
+    runAsync(frame, () => {
+      'worklet';
+      deliverDetection(detect(frame));
+    });
+  });
+}, [detect, deliverDetection]);
+```
+
+`example/src/CaptureScreen.tsx` combines this with the quality analyzer when `example/src/detectorModel.ts` sets
+`DETECTOR_MODEL_URI`, and offers an **Auto capture** switch. Turning auto capture off clears its hold, so turning it
+on again starts a new hold. The example drops a result whose frame size differs from the previous one (the first
+result, or after a rotation), because its guide frame was mapped for the old size; guidance stays not ready until the
+next result.
+
+Device smoke test with the synthetic fixture (its row-0 score is the scene's mean red value, and its box is fixed at
+`[0.1, 0.2, 0.6, 0.9]`):
+
+- Android: `adb push fixtures/detector/detector-nhwc.tflite /data/local/tmp/`, then
+  `adb shell run-as parkingguide.example cp /data/local/tmp/detector-nhwc.tflite files/`, and set
+  `DETECTOR_MODEL_URI` to `/data/user/0/parkingguide.example/files/detector-nhwc.tflite`.
+- iOS: copy `fixtures/detector/detector-nhwc.mlpackage` into the app's Documents directory
+  (`xcrun simctl get_app_container booted parkingguide.example data` on a simulator) and set `DETECTOR_MODEL_URI` to
+  its absolute path.
+- Expected: a strongly red scene (score above `0.5`) yields a detection at the fixed box, so guidance reports a
+  distance or ground issue relative to the guide frame; any other scene yields `NO_VEHICLE` and a disabled shutter.
+  A missing model file yields `detectorError` and a disabled shutter without the "no vehicle" text.
+
+The fixture model's score is rotation-invariant, so the iOS harness checks rotation separately: it maps each VisionCamera
+`Frame.orientation` to the upright transform (VisionCamera defines it as the frame's own orientation, so Left and Right
+swap; its snapshot code applies the same reversal) and renders a two-tone pixel buffer to confirm where each half
+lands. The Android JVM tests check `FramePixels` content for every rotation. Mirroring is verified only at rotation 0
+and only for the back camera, which the example uses.
 
 ### Photo verification
 
@@ -829,7 +919,8 @@ stated.
 | `GuidanceFrameResult` | Required `ready: boolean`, `issues: readonly GuidanceIssue[]`, and `progress: number`. Serializable frame-processor output delivered on the JS thread. |
 | `GuidanceOptions` | Optional `smoothingFactor: number` (default `0.25`) and `debounceFrames: number` (default `3`); constraints are specified in [Capture guidance](#capture-guidance). |
 | `GuidanceReducerState` | Required `guidance: GuidanceState`, `candidate: { ready: boolean; issues: GuidanceIssue[] }`, and `consecutiveFrames: number`. Initialize with `createGuidanceState()`. |
-| `ParkingGuidance` | Extends `GuidanceState` with `onFrameResult(result: GuidanceFrameResult): void` and `reset(): void`. |
+| `ParkingGuidance` | Extends `GuidanceState` with `onFrameResult(result: GuidanceFrameResult): void`, `onDetectorResult(result: DetectorFrameResult): void`, `detectorError: string \| null`, `autoCaptureDue: boolean`, `acknowledgeAutoCapture(): void`, and `reset(): void`. |
+| `GuidanceSessionOptions`, `GuidanceSessionState`, `GuidanceSessionEvent`, `DetectionOptions`, `DetectorFrameResult`, `ParkingDetector`, `ScreenRect`, `Size` | Live detector guidance types. See [Live detector guidance](#live-detector-guidance). |
 | `ParkingFrameAnalyzer<Frame>` | `(frame: Frame) => GuidanceFrameResult`; `Frame` is inferred from the injected camera proxy. Invoke only inside a VisionCamera frame-processor worklet. |
 | `RuleResult` | Required `id: RuleId`, `verdict: Verdict`, and `confidence: number`; optional `score: number`, `message: string`, and `evidence: { bbox?: number[]; maskUri?: string; proximity?: ZoneProximity }`. `evaluatePolicy` clamps a numeric `score` to `[0, 1]`; it does not use `confidence`. |
 | `ZoneProximity` | Required `distance: number` (`>= 0`) and `near: boolean`. See [Model-output mapping](#model-output-mapping). |

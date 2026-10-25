@@ -19,7 +19,7 @@ object FileSha256 {
   private const val CONTENT_PREFIX = "content://"
 
   /**
-   * Same rule as `ParkingGuideFileURL` in `ios/ParkingGuide.mm`: an absolute path, or a `file:///` URI whose text
+   * Same rule as `ParkingGuideFileURL` in `ios/ParkingGuideDetector.mm`: an absolute path, or a `file:///` URI whose text
    * after `file://` is strictly percent-decoded as UTF-8. Android also accepts `content://` URIs.
    */
   fun resolve(uri: String): PhotoSource = when {

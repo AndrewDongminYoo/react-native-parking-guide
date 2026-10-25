@@ -8,6 +8,8 @@ import App from '../App';
 import { CaptureScreen } from '../CaptureScreen';
 import {
   CAPTURE_VEHICLE_TYPES,
+  captureDisclaimer,
+  captureMessages,
   captureTitle,
   guidanceMessages,
   vehicleLabel,
@@ -114,6 +116,28 @@ describe('example capture copy', () => {
       'E-bike',
       'Motorcycle',
     ]);
+  });
+
+  it('explains a detector failure instead of reporting no vehicle', () => {
+    expect(captureMessages([], 'E_MODEL_LOAD')).toEqual([
+      'The parking model could not run.',
+    ]);
+    expect(captureMessages(['BLURRY'], 'E_INFERENCE')).toEqual([
+      'The parking model could not run.',
+      'Hold the phone steady.',
+    ]);
+    expect(captureMessages(['NO_VEHICLE'], null)).toEqual(
+      guidanceMessages(['NO_VEHICLE'])
+    );
+  });
+
+  it('describes what the capture screen checks', () => {
+    expect(captureDisclaimer(false)).toBe(
+      'Checks image quality only. Vehicle detection and the parking result are not available yet.'
+    );
+    expect(captureDisclaimer(true)).toBe(
+      'Checks image quality and vehicle placement with the configured model. The parking result is not available yet.'
+    );
   });
 
   it('uses the library default text for guidance issues', () => {
