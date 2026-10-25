@@ -32,14 +32,14 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 | Goal step | Implemented | Not implemented |
 | --- | --- | --- |
 | 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), and `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`) | Producing model-based issues from camera frames (requires on-device inference) |
-| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection by `MappingOptions.vehicleType` and inside `MappingOptions.guideFrame`, and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `decodeDetectorOutput` (detector output tensors → model output, see [Detector model contract](#detector-model-contract)), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | On-device inference of a host-supplied model (CoreML on iOS, TFLite on Android) and a published reference model (see [Model source](#model-source)); reading device location or fetching zone data |
+| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection by `MappingOptions.vehicleType` and inside `MappingOptions.guideFrame`, and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `runDetector` (native inference of a host-supplied CoreML or LiteRT/TFLite detector on a photo, see [Native detector inference](#native-detector-inference)), `decodeDetectorOutput` (detector output tensors → model output, see [Detector model contract](#detector-model-contract)), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A published reference model (see [Model source](#model-source)) and an uprightness classifier; reading device location or fetching zone data |
 | 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`); `verifyParking` (native photo SHA-256, caller-supplied rule results, and capture metadata → `VerificationResult`) | A result screen in the example app; producing rule results from the photo inside `verifyParking` (requires on-device inference) |
 
 Outside the three goal steps, `uploadVerification` (an opt-in upload of a `VerificationResult` to a caller-owned
 endpoint) is implemented; the package provides no server.
 
-`getModelVersion()` is a native stub that returns `"0.1.0-dev"`. `getFileSha256(uri)` is implemented natively on iOS and
-Android.
+`getModelVersion()` is a native stub that returns `"0.1.0-dev"`. `getFileSha256(uri)` and `runDetector(photoUri, modelUri)`
+are implemented natively on iOS and Android.
 
 ## Planned architecture
 
@@ -175,6 +175,8 @@ a model. See [Photo verification](#photo-verification).
   `VerificationResult`. See [Photo verification](#photo-verification).
 - `getFileSha256(uri: string): Promise<string>` returns the lowercase hexadecimal SHA-256 of a file, computed natively
   off the JS thread. See [Photo verification](#photo-verification).
+- `runDetector(photoUri: string, modelUri: string): Promise<DetectorOutput>` runs a host-supplied detector model on a
+  photo natively. See [Native detector inference](#native-detector-inference).
 
 ### Model-output mapping
 
@@ -299,8 +301,7 @@ const result = evaluatePolicy(rules, defaultPolicy);
 This section defines what a host-supplied detector model must accept and produce.
 `decodeDetectorOutput(output: DetectorOutput): RawModelOutput` converts the model output to the `RawModelOutput` that
 `mapModelOutput` and `mapGuidanceIssues` accept.
-The native inference that runs the model ([#8](https://github.com/donminzzi/react-native-parking-guide/issues/8) on
-iOS, [#9](https://github.com/donminzzi/react-native-parking-guide/issues/9) on Android) is not implemented yet.
+`runDetector` runs the model natively; see [Native detector inference](#native-detector-inference).
 
 Input:
 
@@ -308,7 +309,8 @@ Input:
   without preserving the aspect ratio (no letterbox), so normalized output coordinates apply directly to the original
   image.
 - Pixel values in `[0, 1]`. The model applies its own mean and standard-deviation normalization.
-- The input tensor layout and element type on each platform are defined with the native inference in #8 and #9.
+- One float32 input tensor of shape `[1, 512, 512, 3]` (NHWC) or `[1, 3, 512, 512]` (NCHW), in RGB channel order.
+  `runDetector` reads the shape from the model and fills the tensor in that layout on both platforms.
 
 Output: three tensors for N detections. N can be a fixed, padded count.
 
@@ -317,6 +319,10 @@ Output: three tensors for N detections. N can be a fixed, padded count.
 | `boxes` | N × 4 | Normalized `[left, top, right, bottom]`, each in `[0, 1]`, with `left <= right` and `top <= bottom`. |
 | `scores` | N | Confidence in `[0, 1]`. |
 | `classes` | N | Integer index into `DETECTOR_CLASSES` (table below). |
+
+The output tensors must be named `boxes`, `scores`, and `classes` (TFLite signature output names; CoreML output
+feature names). Any shape with the listed element count is accepted, for example `[1, N, 4]`; element types are
+float32, int32, or int64 on Android and any CoreML multi-array type on iOS.
 
 Post-processing is part of the exported model, not of this package: score activation, conversion to corner
 coordinates, clamping to `[0, 1]`, and duplicate suppression.
@@ -348,6 +354,50 @@ The contract does not cover masks (`ModelMask`), vehicle uprightness from the se
 With `defaultPolicy`, `UPRIGHT` has `severity: 'FAIL'` and `failBelow: 0.7`, so `evaluatePolicy` returns `FAIL` for
 every decoded output until a host merges an `upright` assessment into the vehicle detection. To evaluate decoded
 output before that, pass a policy that disables `UPRIGHT` or sets its `severity` to `'WARN'`.
+
+### Native detector inference
+
+`runDetector(photoUri: string, modelUri: string): Promise<DetectorOutput>` runs a host-supplied detector that follows
+the [Detector model contract](#detector-model-contract) on one photo, off the JS thread, and returns its output
+tensors. Pass the result to `decodeDetectorOutput`. The package bundles no model; see [Model source](#model-source).
+
+```ts
+import { decodeDetectorOutput, mapModelOutput, runDetector } from 'react-native-parking-guide';
+
+const tensors = await runDetector(photo.path, modelPath);
+const ruleResults = mapModelOutput(decodeDetectorOutput(tensors), { vehicleType: 'kickboard' });
+```
+
+- `photoUri` accepts the same forms as `getFileSha256` (see [Photo verification](#photo-verification)): an absolute
+  path or a `file:///` URI, and on Android also a `content://` URI. The photo is decoded, rotated by its EXIF
+  orientation, and stretched to 512 × 512.
+- `modelUri` accepts the same forms. On Android it is a LiteRT/TFLite flatbuffer (`.tflite`) with exactly one
+  signature. On iOS it is a compiled `.mlmodelc` directory, or an `.mlmodel` or `.mlpackage` that is compiled on the
+  first call; the path extension selects the form.
+- Each platform caches the last loaded model and reuses it while `modelUri` stays the same string. A different
+  `modelUri` releases the cached model first; module invalidation (for example a JS reload) releases it too.
+- Calls run one at a time: on Android on the same single background thread as `getFileSha256`, on iOS on a serial
+  background queue.
+
+It rejects with these codes. Messages do not contain file paths.
+
+| Code | Reason |
+| --- | --- |
+| `E_INVALID_URI` | `photoUri` or `modelUri` is not one of the accepted forms. |
+| `E_MODEL_LOAD` | The model file cannot be read, compiled, or loaded, or its iOS extension is not `.mlmodelc`, `.mlmodel`, or `.mlpackage`. |
+| `E_MODEL_CONTRACT` | The model does not have exactly one float32 input of shape `[1, 512, 512, 3]` or `[1, 3, 512, 512]`, or lacks a `boxes`, `scores`, or `classes` output (Android: of type float32, int32, or int64), or (Android) does not have exactly one signature. |
+| `E_PHOTO_READ` | The photo cannot be opened or decoded. |
+| `E_INFERENCE` | The inference call fails. |
+
+On Android, the package depends on `com.google.ai.edge.litert:litert:1.4.2` (the LiteRT Interpreter API), which adds
+native libraries for `arm64-v8a`, `armeabi-v7a`, `x86`, and `x86_64` to the app. LiteRT 2.x is not used: its Kotlin
+metadata (version 2.3 and later) does not compile with the Kotlin 2.1 toolchain of React Native 0.86. On iOS, the pod
+links the system `CoreML`, `ImageIO`, and `CoreGraphics` frameworks.
+
+Synthetic fixtures in `fixtures/detector/` verify both platforms: `scripts/make-fixture-models.py` generates
+NHWC and NCHW `.tflite` and `.mlpackage` models that return a mean-red score, and the solid-color image
+`solid.png`. They contain no trained weights and are not part of the published package. See
+[Development](#development) for the commands.
 
 ### Geofence
 
@@ -861,6 +911,14 @@ yarn lint
 yarn test
 yarn example ios
 yarn example android
+```
+
+Detector fixtures and native detector checks (see [Native detector inference](#native-detector-inference)):
+
+```sh
+uv run scripts/make-fixture-models.py   # regenerate fixtures/detector (Python 3.12, coremltools, tensorflow)
+sh scripts/detector-harness/run.sh      # run ios/ParkingGuideDetector.mm on macOS against the fixtures
+cd example/android && ./gradlew :react-native-parking-guide:connectedDebugAndroidTest   # needs a device or emulator
 ```
 
 ## Contributing
