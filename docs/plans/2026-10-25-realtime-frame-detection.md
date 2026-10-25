@@ -262,3 +262,14 @@ The repository has no React renderer in its test dependencies (the example tests
 - [ ] **Step 4: Run `yarn typecheck && yarn lint && yarn test`** — expected: all pass.
 - [ ] **Step 5: Document.** README: `createParkingDetector`, the `detection` and `autoCapture` hook options, `detectorError`, `screenRectToFrameBox`, the new exports, the fail-closed rule, the provisional `staleAfterMs`, the shared-model serialization, and the device smoke test steps copied from the spec; update implementation status step 1. AGENTS.md: pipeline step 1 and the layout table rows for the new files.
 - [ ] **Step 6: Commit** `feat(example): show live detector guidance and auto capture` and `docs: document realtime frame detection`.
+
+## Reconciliation (2026-10-25, after execution)
+
+The shipped code on `feat/realtime-frame-detection` is the authority where it differs from the steps above.
+
+- Task 2: the clamp test uses `x: -200`; the planned `x: -10` lies inside the cover-cropped frame and cannot produce `[0, 0, 1, 1]`.
+- Task 3: the `createParkingDetector` tests live in `src/__tests__/frame-analyzer.test.ts`, and the hook reads options through a ref so its callbacks stay stable.
+- Task 5: CameraX's `ImageProxy` is not on the library classpath, so the Android plugin derives the clockwise rotation from VisionCamera's `Frame.orientation` (the reverse of `rotationDegrees`).
+- Task 6: `ParkingGuideFileURL` moved to `ios/ParkingGuideDetector.{h,mm}`. The final review found that VisionCamera's iOS `Frame.orientation` is the frame's own orientation, so the planned straight `UIImageOrientation` → `CGImagePropertyOrientation` mapping turned portrait frames upside down; `ParkingGuideUprightOrientation` swaps Left and Right, and the harness now checks the table and a two-tone frame's content.
+- Task 7: the example tests cover new pure helpers (`captureMessages`, `captureDisclaimer`, `frameSizeChange`, `usableGuideBox`) because the example test harness renders no hook-using component.
+- Final review fixes: detector results carry `capturedAt` (taken before inference) and freshness is measured from it; auto-capture state resets while auto capture is off; the example drops a result whose frame size changed; Android reports a frame conversion error as `E_PHOTO_READ`.
