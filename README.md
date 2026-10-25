@@ -33,7 +33,7 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 | --- | --- | --- |
 | 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), and live detection on camera frames with `createParkingDetector` and auto capture (see [Live detector guidance](#live-detector-guidance)) | Device acceptance with a trained model (requires the reference model, #56) |
 | 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection by `MappingOptions.vehicleType` and inside `MappingOptions.guideFrame`, and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `runDetector` (native inference of a host-supplied CoreML or LiteRT/TFLite detector on a photo, see [Native detector inference](#native-detector-inference)), `decodeDetectorOutput` (detector output tensors → model output, see [Detector model contract](#detector-model-contract)), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A published reference model (see [Model source](#model-source)) and an uprightness classifier; reading device location or fetching zone data |
-| 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`); `verifyParking` (native photo SHA-256, caller-supplied rule results, and capture metadata → `VerificationResult`) | A result screen in the example app; producing rule results from the photo inside `verifyParking` |
+| 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`); `verifyParking` (native photo SHA-256, caller-supplied rule results, and capture metadata → `VerificationResult`); the example app's capture → verdict and reasons → retake flow (see [Live detector guidance](#live-detector-guidance)) | Producing rule results from the photo inside `verifyParking` |
 
 Outside the three goal steps, `uploadVerification` (an opt-in upload of a `VerificationResult` to a caller-owned
 endpoint) is implemented; the package provides no server.
@@ -78,7 +78,7 @@ list, input resolution, and licenses, is recorded in
   parking zone), and geofence integration. On-device inference (`runDetector`), model-based guidance from camera
   frames (`createParkingDetector`), the zone rules (`mapModelOutput`), and `evaluateGeofence` are implemented; the
   reference model is not published yet.
-- **v1.0**: photo capture into `VerificationResult` (`verifyParking` is implemented), a rider-facing result screen in the example app, attestation support,
+- **v1.0**: photo capture into `VerificationResult` (`verifyParking` is implemented), a rider-facing result screen in the example app (implemented), attestation support,
   and opt-in upload and server-side verification integration.
 
 ## Installation
@@ -763,6 +763,13 @@ on again starts a new hold. The example drops a result whose frame size differs 
 result, or after a rotation), because its guide frame was mapped for the old size; guidance stays not ready until the
 next result. After a rotation (not for the first result) it also calls `reset()`, so the previous detection and the
 auto-capture hold are discarded.
+
+After a photo is taken, `example/src/ResultScreen.tsx` shows the parking result with **Retake** and **Done**.
+`example/src/parkingResult.ts` runs `runDetector`, `decodeDetectorOutput`, `mapModelOutput` (with the guide frame of the
+last live detection, which assumes that the photo and the camera frames cover the same field of view), `evaluatePolicy`,
+and `getParkingFeedback`. It uses `defaultPolicy` with `UPRIGHT` and
+`IMAGE_QUALITY` disabled, because a detector alone cannot evaluate them (with them enabled, the unknown `UPRIGHT` result
+fails every photo), and the screen says so. Without `DETECTOR_MODEL_URI` the screen shows no verdict.
 
 Device smoke test with the synthetic fixture (its row-0 score is the scene's mean red value, and its box is fixed at
 `[0.1, 0.2, 0.6, 0.9]`):

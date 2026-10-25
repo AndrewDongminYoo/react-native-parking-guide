@@ -8,6 +8,8 @@ import type { VehicleType } from 'react-native-parking-guide';
 
 import { CaptureScreen } from './CaptureScreen';
 import { CAPTURE_VEHICLE_TYPES, vehicleLabel } from './captureCopy';
+import type { CapturedPhoto } from './parkingResult';
+import { ResultScreen } from './ResultScreen';
 
 export default function App() {
   return (
@@ -20,10 +22,32 @@ export default function App() {
 function Home() {
   const insets = useSafeAreaInsets();
   const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
-  const close = useCallback(() => setVehicleType(null), []);
+  // The photo whose parking result is shown; null while capturing.
+  const [photo, setPhoto] = useState<CapturedPhoto | null>(null);
+  const close = useCallback(() => {
+    setPhoto(null);
+    setVehicleType(null);
+  }, []);
+  const retake = useCallback(() => setPhoto(null), []);
 
+  if (vehicleType && photo) {
+    return (
+      <ResultScreen
+        vehicleType={vehicleType}
+        photo={photo}
+        onRetake={retake}
+        onDone={close}
+      />
+    );
+  }
   if (vehicleType) {
-    return <CaptureScreen vehicleType={vehicleType} onClose={close} />;
+    return (
+      <CaptureScreen
+        vehicleType={vehicleType}
+        onClose={close}
+        onCaptured={setPhoto}
+      />
+    );
   }
 
   return (

@@ -47,6 +47,6 @@ export function captureMessages(
 /** What the capture screen checks, depending on whether a detector model is configured. */
 export function captureDisclaimer(detectorConfigured: boolean): string {
   return detectorConfigured
-    ? 'Checks image quality and vehicle placement with the configured model. The parking result is not available yet.'
-    : 'Checks image quality only. Vehicle detection and the parking result are not available yet.';
+    ? 'Checks image quality and vehicle placement with the configured model, then shows a parking result for the photo.'
+    : 'Checks image quality only. Vehicle detection and the parking result need a detector model.';
 }

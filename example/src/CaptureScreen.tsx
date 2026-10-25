@@ -43,6 +43,7 @@ import {
   captureTitle,
 } from './captureCopy';
 import { DETECTOR_MODEL_URI } from './detectorModel';
+import type { CapturedPhoto } from './parkingResult';
 import {
   GUIDE_FRAME_HINT_GAP,
   GUIDE_FRAME_HORIZONTAL_MARGIN,
@@ -58,6 +59,8 @@ const IDLE_COLOR = 'rgba(255, 255, 255, 0.9)';
 interface CaptureScreenProps {
   vehicleType: VehicleType;
   onClose: () => void;
+  /** Called with each photo taken; the caller shows the parking result. */
+  onCaptured: (photo: CapturedPhoto) => void;
 }
 
 function CaptureHeader({
@@ -113,7 +116,11 @@ function CaptureHeader({
   );
 }
 
-function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
+function CameraCapture({
+  vehicleType,
+  onClose,
+  onCaptured,
+}: CaptureScreenProps) {
   const camera = useRef<Camera>(null);
   const device = useCameraDevice('back');
   const [torchOn, setTorchOn] = useState(false);
@@ -246,8 +253,8 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
     }
     setCapturing(true);
     try {
-      await camera.current.takePhoto({ flash: 'off' });
-      setStatus('Photo captured. A parking result is not available yet.');
+      const photo = await camera.current.takePhoto({ flash: 'off' });
+      onCaptured({ path: photo.path, guideFrame });
     } catch {
       setStatus('Could not take the photo. Try again.');
     } finally {
@@ -381,7 +388,11 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
   );
 }
 
-export function CaptureScreen({ vehicleType, onClose }: CaptureScreenProps) {
+export function CaptureScreen({
+  vehicleType,
+  onClose,
+  onCaptured,
+}: CaptureScreenProps) {
   const { hasPermission, requestPermission } = useCameraPermission();
   // Android reports a never-requested permission as 'denied', so only iOS can
   // restore the denied state on mount. On Android, a permanently denied request
@@ -426,7 +437,11 @@ export function CaptureScreen({ vehicleType, onClose }: CaptureScreenProps) {
           unmounted instance. */}
       {hasPermission ? (
         active ? (
-          <CameraCapture vehicleType={vehicleType} onClose={onClose} />
+          <CameraCapture
+            vehicleType={vehicleType}
+            onClose={onClose}
+            onCaptured={onCaptured}
+          />
         ) : (
           <View style={styles.screen}>
             <CaptureHeader
