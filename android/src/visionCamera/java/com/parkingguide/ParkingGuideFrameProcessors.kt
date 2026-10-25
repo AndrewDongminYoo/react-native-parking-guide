@@ -102,13 +102,18 @@ private class ParkingDetectorFrameProcessor(
       Orientation.PORTRAIT_UPSIDE_DOWN -> 180
       Orientation.LANDSCAPE_LEFT -> 270
     }
-    val (y, u, v) = image.planes
-    val videoRange = Build.VERSION.SDK_INT < 33 ||
-      android.hardware.DataSpace.getRange(image.dataSpace) != android.hardware.DataSpace.RANGE_FULL
-    val pixels = FramePixels.toArgb(
-      y.buffer, u.buffer, v.buffer, image.width, image.height, y.rowStride, u.rowStride, u.pixelStride,
-      rotation, frame.isMirrored, videoRange
-    )
+    // Frame conversion errors (unexpected strides or buffer limits) are reported like a failed photo read.
+    val pixels = try {
+      val (y, u, v) = image.planes
+      val videoRange = Build.VERSION.SDK_INT < 33 ||
+        android.hardware.DataSpace.getRange(image.dataSpace) != android.hardware.DataSpace.RANGE_FULL
+      FramePixels.toArgb(
+        y.buffer, u.buffer, v.buffer, image.width, image.height, y.rowStride, u.rowStride, u.pixelStride,
+        rotation, frame.isMirrored, videoRange
+      )
+    } catch (e: Exception) {
+      return mapOf("error" to ParkingDetector.E_PHOTO_READ)
+    }
     val (frameWidth, frameHeight) = FramePixels.uprightSize(image.width, image.height, rotation)
     return try {
       val output = ParkingDetectors.forContext(context).runPixels(pixels, model)

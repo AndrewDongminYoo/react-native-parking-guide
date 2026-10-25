@@ -47,6 +47,8 @@ import {
   GUIDE_FRAME_HINT_GAP,
   GUIDE_FRAME_HORIZONTAL_MARGIN,
   fitGuideFrameWidth,
+  frameSizeChange,
+  usableGuideBox,
 } from './guideFrameLayout';
 import { VehicleSilhouette } from './VehicleSilhouette';
 
@@ -121,6 +123,7 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
   const [guideRect, setGuideRect] = useState<ScreenRect | null>(null);
   const [cameraView, setCameraView] = useState<Size | null>(null);
   const [frameSize, setFrameSize] = useState<Size | null>(null);
+  const frameSizeRef = useRef<Size | null>(null);
   const [hintHeight, setHintHeight] = useState<number | null>(null);
   const [autoCapture, setAutoCapture] = useState(false);
   const insets = useSafeAreaInsets();
@@ -128,15 +131,17 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
   // The guide frame in camera-frame coordinates, once the layouts and the first detection's frame size are known.
   const guideFrame =
     frameArea && guideRect && cameraView && frameSize
-      ? screenRectToFrameBox(
-          {
-            x: frameArea.x + guideRect.x,
-            y: frameArea.y + guideRect.y,
-            width: guideRect.width,
-            height: guideRect.height,
-          },
-          cameraView,
-          frameSize
+      ? usableGuideBox(
+          screenRectToFrameBox(
+            {
+              x: frameArea.x + guideRect.x,
+              y: frameArea.y + guideRect.y,
+              width: guideRect.width,
+              height: guideRect.height,
+            },
+            cameraView,
+            frameSize
+          )
         )
       : undefined;
   const guidance = useParkingGuidance({
@@ -167,13 +172,12 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
   const deliverDetection = useMemo(
     () =>
       Worklets.createRunOnJS((result: DetectorFrameResult) => {
-        if (!('error' in result)) {
-          const { frameWidth: width, frameHeight: height } = result;
-          setFrameSize((size) =>
-            size?.width === width && size.height === height
-              ? size
-              : { width, height }
-          );
+        const changed = frameSizeChange(frameSizeRef.current, result);
+        if (changed !== null) {
+          // This result was mapped against the guide frame for the old size; drop it and let the next one count.
+          frameSizeRef.current = changed;
+          setFrameSize(changed);
+          return;
         }
         onDetectorResult(result);
       }),

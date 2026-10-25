@@ -6,6 +6,8 @@ import {
   GUIDE_FRAME_MAX_WIDTH,
   GUIDE_FRAME_VERTICAL_MARGIN,
   fitGuideFrameWidth,
+  frameSizeChange,
+  usableGuideBox,
 } from '../guideFrameLayout';
 
 function usedHeight(frameWidth: number, hintHeight: number) {
@@ -38,5 +40,42 @@ describe('fitGuideFrameWidth', () => {
   it('returns 0 when the hint and margins leave no room', () => {
     expect(fitGuideFrameWidth({ width: 800, height: 50 }, 20)).toBe(0);
     expect(fitGuideFrameWidth({ width: 40, height: 600 }, 20)).toBe(0);
+  });
+});
+
+describe('frameSizeChange', () => {
+  const tensors = { boxes: [], scores: [], classes: [] };
+
+  it('reports a first or changed upright frame size', () => {
+    const portrait = { ...tensors, frameWidth: 480, frameHeight: 640 };
+    expect(frameSizeChange(null, portrait)).toEqual({
+      width: 480,
+      height: 640,
+    });
+    expect(frameSizeChange({ width: 640, height: 480 }, portrait)).toEqual({
+      width: 480,
+      height: 640,
+    });
+  });
+
+  it('ignores an unchanged size, an error, and a non-positive size', () => {
+    expect(
+      frameSizeChange(
+        { width: 480, height: 640 },
+        { ...tensors, frameWidth: 480, frameHeight: 640 }
+      )
+    ).toBeNull();
+    expect(frameSizeChange(null, { error: 'E_INFERENCE' })).toBeNull();
+    expect(
+      frameSizeChange(null, { ...tensors, frameWidth: 0, frameHeight: 640 })
+    ).toBeNull();
+  });
+});
+
+describe('usableGuideBox', () => {
+  it('passes a box with a positive area and drops an empty one', () => {
+    expect(usableGuideBox([0.2, 0.3, 0.8, 0.9])).toEqual([0.2, 0.3, 0.8, 0.9]);
+    expect(usableGuideBox([1, 0.3, 1, 0.9])).toBeUndefined();
+    expect(usableGuideBox(undefined)).toBeUndefined();
   });
 });

@@ -121,6 +121,41 @@ describe('reduceGuidanceSession', () => {
     expect(state.autoCapture.due).toBe(false);
   });
 
+  it('clears auto-capture state while auto capture is off', () => {
+    const on = { ...DETECTION, autoCapture: { holdMs: 800 } };
+    let state = detect(createGuidanceSession(), VEHICLE, 0, on);
+    state = frame(state, 0, on);
+    expect(state.autoCapture.readySince).toBe(0);
+    state = detect(state, VEHICLE, 900, DETECTION);
+    state = frame(state, 900, DETECTION);
+    expect(state.autoCapture).toEqual({
+      readySince: null,
+      fired: false,
+      due: false,
+    });
+    // Re-enabled: a fresh hold starts instead of firing at once from the old readySince.
+    state = detect(state, VEHICLE, 1000, on);
+    state = frame(state, 1000, on);
+    expect(state.autoCapture.due).toBe(false);
+  });
+
+  it('measures detection freshness from capturedAt when the result carries it', () => {
+    let state = reduceGuidanceSession(
+      createGuidanceSession(),
+      {
+        type: 'detection',
+        result: { ...VEHICLE, capturedAt: 0 },
+        generation: 0,
+        now: 1000,
+      },
+      DETECTION
+    );
+    state = frame(state, 1400, DETECTION);
+    expect(state.guidance.guidance.ready).toBe(true);
+    state = frame(state, 1600, DETECTION);
+    expect(state.guidance.guidance.ready).toBe(false);
+  });
+
   it('behaves as before without detection', () => {
     const options = { debounceFrames: 1 };
     const state = frame(createGuidanceSession(), 0, options);

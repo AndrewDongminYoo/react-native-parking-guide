@@ -71,10 +71,10 @@ export function createParkingDetector<Frame>(
 
   return (frame: Frame): DetectorFrameResult => {
     'worklet';
-    return (
-      (plugin.call(frame) as unknown as DetectorFrameResult | undefined) ?? {
-        error: 'E_INFERENCE',
-      }
-    );
+    // Date the detection before inference, so its age includes the inference time.
+    const capturedAt = Date.now();
+    const result = plugin.call(frame) as unknown as
+      DetectorFrameResult | undefined;
+    return { ...(result ?? { error: 'E_INFERENCE' }), capturedAt };
   };
 }

@@ -6,9 +6,10 @@ import type { GuidanceFrameResult } from './reducer';
 
 /**
  * One `parkingDetector` frame processor result: the detector output tensors and the upright frame size, or an error
- * code (`E_INVALID_URI`, `E_MODEL_LOAD`, `E_MODEL_CONTRACT`, `E_PHOTO_READ`, or `E_INFERENCE`).
+ * code (`E_INVALID_URI`, `E_MODEL_LOAD`, `E_MODEL_CONTRACT`, `E_PHOTO_READ`, or `E_INFERENCE`). `capturedAt`
+ * (`Date.now()` before inference, set by `createParkingDetector`) dates the detection for freshness checks.
  */
-export type DetectorFrameResult =
+export type DetectorFrameResult = (
   | {
       boxes: number[];
       scores: number[];
@@ -16,7 +17,8 @@ export type DetectorFrameResult =
       frameWidth: number;
       frameHeight: number;
     }
-  | { error: string };
+  | { error: string }
+) & { capturedAt?: number };
 
 export interface DetectionOptions extends GuidanceMappingOptions {
   /** A detection older than this many milliseconds keeps guidance not ready. Default: 1500 (provisional). */

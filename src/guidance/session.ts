@@ -91,9 +91,12 @@ export function reduceGuidanceSession(
       if (event.generation !== state.generation) {
         return state;
       }
+      const { capturedAt } = event.result;
       const snapshot = toDetectionSnapshot(
         event.result,
-        event.now,
+        capturedAt !== undefined && Number.isFinite(capturedAt)
+          ? capturedAt
+          : event.now,
         options.detection ?? {}
       );
       return { ...state, snapshot, detectorError: snapshot.error };
@@ -116,7 +119,7 @@ export function reduceGuidanceSession(
         detectorError: merged.detectorError,
         autoCapture:
           autoCapture === undefined
-            ? state.autoCapture
+            ? createAutoCaptureState()
             : reduceAutoCapture(
                 state.autoCapture,
                 { ready: guidance.guidance.ready, now: event.now },

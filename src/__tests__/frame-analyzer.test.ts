@@ -92,7 +92,8 @@ describe('createParkingDetector', () => {
       'parkingDetector',
       { modelUri: '/m.tflite' }
     );
-    expect(detect({} as Frame)).toEqual(result);
+    jest.spyOn(Date, 'now').mockReturnValue(1234);
+    expect(detect({} as Frame)).toEqual({ ...result, capturedAt: 1234 });
   });
 
   it('fails explicitly when the native plugin is not registered', () => {
@@ -105,6 +106,10 @@ describe('createParkingDetector', () => {
   it('reports E_INFERENCE when the plugin returns nothing', () => {
     call.mockReturnValue(undefined);
     const detect = createParkingDetector(proxy, { modelUri: '/m.tflite' });
-    expect(detect({} as Frame)).toEqual({ error: 'E_INFERENCE' });
+    jest.spyOn(Date, 'now').mockReturnValue(5);
+    expect(detect({} as Frame)).toEqual({
+      error: 'E_INFERENCE',
+      capturedAt: 5,
+    });
   });
 });
