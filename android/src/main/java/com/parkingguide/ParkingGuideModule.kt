@@ -1,6 +1,7 @@
 package com.parkingguide
 
 import android.net.Uri
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import java.io.File
@@ -14,6 +15,7 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
   NativeParkingGuideSpec(reactContext) {
 
   private val fileExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+  private val detector = ParkingDetector(::openPhoto)
 
   override fun getModelVersion(): String {
     return "0.1.0-dev"
@@ -46,6 +48,38 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
     }
   }
 
+  override fun runDetector(photoUri: String, modelUri: String, promise: Promise) {
+    val photo = FileSha256.resolve(photoUri)
+    val model = FileSha256.resolve(modelUri)
+    if (photo == PhotoSource.Invalid || model == PhotoSource.Invalid) {
+      promise.reject(
+        "E_INVALID_URI",
+        "The photo and model URIs must be absolute paths, file:/// URIs, or content:// URIs."
+      )
+      return
+    }
+    try {
+      fileExecutor.execute {
+        try {
+          val output = detector.run(photo, model)
+          val map = Arguments.createMap()
+          for ((name, values) in output) {
+            val array = Arguments.createArray()
+            values.forEach { array.pushDouble(it) }
+            map.putArray(name, array)
+          }
+          promise.resolve(map)
+        } catch (e: ParkingDetector.Failure) {
+          promise.reject(e.code, e.message)
+        } catch (e: Exception) {
+          promise.reject(ParkingDetector.E_INFERENCE, "The LiteRT inference failed.")
+        }
+      }
+    } catch (e: RejectedExecutionException) {
+      promise.reject(ParkingDetector.E_INFERENCE, "The LiteRT inference failed.")
+    }
+  }
+
   private fun openPhoto(source: PhotoSource): InputStream? = when (source) {
     is PhotoSource.File -> FileInputStream(File(source.path))
     is PhotoSource.Content -> reactApplicationContext.contentResolver.openInputStream(Uri.parse(source.uri))
@@ -54,6 +88,7 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
 
   override fun invalidate() {
     fileExecutor.shutdownNow()
+    detector.close()
     ParkingGuideFrameProcessors.invalidate(reactApplicationContext)
     super.invalidate()
   }

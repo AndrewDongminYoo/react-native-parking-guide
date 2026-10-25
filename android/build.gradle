@@ -35,15 +35,29 @@ android {
 
   defaultConfig {
     minSdkVersion getExtOrDefault("minSdkVersion")
+    testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
   }
 
   sourceSets.main.java.srcDir(frameProcessorsEnabled ? "src/visionCamera/java" : "src/noCamera/java")
+  // Synthetic detector fixtures from scripts/make-fixture-models.py; outside the published package files.
+  sourceSets.androidTest.assets.srcDir("../fixtures/detector")
+
+  packaging {
+    jniLibs {
+      // Only the androidTest APK merges both the Hermes/React Native libraries and react-native-worklets-core, which
+      // ships its own copies of these files.
+      pickFirsts += ["**/libhermestooling.so", "**/libhermesvm.so"]
+    }
+  }
 }
 
 dependencies {
   implementation "com.facebook.react:react-android"
+  implementation "com.google.ai.edge.litert:litert:1.4.2"
   if (frameProcessorsEnabled) {
     implementation project(":react-native-vision-camera")
   }
   testImplementation "junit:junit:4.13.2"
+  androidTestImplementation "androidx.test:runner:1.7.0"
+  androidTestImplementation "androidx.test.ext:junit:1.3.0"
 }
