@@ -151,7 +151,7 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
         ? { holdMs: DEFAULT_AUTO_CAPTURE_HOLD_MS }
         : undefined,
   });
-  const { onFrameResult, onDetectorResult } = guidance;
+  const { onFrameResult, onDetectorResult, reset: resetGuidance } = guidance;
   const analyze = useMemo(
     () => createParkingFrameAnalyzer(VisionCameraProxy),
     []
@@ -172,16 +172,21 @@ function CameraCapture({ vehicleType, onClose }: CaptureScreenProps) {
   const deliverDetection = useMemo(
     () =>
       Worklets.createRunOnJS((result: DetectorFrameResult) => {
-        const changed = frameSizeChange(frameSizeRef.current, result);
+        const previous = frameSizeRef.current;
+        const changed = frameSizeChange(previous, result);
         if (changed !== null) {
           // This result was mapped against the guide frame for the old size; drop it and let the next one count.
           frameSizeRef.current = changed;
           setFrameSize(changed);
+          if (previous !== null) {
+            // After a rotation, the previous detection and the auto-capture hold describe the old orientation.
+            resetGuidance();
+          }
           return;
         }
         onDetectorResult(result);
       }),
-    [onDetectorResult]
+    [onDetectorResult, resetGuidance]
   );
   const frameProcessor = useFrameProcessor(
     (frame) => {
