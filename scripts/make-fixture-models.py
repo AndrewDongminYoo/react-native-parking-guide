@@ -6,12 +6,18 @@
 
 Run from the repository root: `uv run scripts/make-fixture-models.py`.
 
-Every model follows the README "Detector model contract" input and output names and returns two rows:
+Every detector-{nhwc,nchw} model follows the README "Detector model contract" input and output names and returns two
+rows:
 - row 0: box [0.1, 0.2, 0.6, 0.9], class 0 (kickboard), score = mean of input channel 0 (red);
 - row 1: a zero padding row, box [0, 0, 0, 0], class 3, score 0.
 
 `solid.png` is a 640 x 480 image with RGB (204, 102, 51), so a correct pipeline (stretch to 512 x 512, pixel values
-in [0, 1], the model's layout) returns a row-0 score of 0.8 within 1e-3 (float32 summation error). Reading NHWC data as NCHW gives about 0.467 instead.
+in [0, 1], the model's layout) returns a row-0 score of 0.8 within 1e-3 (float32 summation error). Reading NHWC data
+as NCHW gives about 0.467 instead.
+
+`detector-dynamic.tflite` (NHWC) has a variable detection count: it returns row 1 only when the mean red value is
+above 0.5. It returns two rows for `solid.png` and one row for `dark.png`, RGB (51, 102, 204).
+
 The models do not contain trained weights.
 """
 
@@ -65,6 +71,33 @@ def make_tflite(layout: str) -> None:
     (OUT / f"detector-{layout}.tflite").write_bytes(converter.convert())
 
 
+def make_dynamic_tflite() -> None:
+    class Fixture(tf.Module):
+        @tf.function(input_signature=[tf.TensorSpec(SHAPES["nhwc"], tf.float32, name="image")])
+        def serve(self, image):
+            red = tf.reduce_mean(image[..., 0])
+            keep = tf.stack([tf.constant(True), red > 0.5])
+            scores = tf.stack([red, red * 0.0])
+            return {
+                "boxes": tf.boolean_mask(tf.constant(BOXES[0]), keep)[None],
+                "scores": tf.boolean_mask(scores, keep)[None],
+                "classes": tf.boolean_mask(tf.constant(CLASSES[0]), keep)[None],
+            }
+
+    module = Fixture()
+    converter = tf.lite.TFLiteConverter.from_concrete_functions([module.serve.get_concrete_function()], module)
+    (OUT / "detector-dynamic.tflite").write_bytes(converter.convert())
+
+
+def check_dynamic() -> None:
+    runner = tf.lite.Interpreter(model_path=str(OUT / "detector-dynamic.tflite")).get_signature_runner()
+    for red, rows in [(0.8, 2), (0.2, 1), (0.8, 2)]:
+        image = np.ascontiguousarray(np.broadcast_to(np.array([red, 0.4, 1 - red], np.float32), SHAPES["nhwc"]))
+        result = runner(image=image)
+        assert result["boxes"].shape == (1, rows, 4), result["boxes"].shape
+        assert result["scores"].shape == (1, rows) and result["classes"].shape == (1, rows), result
+
+
 def make_coreml(layout: str) -> None:
     shape = SHAPES[layout]
     end = [1, SIZE, SIZE, 1] if layout == "nhwc" else [1, 1, SIZE, SIZE]
@@ -109,10 +142,13 @@ def self_check(layout: str) -> None:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     write_png(OUT / "solid.png", 640, 480, (204, 102, 51))
+    write_png(OUT / "dark.png", 640, 480, (51, 102, 204))
     for layout in SHAPES:
         make_tflite(layout)
         make_coreml(layout)
         self_check(layout)
+    make_dynamic_tflite()
+    check_dynamic()
     print(f"wrote fixtures to {OUT}")
 
 

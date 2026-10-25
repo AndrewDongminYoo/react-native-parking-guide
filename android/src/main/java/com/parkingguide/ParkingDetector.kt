@@ -50,16 +50,17 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
     val inputBuffer = ByteBuffer.allocateDirect(4 * 3 * DetectorTensors.INPUT_SIZE * DetectorTensors.INPUT_SIZE)
       .order(ByteOrder.nativeOrder())
     DetectorTensors.fillInput(pixels, layout, inputBuffer.asFloatBuffer())
-    val outputs = outputNames.associateWith { name ->
-      ByteBuffer.allocateDirect(interpreter.getOutputTensorFromSignature(name, key).numBytes())
-        .order(ByteOrder.nativeOrder())
-    }
     try {
-      interpreter.runSignature(mapOf<String, Any>(inputName to inputBuffer), outputs, key)
+      // No preallocated outputs: a model may return a different detection count per photo, so each output is read
+      // after inference with the shape it resolved to.
+      interpreter.runSignature(mapOf<String, Any>(inputName to inputBuffer), mutableMapOf(), key)
+      return DetectorTensors.OUTPUT_NAMES.associateWith {
+        val buffer = interpreter.getOutputTensorFromSignature(it, key).asReadOnlyBuffer()
+        DetectorTensors.readValues(buffer, kinds.getValue(it)!!)
+      }
     } catch (e: Exception) {
       throw Failure(E_INFERENCE, "The LiteRT inference failed.")
     }
-    return DetectorTensors.OUTPUT_NAMES.associateWith { DetectorTensors.readValues(outputs.getValue(it), kinds.getValue(it)!!) }
   }
 
   @Synchronized

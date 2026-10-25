@@ -395,8 +395,9 @@ metadata (version 2.3 and later) does not compile with the Kotlin 2.1 toolchain 
 links the system `CoreML`, `ImageIO`, and `CoreGraphics` frameworks.
 
 Synthetic fixtures in `fixtures/detector/` verify both platforms: `scripts/make-fixture-models.py` generates
-NHWC and NCHW `.tflite` and `.mlpackage` models that return a mean-red score, and the solid-color image
-`solid.png`. They contain no trained weights and are not part of the published package. See
+NHWC and NCHW `.tflite` and `.mlpackage` models that return a mean-red score, a `.tflite` model whose detection count
+depends on the photo, and the solid-color images `solid.png` and `dark.png`. They contain no trained weights and are
+not part of the published package. See
 [Development](#development) for the commands.
 
 ### Geofence

@@ -39,6 +39,16 @@ class ParkingDetectorTest {
     }
   }
 
+  @Test fun readsAVariableDetectionCountPerPhoto() {
+    val model = fixture("detector-dynamic.tflite")
+    for ((photo, rows) in listOf("solid.png" to 2, "dark.png" to 1, "solid.png" to 2)) {
+      val output = detector.run(fixture(photo), model)
+      assertEquals(photo, rows * 4, output.getValue("boxes").size)
+      assertEquals(photo, rows, output.getValue("scores").size)
+      assertEquals(photo, rows, output.getValue("classes").size)
+    }
+  }
+
   @Test fun rejectsAMissingModel() {
     val error = assertThrows(ParkingDetector.Failure::class.java) {
       detector.run(fixture("solid.png"), PhotoSource.File("/nonexistent/model.tflite"))
