@@ -34,14 +34,14 @@ automatically", not "automobile"; see the TSDoc on `VehicleType` in `src/types.t
 
 Pipeline (see the `README.md` roadmap). Step 3, JS guidance state processing, iOS and Android image-quality frame analysis
 (`BLURRY`, `LOW_LIGHT`, `TILTED`), the pure TypeScript model-output mapping (`mapModelOutput`) and model-based guidance mapping
-(`mapGuidanceIssues`), photo verification (`verifyParking` with the native `getFileSha256`), and the native
+(`mapGuidanceIssues`), the detector output decoding (`decodeDetectorOutput`), photo verification (`verifyParking` with the native `getFileSha256`), and the native
 `getModelVersion()` stub are implemented. Native model inference is not implemented:
 
 1. Realtime capture guidance via a `react-native-vision-camera` frame processor → `GuidanceState` / `GuidanceIssue`.
    Native analysis produces only `BLURRY`, `LOW_LIGHT`, and `TILTED`. `mapGuidanceIssues` maps `RawModelOutput` to
    `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, and `GROUND_NOT_VISIBLE`, but no frame processor calls it yet.
 2. On-device inference of a host-supplied model (CoreML on iOS, TFLite on Android; the package bundles no weights,
-   see `## Model source` in `README.md`) → `RawModelOutput` → `mapModelOutput` → per-rule `RuleResult[]`;
+   see `## Model source` in `README.md`) → `DetectorOutput` → `decodeDetectorOutput` → `RawModelOutput` → `mapModelOutput` → per-rule `RuleResult[]`;
    `evaluateGeofence` adds the `GEOFENCE` result from a caller-supplied location and zones.
 3. Pure TypeScript JSON-policy rule engine (`evaluatePolicy`) → final `Verdict` and score; `getParkingFeedback` →
    rider-facing feedback keys and default English text.
@@ -79,6 +79,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `src/geofence/geofence.ts` | `evaluateGeofence(location, zones)` — pure `GEOFENCE` `RuleResult` from a caller-supplied location and zones. |
 | `src/upload.ts` | `uploadVerification(result, options)` — opt-in JSON upload of a `VerificationResult` to a caller-owned `https://` endpoint, with timeout and retries. The only network call in the package; never call it automatically. |
 | `src/verification.ts` | `verifyParking(options)` — native photo SHA-256 plus caller-supplied rule results and metadata → `VerificationResult`. Includes `location` only when the caller passes it; logs nothing. |
+| `src/inference/detector.ts` | `decodeDetectorOutput(output)` — pure conversion of the host detector's post-processed output tensors (`DetectorOutput`) to `RawModelOutput`; see `### Detector model contract` in `README.md`. |
 | `src/inference/guidance.ts` | `mapGuidanceIssues(output, options)` — pure conversion of `RawModelOutput` to model-based `GuidanceIssue[]`. |
 | `src/guidance/frameAnalyzer.ts` | Optional VisionCamera analyzer factory and shared native initialization thresholds. |
 | `ios/ParkingGuideFrameProcessor.mm`, `cpp/CaptureMetrics.h` | iOS image-quality plugin and portable native metrics. |
