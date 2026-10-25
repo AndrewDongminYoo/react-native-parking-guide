@@ -32,3 +32,21 @@ export function guidanceMessages(issues: readonly GuidanceIssue[]): string[] {
     (feedback) => feedback.text
   );
 }
+
+/** Guidance messages, preceded by a model-failure message when the detector failed (instead of "no vehicle"). */
+export function captureMessages(
+  issues: readonly GuidanceIssue[],
+  detectorError: string | null
+): string[] {
+  const messages = guidanceMessages(issues);
+  return detectorError === null
+    ? messages
+    : ['The parking model could not run.', ...messages];
+}
+
+/** What the capture screen checks, depending on whether a detector model is configured. */
+export function captureDisclaimer(detectorConfigured: boolean): string {
+  return detectorConfigured
+    ? 'Checks image quality and vehicle placement with the configured model. The parking result is not available yet.'
+    : 'Checks image quality only. Vehicle detection and the parking result are not available yet.';
+}
