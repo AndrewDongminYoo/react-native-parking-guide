@@ -336,12 +336,18 @@ coordinates, clamping to `[0, 1]`, and duplicate suppression.
 `boxes[4i]` to `boxes[4i + 3]`.
 `decodeDetectorOutput` is pure and deterministic. It keeps every row, including zero-score padding rows;
 `mapModelOutput` and `mapGuidanceIssues` ignore rows below `minimumConfidence` and rows with a zero-area box.
+Padding rows must still be valid rows: a class index in `[0, 7]`, a box in `[0, 1]` with `left <= right` and
+`top <= bottom` (for example `[0, 0, 0, 0]`), and a score in `[0, 1]`. One invalid padding row makes the whole call
+throw.
 It throws `RangeError` when `boxes.length` is not `4 × scores.length`, when `classes.length` is not `scores.length`,
 when a class index is not an integer in `[0, 7]`, and for any value that `mapModelOutput` rejects. It never clamps.
 
 The contract does not cover masks (`ModelMask`), vehicle uprightness from the separate classifier
 (`ModelDetection.upright`), or `imageQuality`. The decoded output contains none of them, so `mapModelOutput` reports
 `UPRIGHT` and `IMAGE_QUALITY` as `WARN` with score/confidence `0`.
+With `defaultPolicy`, `UPRIGHT` has `severity: 'FAIL'` and `failBelow: 0.7`, so `evaluatePolicy` returns `FAIL` for
+every decoded output until a host merges an `upright` assessment into the vehicle detection. To evaluate decoded
+output before that, pass a policy that disables `UPRIGHT` or sets its `severity` to `'WARN'`.
 
 ### Geofence
 

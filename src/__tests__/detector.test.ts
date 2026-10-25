@@ -6,6 +6,8 @@ import {
   type DetectorOutput,
 } from '../inference/detector';
 import { mapModelOutput } from '../inference/mapping';
+import { defaultPolicy } from '../policy/defaultPolicy';
+import { evaluatePolicy } from '../policy/evaluate';
 
 describe('decodeDetectorOutput', () => {
   it('maps every detector class to its classId and vehicleType', () => {
@@ -74,6 +76,27 @@ describe('decodeDetectorOutput', () => {
       { id: 'UPRIGHT', verdict: 'WARN', score: 0, confidence: 0 },
       { id: 'IMAGE_QUALITY', verdict: 'WARN', score: 0, confidence: 0 },
     ]);
+  });
+
+  it('fails defaultPolicy on UPRIGHT alone when no upright assessment is merged', () => {
+    const rules = mapModelOutput(
+      decodeDetectorOutput({
+        boxes: [0.2, 0.2, 0.8, 0.9],
+        scores: [0.99],
+        classes: [0],
+      })
+    );
+
+    expect(evaluatePolicy(rules, defaultPolicy).verdict).toBe('FAIL');
+    expect(
+      evaluatePolicy(rules, {
+        ...defaultPolicy,
+        rules: {
+          ...defaultPolicy.rules,
+          UPRIGHT: { ...defaultPolicy.rules.UPRIGHT!, severity: 'WARN' },
+        },
+      }).verdict
+    ).not.toBe('FAIL');
   });
 
   it('decodes an empty output', () => {
