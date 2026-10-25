@@ -217,6 +217,14 @@ function CameraCapture({
   const { autoCaptureDue, acknowledgeAutoCapture } = guidance;
   // Holds the latest capturePhoto, which is declared after the early return below.
   const captureRef = useRef<() => Promise<void>>(async () => undefined);
+  // A photo that finishes after the rider closed capture belongs to no session; capturePhoto drops it.
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   useEffect(() => {
     if (autoCaptureDue) {
       acknowledgeAutoCapture();
@@ -254,7 +262,9 @@ function CameraCapture({
     setCapturing(true);
     try {
       const photo = await camera.current.takePhoto({ flash: 'off' });
-      onCaptured({ path: photo.path, guideFrame });
+      if (mountedRef.current) {
+        onCaptured({ path: photo.path, guideFrame });
+      }
     } catch {
       setStatus('Could not take the photo. Try again.');
     } finally {
