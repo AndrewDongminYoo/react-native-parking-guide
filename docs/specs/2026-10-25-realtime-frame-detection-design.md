@@ -1,6 +1,6 @@
 # Realtime frame detection design (#37, #38)
 
-Status: draft for approval, 2026-10-25.
+Status: approved by Andrew, 2026-10-25.
 Issues: #37 (iOS), #38 (Android), parent #35.
 Builds on: #61 (detector contract), #64 (`runDetector`), #66 (host-supplied `modelVersion`).
 
@@ -42,7 +42,7 @@ These issues join the existing image-quality issues (`BLURRY`, `LOW_LIGHT`, `TIL
 - Its `callback(frame)` converts the frame to the detector input, runs the model, and returns `{ boxes, scores, classes }` (the `DetectorOutput` shape), or `{ error: <code> }` with the `runDetector` error codes when the model cannot load or run.
 - iOS: refactor `ParkingGuideDetector` so model loading, the contract check, tensor filling, prediction, and output flattening take either a photo URL (existing path) or a `CVPixelBuffer` plus orientation. The frame path converts the YUV buffer with Core Image (`CIImage` from the pixel buffer, oriented by the frame orientation, scaled to 512 × 512, rendered into the same RGBX buffer the photo path uses) with one reused `CIContext`.
 - Android: refactor `ParkingDetector` the same way. The frame path converts the `YUV_420_888` `Image` straight into 512 × 512 ARGB pixels, applying the frame rotation, in a pure Kotlin function (`FramePixels`) that is JVM-testable; the result goes through the existing `DetectorTensors.fillInput`.
-- Both paths use the shared refactored core, so preprocessing cannot drift. Whether they also share one loaded model per URI is open decision 1 below.
+- Both paths use the shared refactored core, so preprocessing cannot drift, and they share one loaded model per URI (see "Decided by Andrew").
 - The plugin handles `frame.orientation` and `frame.isMirrored` so that the tensor is the upright, unmirrored scene.
 
 ### JS: throttled async call, decode on the JS thread
@@ -96,11 +96,10 @@ The frame size comes from the camera format; the plugin also returns the upright
 - `screenRectToFrameBox` lives in the library.
 - Stale or failed detection keeps `ready` false (fail closed); only a successful detection can produce `NO_VEHICLE`, and a failure is exposed as `detectorError`.
 
-## Open decision for Andrew
+## Decided by Andrew
 
-1. Model memory during capture. The frame plugin and `runDetector` both run the same host model in one capture flow (live frames, then the captured photo). Options:
-   - **One shared detector per model URI (recommended).** One copy in memory. Calls are serialized (Android already synchronizes `ParkingDetector`; iOS already uses a serial queue), so frame detection pauses briefly while the photo is analyzed.
-   - **Separate instances.** No pause, but two copies of the model in memory; with the fixture this costs nothing, but the reference model (RF-DETR-Seg) is large.
+- Model memory during capture: **one shared detector per model URI.** The frame plugin and `runDetector` use the same loaded model for the same URI, with calls serialized (Android: the synchronized `ParkingDetector`; iOS: one serial queue), so frame detection pauses briefly while a photo is analyzed. Only one copy of the model is in memory.
+- Model version comes from the host (#66), so neither path reads a version from the model.
 
 ## Left to the builder
 
