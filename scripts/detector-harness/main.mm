@@ -8,6 +8,16 @@
 
 #import "ParkingGuideDetector.h"
 
+#include <vector>
+
+// The private preprocessing step, declared here so the harness can check frame content without a model.
+@interface ParkingGuideDetector (Harness)
+- (BOOL)readPixelBuffer:(CVPixelBufferRef)buffer
+            orientation:(CGImagePropertyOrientation)orientation
+                   into:(std::vector<uint8_t> &)rgbx
+                upright:(CGSize *)upright;
+@end
+
 /// A 640 x 480 full-range 4:2:0 bi-planar buffer of one RGB color, converted with BT.601.
 static CVPixelBufferRef ParkingGuideSolidPixelBuffer(int r, int g, int b)
 {
@@ -40,6 +50,39 @@ static CVPixelBufferRef ParkingGuideSolidPixelBuffer(int r, int g, int b)
   return buffer;
 }
 
+/// A 640 x 480 full-range buffer whose left half is pure red and right half pure blue.
+static CVPixelBufferRef ParkingGuideTwoToneBuffer()
+{
+  CVPixelBufferRef buffer = ParkingGuideSolidPixelBuffer(255, 0, 0);
+  if (buffer == NULL) {
+    return NULL;
+  }
+  CVPixelBufferLockBaseAddress(buffer, 0);
+  const uint8_t blueY = 29, blueCb = 255, blueCr = 107;
+  uint8_t *luma = (uint8_t *)CVPixelBufferGetBaseAddressOfPlane(buffer, 0);
+  for (size_t row = 0; row < 480; row++) {
+    memset(luma + row * CVPixelBufferGetBytesPerRowOfPlane(buffer, 0) + 320, blueY, 320);
+  }
+  uint8_t *chroma = (uint8_t *)CVPixelBufferGetBaseAddressOfPlane(buffer, 1);
+  for (size_t row = 0; row < 240; row++) {
+    uint8_t *line = chroma + row * CVPixelBufferGetBytesPerRowOfPlane(buffer, 1);
+    for (size_t col = 160; col < 320; col++) {
+      line[col * 2] = blueCb;
+      line[col * 2 + 1] = blueCr;
+    }
+  }
+  CVPixelBufferUnlockBaseAddress(buffer, 0);
+  return buffer;
+}
+
+static const char *ParkingGuideColorName(const std::vector<uint8_t> &rgbx, size_t x, size_t y)
+{
+  const uint8_t *pixel = &rgbx[(y * 512 + x) * 4];
+  if (pixel[0] > 200 && pixel[2] < 60) return "red";
+  if (pixel[2] > 200 && pixel[0] < 60) return "blue";
+  return "other";
+}
+
 static int ParkingGuidePrint(NSDictionary *output, NSString *code)
 {
   if (output == nil) {
@@ -57,6 +100,37 @@ int main(int argc, const char *argv[])
     ParkingGuideDetector *detector = [ParkingGuideDetector new];
     NSString *code = nil;
     NSString *message = nil;
+    if (argc == 2 && strcmp(argv[1], "--orientation-table") == 0) {
+      NSMutableString *json = [NSMutableString stringWithString:@"{"];
+      for (NSInteger mirrored = 0; mirrored <= 1; mirrored++) {
+        for (NSInteger raw = 0; raw < (mirrored ? 4 : 8); raw++) {
+          [json appendFormat:@"%@\"%@%ld\":%d", json.length > 1 ? @"," : @"", mirrored ? @"m" : @"", (long)raw,
+                             (int)ParkingGuideUprightOrientation(raw, mirrored)];
+        }
+      }
+      [json appendString:@"}"];
+      printf("%s\n", json.UTF8String);
+      return 0;
+    }
+    if (argc == 3 && strcmp(argv[1], "--probe") == 0) {
+      CVPixelBufferRef buffer = ParkingGuideTwoToneBuffer();
+      std::vector<uint8_t> rgbx;
+      CGSize upright = CGSizeZero;
+      BOOL ok = buffer != NULL && [detector readPixelBuffer:buffer
+                                                orientation:(CGImagePropertyOrientation)atoi(argv[2])
+                                                       into:rgbx
+                                                    upright:&upright];
+      if (buffer != NULL) {
+        CVPixelBufferRelease(buffer);
+      }
+      if (!ok) {
+        printf("error\n");
+        return 1;
+      }
+      printf("%s %s %s\n", ParkingGuideColorName(rgbx, 8, 8), ParkingGuideColorName(rgbx, 503, 8),
+             ParkingGuideColorName(rgbx, 8, 503));
+      return 0;
+    }
     if (argc == 7 && strcmp(argv[1], "--pixel-buffer") == 0) {
       CVPixelBufferRef buffer = ParkingGuideSolidPixelBuffer(atoi(argv[2]), atoi(argv[3]), atoi(argv[4]));
       NSURL *model = [NSURL fileURLWithPath:@(argv[6])];

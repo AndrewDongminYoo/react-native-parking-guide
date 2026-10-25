@@ -8,6 +8,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// `FileSha256.resolve` on Android. Returns nil for any other form.
 FOUNDATION_EXPORT NSURL *_Nullable ParkingGuideFileURL(NSString *uri);
 
+/// The orientation that turns a VisionCamera frame upright. `frameOrientation` is the raw `UIImageOrientation` of
+/// `Frame.orientation`, which VisionCamera defines as the frame's own orientation, the reverse of the upright transform
+/// (its snapshot code applies `Orientation.portrait.relativeTo(frameOrientation)`), so Left and Right swap. Mirrored
+/// `UIImageOrientation` values are read as their unmirrored base; `mirrored` selects the mirrored result.
+FOUNDATION_EXPORT CGImagePropertyOrientation ParkingGuideUprightOrientation(NSInteger frameOrientation, BOOL mirrored);
+
 /// Error codes shared with Android `ParkingDetector`.
 extern NSString *const ParkingGuideDetectorErrorModelLoad;
 extern NSString *const ParkingGuideDetectorErrorModelContract;

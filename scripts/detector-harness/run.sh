@@ -60,6 +60,30 @@ assert (o["frameWidth"], o["frameHeight"]) == size, o
   done
 done
 
+# VisionCamera's iOS Frame.orientation is the frame's own orientation, the reverse of the upright transform (its
+# snapshot code applies Orientation.portrait.relativeTo(frame orientation)), so Left and Right swap.
+expected='{"0":1,"1":3,"2":6,"3":8,"4":1,"5":3,"6":6,"7":8,"m0":2,"m1":4,"m2":7,"m3":5}'
+table=$("$out/harness" --orientation-table)
+if [ "$table" = "$expected" ]; then
+  echo "PASS orientation table"
+else
+  echo "FAIL orientation table: $table"
+  status=1
+fi
+
+# Content check: a buffer whose left half is red and right half blue. Applying orientation 6 (rotate 90 degrees
+# clockwise to display) puts the red half on top; 8 (counterclockwise) puts it at the bottom; 1 keeps it on the left.
+for case in "1 red blue red" "6 red red blue" "8 blue blue red"; do
+  set -- $case
+  probe=$("$out/harness" --probe "$1")
+  if [ "$probe" = "$2 $3 $4" ]; then
+    echo "PASS probe orientation $1"
+  else
+    echo "FAIL probe orientation $1: got '$probe', want '$2 $3 $4' (top-left top-right bottom-left)"
+    status=1
+  fi
+done
+
 # A precompiled .mlmodelc, the form an app bundle ships, loads without compiling and is not deleted by reset.
 xcrun coremlcompiler compile "$root/fixtures/detector/detector-nhwc.mlpackage" "$out" > /dev/null
 if "$out/harness" "$root/fixtures/detector/solid.png" "$out/detector-nhwc.mlmodelc" | grep -q '"scores":\[0.7999' &&

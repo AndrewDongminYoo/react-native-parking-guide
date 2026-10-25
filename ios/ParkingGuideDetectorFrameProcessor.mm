@@ -3,7 +3,6 @@
 #import <VisionCamera/FrameProcessorPlugin.h>
 #import <CoreMedia/CoreMedia.h>
 #import <ImageIO/ImageIO.h>
-#import <UIKit/UIKit.h>
 
 #import "ParkingGuideDetector.h"
 
@@ -27,26 +26,6 @@ VISION_EXPORT_FRAME_PROCESSOR(ParkingGuideDetectorFrameProcessor, parkingDetecto
   return self;
 }
 
-/// Maps VisionCamera's `UIImageOrientation` and mirroring to the `CGImagePropertyOrientation` that makes it upright.
-static CGImagePropertyOrientation ParkingGuideOrientation(UIImageOrientation orientation, BOOL mirrored)
-{
-  switch (orientation) {
-    case UIImageOrientationUp:
-    case UIImageOrientationUpMirrored:
-      return mirrored ? kCGImagePropertyOrientationUpMirrored : kCGImagePropertyOrientationUp;
-    case UIImageOrientationDown:
-    case UIImageOrientationDownMirrored:
-      return mirrored ? kCGImagePropertyOrientationDownMirrored : kCGImagePropertyOrientationDown;
-    case UIImageOrientationLeft:
-    case UIImageOrientationLeftMirrored:
-      return mirrored ? kCGImagePropertyOrientationLeftMirrored : kCGImagePropertyOrientationLeft;
-    case UIImageOrientationRight:
-    case UIImageOrientationRightMirrored:
-      return mirrored ? kCGImagePropertyOrientationRightMirrored : kCGImagePropertyOrientationRight;
-  }
-  return kCGImagePropertyOrientationUp;
-}
-
 - (id)callback:(Frame *)frame withArguments:(NSDictionary *)arguments
 {
   if ([NSThread isMainThread]) {
@@ -59,7 +38,7 @@ static CGImagePropertyOrientation ParkingGuideOrientation(UIImageOrientation ori
   if (buffer == nullptr) {
     return @{@"error" : ParkingGuideDetectorErrorPhotoRead};
   }
-  const CGImagePropertyOrientation orientation = ParkingGuideOrientation(frame.orientation, frame.isMirrored);
+  const CGImagePropertyOrientation orientation = ParkingGuideUprightOrientation(frame.orientation, frame.isMirrored);
   NSURL *modelURL = _modelURL;
   __block NSDictionary *output = nil;
   __block NSString *code = nil;

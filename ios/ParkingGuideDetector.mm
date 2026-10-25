@@ -26,6 +26,21 @@ NSURL *ParkingGuideFileURL(NSString *uri)
   return nil;
 }
 
+CGImagePropertyOrientation ParkingGuideUprightOrientation(NSInteger frameOrientation, BOOL mirrored)
+{
+  // UIImageOrientation raw values: Up 0, Down 1, Left 2, Right 3, then the same four mirrored.
+  switch (frameOrientation % 4) {
+    case 1:
+      return mirrored ? kCGImagePropertyOrientationDownMirrored : kCGImagePropertyOrientationDown;
+    case 2:
+      return mirrored ? kCGImagePropertyOrientationRightMirrored : kCGImagePropertyOrientationRight;
+    case 3:
+      return mirrored ? kCGImagePropertyOrientationLeftMirrored : kCGImagePropertyOrientationLeft;
+    default:
+      return mirrored ? kCGImagePropertyOrientationUpMirrored : kCGImagePropertyOrientationUp;
+  }
+}
+
 static const NSInteger kInputSize = 512;
 static NSArray<NSString *> *const kOutputNames = @[ @"boxes", @"scores", @"classes" ];
 
