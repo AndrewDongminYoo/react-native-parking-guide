@@ -80,7 +80,8 @@ function validateOptions(options: VerifyParkingOptions): ParkingPolicy {
   }
   if (
     !Array.isArray(ruleResults) ||
-    !ruleResults.every(
+    // Array.from turns holes into undefined; every() would skip them.
+    !Array.from(ruleResults).every(
       (rule: unknown) => isRecord(rule) && VERDICTS.includes(rule.verdict)
     )
   ) {
@@ -149,21 +150,14 @@ export async function verifyParking(
   const { photo, ruleResults, deviceTilt, heading, location, attestation } =
     options;
   const capturedAt = options.capturedAt?.getTime() ?? calledAt;
-  const rules = [...ruleResults];
-  const sha256 = await ParkingGuide.getFileSha256(photo.uri);
-  if (typeof sha256 !== 'string' || !SHA256_PATTERN.test(sha256)) {
-    throw new Error('getFileSha256 returned an invalid SHA-256 digest.');
-  }
-
-  return {
-    ...evaluatePolicy(rules, policy),
+  // Copy everything before the await: the caller can mutate its objects while the hash is pending.
+  // shortcut: `evidence` stays shared with the caller; evaluatePolicy does not read it. Deep-copy it if it ever does.
+  const rules = ruleResults.map((rule) => ({ ...rule }));
+  const evaluation = evaluatePolicy(rules, policy);
+  const { uri, width, height } = photo;
+  const result = {
+    ...evaluation,
     rules,
-    photo: {
-      uri: photo.uri,
-      width: photo.width,
-      height: photo.height,
-      sha256,
-    },
     metadata: {
       capturedAt: new Date(capturedAt).toISOString(),
       ...(location === undefined
@@ -182,4 +176,10 @@ export async function verifyParking(
       ...(attestation === undefined ? {} : { attestation }),
     },
   };
+  const sha256 = await ParkingGuide.getFileSha256(uri);
+  if (typeof sha256 !== 'string' || !SHA256_PATTERN.test(sha256)) {
+    throw new Error('getFileSha256 returned an invalid SHA-256 digest.');
+  }
+
+  return { ...result, photo: { uri, width, height, sha256 } };
 }

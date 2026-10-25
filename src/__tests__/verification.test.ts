@@ -118,6 +118,48 @@ describe('verifyParking', () => {
     expect(result.photo).not.toBe(opts.photo);
   });
 
+  it('snapshots inputs before the native hash resolves', async () => {
+    let resolveHash: (hash: string) => void = () => {};
+    mockGetFileSha256.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveHash = resolve;
+      })
+    );
+    const upright: RuleResult = {
+      id: 'UPRIGHT',
+      verdict: 'PASS',
+      confidence: 1,
+    };
+    const photo = { uri: '/tmp/photo.jpg', width: 1920, height: 1080 };
+    const deviceTilt = { pitch: 0.1, roll: -0.2 };
+    const location = { lat: 37.5, lng: 127, accuracy: 5 };
+    const pending = verifyParking(
+      options({ photo, deviceTilt, location, ruleResults: [upright] })
+    );
+
+    photo.uri = '/tmp/other.jpg';
+    deviceTilt.pitch = 1;
+    location.lat = 0;
+    upright.verdict = 'FAIL';
+    resolveHash(HASH);
+    const result = await pending;
+    upright.score = 0;
+
+    const expectedRules: RuleResult[] = [
+      { id: 'UPRIGHT', verdict: 'PASS', confidence: 1 },
+    ];
+    expect(result).toMatchObject({
+      ...evaluatePolicy(expectedRules, defaultPolicy),
+      rules: expectedRules,
+      photo: { uri: '/tmp/photo.jpg', sha256: HASH },
+      metadata: {
+        deviceTilt: { pitch: 0.1, roll: -0.2 },
+        location: { lat: 37.5, lng: 127, accuracy: 5 },
+      },
+    });
+    expect(result.verdict).toBe('PASS');
+  });
+
   it('defaults capturedAt to the time of the call', async () => {
     jest.useFakeTimers({ now: new Date('2026-01-02T03:04:05.000Z') });
     try {
@@ -176,6 +218,7 @@ describe('verifyParking', () => {
     ],
     ['missing photo', invalid({ ...options(), photo: undefined })],
     ['rules not an array', invalid({ ...options(), ruleResults: {} })],
+    ['sparse rules array', options({ ruleResults: new Array<RuleResult>(1) })],
     [
       'rule with an unknown verdict',
       options({
