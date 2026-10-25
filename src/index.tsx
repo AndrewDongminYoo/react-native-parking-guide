@@ -1,4 +1,5 @@
 import ParkingGuide from './NativeParkingGuide';
+import type { DetectorOutput } from './inference/detector';
 
 export { useParkingGuidance } from './guidance/useParkingGuidance';
 export type { ParkingGuidance } from './guidance/useParkingGuidance';
@@ -98,4 +99,15 @@ export function getModelVersion(): string {
  */
 export function getFileSha256(uri: string): Promise<string> {
   return ParkingGuide.getFileSha256(uri);
+}
+
+/**
+ * Runs the host-supplied detector model at `modelUri` on the photo at `photoUri`, off the JS thread, and returns
+ * its output tensors for `decodeDetectorOutput`. See the README section "Native detector inference".
+ */
+export function runDetector(
+  photoUri: string,
+  modelUri: string
+): Promise<DetectorOutput> {
+  return ParkingGuide.runDetector(photoUri, modelUri);
 }

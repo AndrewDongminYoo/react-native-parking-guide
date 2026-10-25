@@ -1,4 +1,5 @@
 #import "ParkingGuide.h"
+#import "ParkingGuideDetector.h"
 
 #import <CommonCrypto/CommonDigest.h>
 
@@ -59,7 +60,20 @@ static NSString *ParkingGuideSha256Hex(NSURL *url)
   return hex;
 }
 
-@implementation ParkingGuide
+@implementation ParkingGuide {
+  ParkingGuideDetector *_detector;
+  dispatch_queue_t _detectorQueue;
+}
+
+- (instancetype)init
+{
+  if (self = [super init]) {
+    _detector = [ParkingGuideDetector new];
+    _detectorQueue = dispatch_queue_create("com.parkingguide.detector", DISPATCH_QUEUE_SERIAL);
+  }
+  return self;
+}
+
 - (NSString *)getModelVersion {
   return @"0.1.0-dev";
 }
@@ -80,6 +94,38 @@ static NSString *ParkingGuideSha256Hex(NSURL *url)
     } else {
       resolve(hex);
     }
+  });
+}
+
+- (void)runDetector:(NSString *)photoUri
+           modelUri:(NSString *)modelUri
+            resolve:(RCTPromiseResolveBlock)resolve
+             reject:(RCTPromiseRejectBlock)reject
+{
+  NSURL *photoURL = ParkingGuideFileURL(photoUri);
+  NSURL *modelURL = ParkingGuideFileURL(modelUri);
+  if (photoURL == nil || modelURL == nil) {
+    reject(@"E_INVALID_URI", @"The photo and model URIs must be absolute paths or file:/// URIs.", nil);
+    return;
+  }
+  ParkingGuideDetector *detector = _detector;
+  dispatch_async(_detectorQueue, ^{
+    NSString *code = nil;
+    NSString *message = nil;
+    NSDictionary *output = [detector runWithPhotoURL:photoURL modelURL:modelURL errorCode:&code message:&message];
+    if (output == nil) {
+      reject(code, message, nil);
+    } else {
+      resolve(output);
+    }
+  });
+}
+
+- (void)invalidate
+{
+  ParkingGuideDetector *detector = _detector;
+  dispatch_async(_detectorQueue, ^{
+    [detector reset];
   });
 }
 

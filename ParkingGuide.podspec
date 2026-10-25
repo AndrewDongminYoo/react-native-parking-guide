@@ -23,8 +23,9 @@ Pod::Spec.new do |s|
     app_path, :out => File::NULL, :err => File::NULL)
   if has_camera_worklets && (!defined?($VCEnableFrameProcessors) || $VCEnableFrameProcessors)
     s.dependency "VisionCamera/FrameProcessors", "~> 4.7"
-    s.frameworks = "CoreMotion", "CoreVideo", "QuartzCore"
+    s.frameworks = "CoreML", "ImageIO", "CoreGraphics", "CoreMotion", "CoreVideo", "QuartzCore"
   else
+    s.frameworks = "CoreML", "ImageIO", "CoreGraphics"
     s.exclude_files = "ios/ParkingGuideFrameProcessor.mm"
   end
 
