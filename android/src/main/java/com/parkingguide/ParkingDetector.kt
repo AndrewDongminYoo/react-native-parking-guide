@@ -15,8 +15,9 @@ import org.tensorflow.lite.Interpreter
  * Runs a host-supplied LiteRT (TFLite) detector on one photo, following the README "Detector model contract".
  * Same rules and error codes as `ios/ParkingGuideDetector.mm`. Caches the last model; every method is synchronized.
  *
- * [cacheDir] holds a private copy of a `content://` model while it is loaded. [open] opens a [PhotoSource] for reading,
- * or returns null.
+ * [cacheDir] holds a private copy of a `content://` model while it is loaded; it is created when missing.
+ * [ParkingDetectors] passes [MODEL_COPY_DIR] in the app cache directory, which only detectors write to.
+ * [open] opens a [PhotoSource] for reading, or returns null.
  */
 class ParkingDetector(private val cacheDir: File, private val open: (PhotoSource) -> InputStream?) {
   class Failure(val code: String, message: String) : Exception(message)
@@ -111,10 +112,12 @@ class ParkingDetector(private val cacheDir: File, private val open: (PhotoSource
 
   /**
    * Copies a `content://` model to a private file in [cacheDir] (at most [DetectorTensors.MAX_MODEL_BYTES]) and loads
-   * it memory-mapped, so no model bytes stay on the Java heap. The file is deleted on failure, or by [close]; a copy
-   * left by a process that ended first is deleted by [deleteModelCopies].
+   * it memory-mapped, so no model bytes stay on the Java heap. [cacheDir] is created first, because the app cache can
+   * be cleared while the app runs. The file is deleted on failure, or by [close]; a copy left by a process that ended
+   * first is deleted by [deleteModelCopies].
    */
   private fun loadContent(model: PhotoSource.Content): Interpreter {
+    cacheDir.mkdirs()
     val file = File.createTempFile(MODEL_COPY_PREFIX, MODEL_COPY_SUFFIX, cacheDir)
     try {
       val fits = open(model)?.use { input ->
@@ -199,9 +202,13 @@ class ParkingDetector(private val cacheDir: File, private val open: (PhotoSource
     private const val MODEL_COPY_PREFIX = "parking-guide-model"
     private const val MODEL_COPY_SUFFIX = ".tflite"
 
+    /** Name of the detector-owned subdirectory of the app cache directory that holds `content://` model copies. */
+    const val MODEL_COPY_DIR = "parking-guide-models"
+
     /**
      * Deletes every `content://` model copy in [cacheDir], including copies left by a process that ended before
-     * [close]. Call it only while no detector that uses [cacheDir] is loading or holds a copy.
+     * [close]. Call it only while no detector that uses [cacheDir] is loading or holds a copy, and only on a
+     * detector-owned directory such as [MODEL_COPY_DIR], never on a directory that the host app also writes to.
      */
     fun deleteModelCopies(cacheDir: File) {
       cacheDir.listFiles()

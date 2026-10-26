@@ -16,17 +16,19 @@ object ParkingDetectors {
   private var copiesDeleted = false
 
   /**
-   * The first call in a process deletes the `content://` model copies that an earlier process left in the cache
-   * directory; no detector of this process has written one yet.
+   * Detectors keep `content://` model copies in [ParkingDetector.MODEL_COPY_DIR] inside the app cache directory, so the
+   * cleanup never touches host-app files. The first call in a process deletes the copies that an earlier process left
+   * there; no detector of this process has written one yet.
    */
   @Synchronized
   fun forContext(context: ReactApplicationContext): ParkingDetector =
     detectors.getOrPut(context) {
+      val copyDir = File(context.cacheDir, ParkingDetector.MODEL_COPY_DIR)
       if (!copiesDeleted) {
-        ParkingDetector.deleteModelCopies(context.cacheDir)
+        ParkingDetector.deleteModelCopies(copyDir)
         copiesDeleted = true
       }
-      ParkingDetector(context.cacheDir) { openSource(context, it) }
+      ParkingDetector(copyDir) { openSource(context, it) }
     }
 
   @Synchronized
