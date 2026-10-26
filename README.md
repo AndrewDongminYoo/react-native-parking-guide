@@ -155,6 +155,9 @@ a model. See [Photo verification](#photo-verification).
   `react-native-worklets-core` delivers a worklet value on the JS thread as a host object, on which the `in` operator
   reports every key and arrays fail `Array.isArray`. `onDetectorResult` copies each result itself; copy a result
   before reading it in your own code.
+- `createDetectorAsyncRunner(Worklets): DetectorAsyncRunner<Frame>` returns a frame-processor worklet
+  `(frame, work) => boolean` that runs `work` on a background thread, or skips the frame while a previous call runs.
+  Use it instead of VisionCamera's `runAsync`. See [Live detector guidance](#live-detector-guidance).
 - `screenRectToFrameBox(rect: ScreenRect, view: Size, frame: Size): ModelBox` maps an on-screen rectangle over a
   `resizeMode="cover"` preview to normalized upright frame coordinates.
 - `createGuidanceSession()` and `reduceGuidanceSession(state, event, options)` are the pure session reducer behind
@@ -735,11 +738,25 @@ Each call returns `{ boxes, scores, classes, frameWidth, frameHeight, capturedAt
 and `capturedAt` is `Date.now()` taken before inference, or `{ error, capturedAt }` with a `runDetector` error code.
 Freshness (`staleAfterMs`) is measured from `capturedAt`, so slow inference cannot make an old frame count as fresh.
 The worklet runtime's clock can run ahead of the JS runtime's clock, so a `capturedAt` later than the result's arrival
-counts as the arrival time. Call it at a low rate with `runAtTargetFps`. The call runs on the camera's frame processor
-thread and blocks it for the inference time. VisionCamera's `runAsync` would move that work to another thread, but on
-an iPhone 16 Pro (VisionCamera 4.7.3, react-native-worklets-core 1.6.3, React Native 0.86.3) `runAsync` ran the
-detector three times and then scheduled no further calls until the app restarted; the root cause is not known
-([#83](https://github.com/AndrewDongminYoo/react-native-parking-guide/issues/83)).
+counts as the arrival time. Call it at a low rate with `runAtTargetFps`, inside the runner from
+`createDetectorAsyncRunner(Worklets)` so that inference never blocks the camera; the runner skips a frame while a call
+is running.
+
+Do not use VisionCamera's `runAsync` for this. In VisionCamera 4.7.3 it keeps the worklet context from
+`Worklets.createContext` only in a local variable, and react-native-worklets-core 1.6.3's `createRunAsync` keeps only
+a raw pointer to that context. When Hermes collects the context's JS object, the context is destroyed while `runAsync`
+still uses it: work is dropped and `runAsync` stays busy, so detection stops until the app restarts, or the app crashes
+in `JsiWorkletContext::invokeOnWorkletThread`. Both were observed on an iPhone 16 Pro in Release builds
+([#83](https://github.com/AndrewDongminYoo/react-native-parking-guide/issues/83)). `createDetectorAsyncRunner` does the
+same work as `runAsync` (it holds a frame reference until the work ends) on one context that stays referenced for the
+life of the JS runtime. Every runner shares that context and one busy flag, so detector calls run one at a time, as
+the native detector does anyway. An exception thrown inside the runner's work is lost; `createParkingDetector` reports
+failures as `{ error }` results instead.
+
+The runner's thread is a worklet context thread, not a dispatch queue, so it never drains an autorelease pool on its
+own. The iOS `parkingDetector` plugin therefore runs each frame inside `@autoreleasepool`; without it, every call kept
+one camera pixel buffer alive, and after about 16 calls the capture pool ran out and the preview and frame processor
+stopped. A frame processor plugin of your own that you call through the runner needs the same pool.
 
 Pass each result to `onDetectorResult` on the JS thread and set the hook's `detection` option:
 
@@ -769,13 +786,20 @@ const deliverDetection = useMemo(
   () => Worklets.createRunOnJS(guidance.onDetectorResult),
   [guidance.onDetectorResult]
 );
+const runDetection = useMemo(
+  () => createDetectorAsyncRunner<Frame>(Worklets),
+  []
+);
 const frameProcessor = useFrameProcessor((frame) => {
   'worklet';
   runAtTargetFps(2, () => {
     'worklet';
-    deliverDetection(detect(frame));
+    runDetection(frame, () => {
+      'worklet';
+      deliverDetection(detect(frame));
+    });
   });
-}, [detect, deliverDetection]);
+}, [detect, deliverDetection, runDetection]);
 ```
 
 `onDetectorResult` copies each result with `copyDetectorResult`, because the worklet delivers it as a host object.
@@ -974,7 +998,7 @@ stated.
 | `GuidanceOptions` | Optional `smoothingFactor: number` (default `0.25`) and `debounceFrames: number` (default `3`); constraints are specified in [Capture guidance](#capture-guidance). |
 | `GuidanceReducerState` | Required `guidance: GuidanceState`, `candidate: { ready: boolean; issues: GuidanceIssue[] }`, and `consecutiveFrames: number`. Initialize with `createGuidanceState()`. |
 | `ParkingGuidance` | Extends `GuidanceState` with `onFrameResult(result: GuidanceFrameResult): void`, `onDetectorResult(result: DetectorFrameResult): void`, `detectorError: string \| null`, `autoCaptureDue: boolean`, `acknowledgeAutoCapture(): void`, and `reset(): void`. |
-| `GuidanceSessionOptions`, `GuidanceSessionState`, `GuidanceSessionEvent`, `DetectionOptions`, `DetectorFrameResult`, `ParkingDetector`, `ScreenRect`, `Size` | Live detector guidance types. See [Live detector guidance](#live-detector-guidance). |
+| `GuidanceSessionOptions`, `GuidanceSessionState`, `GuidanceSessionEvent`, `DetectionOptions`, `DetectorFrameResult`, `ParkingDetector`, `DetectorAsyncRunner`, `DetectorRunnerWorklets`, `ScreenRect`, `Size` | Live detector guidance types. See [Live detector guidance](#live-detector-guidance). |
 | `ParkingFrameAnalyzer<Frame>` | `(frame: Frame) => GuidanceFrameResult`; `Frame` is inferred from the injected camera proxy. Invoke only inside a VisionCamera frame-processor worklet. |
 | `RuleResult` | Required `id: RuleId`, `verdict: Verdict`, and `confidence: number`; optional `score: number`, `message: string`, and `evidence: { bbox?: number[]; maskUri?: string; proximity?: ZoneProximity }`. `evaluatePolicy` clamps a numeric `score` to `[0, 1]`; it does not use `confidence`. |
 | `ZoneProximity` | Required `distance: number` (`>= 0`) and `near: boolean`. See [Model-output mapping](#model-output-mapping). |
