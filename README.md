@@ -738,7 +738,8 @@ The worklet runtime's clock can run ahead of the JS runtime's clock, so a `captu
 counts as the arrival time. Call it at a low rate with `runAtTargetFps`. The call runs on the camera's frame processor
 thread and blocks it for the inference time. VisionCamera's `runAsync` would move that work to another thread, but on
 an iPhone 16 Pro (VisionCamera 4.7.3, react-native-worklets-core 1.6.3, React Native 0.86.3) `runAsync` ran the
-detector three times and then scheduled no further calls until the app restarted; the root cause is not known.
+detector three times and then scheduled no further calls until the app restarted; the root cause is not known
+([#83](https://github.com/AndrewDongminYoo/react-native-parking-guide/issues/83)).
 
 Pass each result to `onDetectorResult` on the JS thread and set the hook's `detection` option:
 
