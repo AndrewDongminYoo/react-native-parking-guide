@@ -104,6 +104,7 @@ function renderPermissionScreen() {
     expand(
       CaptureScreen({
         vehicleType: 'kickboard',
+        modelUri: undefined,
         onClose: () => undefined,
         onCaptured: () => undefined,
       })
@@ -174,6 +175,7 @@ describe('example result screen', () => {
       expand(
         ResultScreen({
           vehicleType: 'kickboard',
+          modelUri: undefined,
           photo: { path: '/tmp/photo.jpg', guideFrame: undefined },
           onRetake: () => undefined,
           onDone: () => undefined,
@@ -235,6 +237,7 @@ describe('example capture lifecycle', () => {
       const names = componentNames(
         CaptureScreen({
           vehicleType: 'kickboard',
+          modelUri: undefined,
           onClose: () => undefined,
           onCaptured: () => undefined,
         })
@@ -263,6 +266,7 @@ describe('example capture AppState subscription', () => {
 
     CaptureScreen({
       vehicleType: 'kickboard',
+      modelUri: undefined,
       onClose: () => undefined,
       onCaptured: () => undefined,
     });
