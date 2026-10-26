@@ -26,8 +26,9 @@ rows (`boxes` [1001, 4], `scores` and `classes` [1001]), one more than the 1000-
 with fixed boxes and a score of either 0.9 or 0:
 - row 0: kickboard at [0.375, 0.3125, 0.625, 0.5], 0.9 when the mean of that box region is red: red above 0.45 and
   at least 0.2 above both green and blue;
-- row 1: crosswalk at [0, 0, 1, 1], 0.9 when the scene mean is green: green at least 0.1 above both red and blue;
-- row 2: sidewalk_block at [0, 0, 1, 1], 0.9 when the scene mean is blue by the same margin;
+- row 1: crosswalk at [0, 0, 1, 1], 0.9 when the mean of the ground region [0.25, 0.53125, 0.75, 0.78125] below the
+  row-0 box is green: green at least 0.1 above both red and blue;
+- row 2: sidewalk_block at [0, 0, 1, 1], 0.9 when the ground region mean is blue by the same margin;
 - row 3: parking_zone at [0, 0, 1, 1], 0.9 when neither row 1 nor row 2 is 0.9.
 
 The models do not contain trained weights.
@@ -58,6 +59,9 @@ DEMO_SCORE = 0.9
 # The row-0 box in 512 x 512 input pixels: rows 160..255, columns 192..319.
 DEMO_REGION_BEGIN = [0, 160, 192, 0]
 DEMO_REGION_END = [1, 256, 320, 3]
+# The ground region below the row-0 box: rows 272..399, columns 128..383.
+DEMO_GROUND_BEGIN = [0, 272, 128, 0]
+DEMO_GROUND_END = [1, 400, 384, 3]
 DEMO_RED_MIN = 0.45
 DEMO_RED_MARGIN = 0.2
 DEMO_SCENE_MARGIN = 0.1
@@ -157,7 +161,8 @@ def make_demo_tflite() -> None:
         def serve(self, image):
             (top, left), (bottom, right) = DEMO_REGION_BEGIN[1:3], DEMO_REGION_END[1:3]
             region = tf.reduce_mean(image[:, top:bottom, left:right, :], axis=[1, 2])
-            scene = tf.reduce_mean(image, axis=[1, 2])
+            (top, left), (bottom, right) = DEMO_GROUND_BEGIN[1:3], DEMO_GROUND_END[1:3]
+            scene = tf.reduce_mean(image[:, top:bottom, left:right, :], axis=[1, 2])
             vehicle = tf.logical_and(region[:, 0] > DEMO_RED_MIN, dominance(region, 0) > DEMO_RED_MARGIN)
             green = dominance(scene, 1) > DEMO_SCENE_MARGIN
             blue = dominance(scene, 2) > DEMO_SCENE_MARGIN
@@ -190,7 +195,8 @@ def make_demo_coreml() -> None:
     def program(image):
         region = mb.slice_by_index(x=image, begin=DEMO_REGION_BEGIN, end=DEMO_REGION_END)
         region = mb.reduce_mean(x=region, axes=[1, 2], keep_dims=False)
-        scene = mb.reduce_mean(x=image, axes=[1, 2], keep_dims=False)
+        scene = mb.slice_by_index(x=image, begin=DEMO_GROUND_BEGIN, end=DEMO_GROUND_END)
+        scene = mb.reduce_mean(x=scene, axes=[1, 2], keep_dims=False)
         vehicle = mb.logical_and(
             x=mb.greater(x=channel(region, 0), y=DEMO_RED_MIN),
             y=mb.greater(x=dominance(region, 0), y=DEMO_RED_MARGIN),
@@ -215,20 +221,25 @@ def make_demo_coreml() -> None:
 
 
 def check_demo() -> None:
-    """Run both demo models on synthetic scenes with a red block in the row-0 box and assert the documented scores."""
-    red = [0.8, 0.1, 0.1]
+    """Run both demo models on synthetic scenes with a block in the row-0 box and assert the documented scores."""
+    red, gray, green = [0.8, 0.1, 0.1], [0.5, 0.5, 0.5], [0.2, 0.6, 0.2]
+    # (background, row-0 box block, ground region or None for the background, expected scores)
     scenes = [
-        ([0.5, 0.5, 0.5], red, [0.9, 0.0, 0.0, 0.9]),
-        ([0.2, 0.6, 0.2], red, [0.9, 0.9, 0.0, 0.0]),
-        ([0.2, 0.2, 0.6], red, [0.9, 0.0, 0.9, 0.0]),
-        ([0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [0.0, 0.0, 0.0, 0.9]),
-        ([0.5, 0.5, 0.5], [0.4, 0.1, 0.1], [0.0, 0.0, 0.0, 0.9]),
+        (gray, red, None, [0.9, 0.0, 0.0, 0.9]),
+        (green, red, None, [0.9, 0.9, 0.0, 0.0]),
+        ([0.2, 0.2, 0.6], red, None, [0.9, 0.0, 0.9, 0.0]),
+        (gray, gray, None, [0.0, 0.0, 0.0, 0.9]),
+        (gray, [0.4, 0.1, 0.1], None, [0.0, 0.0, 0.0, 0.9]),
+        # A green mat under the vehicle on a neutral scene.
+        (gray, red, green, [0.9, 0.9, 0.0, 0.0]),
     ]
     runner = tf.lite.Interpreter(model_path=str(OUT / "detector-demo.tflite")).get_signature_runner()
     coreml = ct.models.MLModel(str(OUT / "detector-demo.mlpackage"))
-    for background, block, expected in scenes:
+    for background, block, ground, expected in scenes:
         image = np.empty(SHAPES["nhwc"], dtype=np.float32)
         image[...] = background
+        if ground is not None:
+            image[:, 272:400, 128:384, :] = ground
         image[:, 160:256, 192:320, :] = block
         for name, result in [("tflite", runner(image=image)), ("coreml", coreml.predict({"image": image}))]:
             np.testing.assert_allclose(result["boxes"], DEMO_BOXES, atol=1e-6, err_msg=f"{name} demo boxes")
