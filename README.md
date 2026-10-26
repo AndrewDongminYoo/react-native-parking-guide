@@ -802,7 +802,7 @@ device, because the absolute path of the app's data container changes between in
 Device smoke test with the color-gated demo fixture `detector-demo` (no trained weights; see
 `scripts/make-fixture-models.py`). It reports a kickboard at the fixed box `[0.375, 0.3125, 0.625, 0.5]`, which lies
 inside the example guide frame on portrait phones, when that box region is red. It reads the ground from the region
-`[0.25, 0.53125, 0.75, 0.78125]` just below that box, and reports a crosswalk over the whole image when at least 30% of
+`[0.25, 0.5, 0.75, 0.65625]` just below that box, and reports a crosswalk over the whole image when at least 30% of
 that region's pixels are green, a sidewalk block when at least 30% are blue, and a parking zone otherwise:
 
 - Android: `adb push fixtures/detector/detector-demo.tflite /data/local/tmp/`, then

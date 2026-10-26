@@ -27,7 +27,7 @@ with fixed boxes and a score of either 0.9 or 0:
 - row 0: kickboard at [0.375, 0.3125, 0.625, 0.5], 0.9 when the mean of that box region is red: red above 0.45 and
   at least 0.2 above both green and blue;
 - row 1: crosswalk at [0, 0, 1, 1], 0.9 when at least 30% of the pixels in the ground region
-  [0.25, 0.53125, 0.75, 0.78125] below the row-0 box are green: green at least 0.04 above both red and blue (a dark
+  [0.25, 0.5, 0.75, 0.65625] below the row-0 box are green: green at least 0.04 above both red and blue (a dark
   green mouse pad measured about 0.06 on an iPhone);
 - row 2: sidewalk_block at [0, 0, 1, 1], 0.9 when at least 30% of the ground region pixels are blue by the same margin;
 - row 3: parking_zone at [0, 0, 1, 1], 0.9 when neither row 1 nor row 2 is 0.9.
@@ -60,9 +60,9 @@ DEMO_SCORE = 0.9
 # The row-0 box in 512 x 512 input pixels: rows 160..255, columns 192..319.
 DEMO_REGION_BEGIN = [0, 160, 192, 0]
 DEMO_REGION_END = [1, 256, 320, 3]
-# The ground region below the row-0 box: rows 272..399, columns 128..383.
-DEMO_GROUND_BEGIN = [0, 272, 128, 0]
-DEMO_GROUND_END = [1, 400, 384, 3]
+# The ground region below the row-0 box: rows 256..335, columns 128..383.
+DEMO_GROUND_BEGIN = [0, 256, 128, 0]
+DEMO_GROUND_END = [1, 336, 384, 3]
 DEMO_RED_MIN = 0.45
 DEMO_RED_MARGIN = 0.2
 DEMO_PIXEL_MARGIN = 0.04
@@ -259,7 +259,8 @@ def check_demo() -> None:
         image = np.empty(SHAPES["nhwc"], dtype=np.float32)
         image[...] = background
         if ground is not None:
-            image[:, 272:400, 128:384, :] = ground
+            (top, left), (bottom, right) = DEMO_GROUND_BEGIN[1:3], DEMO_GROUND_END[1:3]
+            image[:, top:bottom, left:right, :] = ground
         image[:, 160:256, 192:320, :] = block
         for name, result in [("tflite", runner(image=image)), ("coreml", coreml.predict({"image": image}))]:
             np.testing.assert_allclose(result["boxes"], DEMO_BOXES, atol=1e-6, err_msg=f"{name} demo boxes")
