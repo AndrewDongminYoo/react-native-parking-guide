@@ -151,6 +151,10 @@ a model. See [Photo verification](#photo-verification).
 - `createParkingDetector(VisionCameraProxy, { modelUri }): ParkingDetector<Frame>` creates the `parkingDetector`
   plugin on the JS thread and returns a frame-processor worklet that runs the detector. Throws if the native plugin
   is unavailable. See [Live detector guidance](#live-detector-guidance).
+- `copyDetectorResult(result: DetectorFrameResult): DetectorFrameResult` returns a plain copy of a detector result.
+  `react-native-worklets-core` delivers a worklet value on the JS thread as a host object, on which the `in` operator
+  reports every key and arrays fail `Array.isArray`. `onDetectorResult` copies each result itself; copy a result
+  before reading it in your own code.
 - `screenRectToFrameBox(rect: ScreenRect, view: Size, frame: Size): ModelBox` maps an on-screen rectangle over a
   `resizeMode="cover"` preview to normalized upright frame coordinates.
 - `createGuidanceSession()` and `reduceGuidanceSession(state, event, options)` are the pure session reducer behind
@@ -729,8 +733,10 @@ frame orientation and mirroring), and shares the loaded model with `runDetector`
 memory and calls run one at a time, so frame detection pauses briefly while a photo is analyzed.
 Each call returns `{ boxes, scores, classes, frameWidth, frameHeight, capturedAt }`, where the frame size is upright
 and `capturedAt` is `Date.now()` taken before inference, or `{ error, capturedAt }` with a `runDetector` error code.
-Freshness (`staleAfterMs`) is measured from `capturedAt`, so slow inference cannot make an old frame count as fresh. Call it inside VisionCamera's `runAsync` at a low rate so that inference
-never blocks the camera; `runAsync` drops frames while a call is running.
+Freshness (`staleAfterMs`) is measured from `capturedAt`, so slow inference cannot make an old frame count as fresh.
+The worklet runtime's clock can run ahead of the JS runtime's clock, so a `capturedAt` later than the result's arrival
+counts as the arrival time. Call it inside VisionCamera's `runAsync` at a low rate so that inference never blocks the
+camera; `runAsync` drops frames while a call is running.
 
 Pass each result to `onDetectorResult` on the JS thread and set the hook's `detection` option:
 

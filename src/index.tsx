@@ -12,7 +12,10 @@ export type {
   ParkingDetector,
   ParkingFrameAnalyzer,
 } from './guidance/frameAnalyzer';
-export { DEFAULT_DETECTION_STALE_MS } from './guidance/detection';
+export {
+  DEFAULT_DETECTION_STALE_MS,
+  copyDetectorResult,
+} from './guidance/detection';
 export type {
   DetectionOptions,
   DetectorFrameResult,
