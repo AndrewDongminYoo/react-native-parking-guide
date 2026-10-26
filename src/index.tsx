@@ -12,6 +12,11 @@ export type {
   ParkingDetector,
   ParkingFrameAnalyzer,
 } from './guidance/frameAnalyzer';
+export { createDetectorAsyncRunner } from './guidance/asyncRunner';
+export type {
+  DetectorAsyncRunner,
+  DetectorRunnerWorklets,
+} from './guidance/asyncRunner';
 export {
   DEFAULT_DETECTION_STALE_MS,
   copyDetectorResult,

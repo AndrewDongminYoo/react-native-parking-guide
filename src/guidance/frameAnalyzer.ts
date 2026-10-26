@@ -43,7 +43,7 @@ export function createParkingFrameAnalyzer<Frame>(proxy: {
 }
 
 export interface ParkingDetector<Frame> {
-  /** Invoke only in a VisionCamera frame-processor worklet, preferably inside `runAsync`; it runs the model. */
+  /** Invoke only in a VisionCamera frame-processor worklet, preferably inside `createDetectorAsyncRunner`'s runner; it runs the model. */
   (frame: Frame): DetectorFrameResult;
 }
 

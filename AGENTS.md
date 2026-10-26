@@ -76,7 +76,7 @@ CI (`.github/workflows/ci.yml`) also builds the library and the example app for 
 | `src/types.ts` | Domain types: `VehicleType`, `Verdict`, `RuleId`, `RuleResult`, `GuidanceState`, `ParkingPolicy`, `VerificationResult`. |
 | `src/policy/defaultPolicy.ts` | Default `ParkingPolicy` (weights, severities, `failBelow`, `passThreshold`). |
 | `src/policy/evaluate.ts` | `evaluatePolicy(ruleResults, policy)` — pure, platform-independent. |
-| `src/guidance/` | Pure frame-result reduction (`reducer.ts`), detection merge (`detection.ts`), auto capture (`autoCapture.ts`), screen-to-frame mapping (`screenRect.ts`), the session reducer (`session.ts`), and `useParkingGuidance`; frame and detector results must be delivered on the JS thread. |
+| `src/guidance/` | Pure frame-result reduction (`reducer.ts`), detection merge (`detection.ts`), auto capture (`autoCapture.ts`), screen-to-frame mapping (`screenRect.ts`), the session reducer (`session.ts`), the detector background runner (`asyncRunner.ts`, used instead of VisionCamera's `runAsync`, see #83), and `useParkingGuidance`; frame and detector results must be delivered on the JS thread. |
 | `src/inference/mapping.ts` | `mapModelOutput(output, options)` — pure conversion of `RawModelOutput` to `RuleResult[]`, including the `evidence.proximity` flag; no model execution. |
 | `src/feedback/feedback.ts` | `getParkingFeedback(input, options)` — stable rider-facing feedback keys and default English text. |
 | `src/geofence/geofence.ts` | `evaluateGeofence(location, zones)` — pure `GEOFENCE` `RuleResult` from a caller-supplied location and zones. |
