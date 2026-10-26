@@ -18,6 +18,10 @@ as NCHW gives about 0.467 instead.
 `detector-dynamic.tflite` (NHWC) has a variable detection count: it returns row 1 only when the mean red value is
 above 0.5. It returns two rows for `solid.png` and one row for `dark.png`, RGB (51, 102, 204).
 
+`tall.png` is a 512 x 60000 image with the `solid.png` color, so a pipeline that caps the decoded long side at 4096
+returns the same row-0 score of 0.8 without decoding the full size. `detector-large.tflite` (NHWC) returns 1001 zero
+rows (`boxes` [1001, 4], `scores` and `classes` [1001]), one more than the 1000-detection output limit.
+
 The models do not contain trained weights.
 """
 
@@ -35,6 +39,7 @@ SIZE = 512
 BOXES = np.array([[[0.1, 0.2, 0.6, 0.9], [0.0, 0.0, 0.0, 0.0]]], dtype=np.float32)
 CLASSES = np.array([[0.0, 3.0]], dtype=np.float32)
 SHAPES = {"nhwc": (1, SIZE, SIZE, 3), "nchw": (1, 3, SIZE, SIZE)}
+LARGE_ROWS = 1001
 
 
 def write_png(path: Path, width: int, height: int, rgb: tuple[int, int, int]) -> None:
@@ -98,6 +103,29 @@ def check_dynamic() -> None:
         assert result["scores"].shape == (1, rows) and result["classes"].shape == (1, rows), result
 
 
+def make_large_tflite() -> None:
+    class Fixture(tf.Module):
+        @tf.function(input_signature=[tf.TensorSpec(SHAPES["nhwc"], tf.float32, name="image")])
+        def serve(self, image):
+            zero = tf.reduce_mean(image) * 0.0
+            return {
+                "boxes": tf.zeros([LARGE_ROWS, 4]) + zero,
+                "scores": tf.zeros([LARGE_ROWS]) + zero,
+                "classes": tf.zeros([LARGE_ROWS]) + zero,
+            }
+
+    module = Fixture()
+    converter = tf.lite.TFLiteConverter.from_concrete_functions([module.serve.get_concrete_function()], module)
+    (OUT / "detector-large.tflite").write_bytes(converter.convert())
+
+
+def check_large() -> None:
+    runner = tf.lite.Interpreter(model_path=str(OUT / "detector-large.tflite")).get_signature_runner()
+    result = runner(image=np.zeros(SHAPES["nhwc"], np.float32))
+    assert result["boxes"].shape == (LARGE_ROWS, 4), result["boxes"].shape
+    assert result["scores"].shape == (LARGE_ROWS,) and result["classes"].shape == (LARGE_ROWS,), result
+
+
 def make_coreml(layout: str) -> None:
     shape = SHAPES[layout]
     end = [1, SIZE, SIZE, 1] if layout == "nhwc" else [1, 1, SIZE, SIZE]
@@ -143,12 +171,15 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     write_png(OUT / "solid.png", 640, 480, (204, 102, 51))
     write_png(OUT / "dark.png", 640, 480, (51, 102, 204))
+    write_png(OUT / "tall.png", 512, 60000, (204, 102, 51))
     for layout in SHAPES:
         make_tflite(layout)
         make_coreml(layout)
         self_check(layout)
     make_dynamic_tflite()
     check_dynamic()
+    make_large_tflite()
+    check_large()
     print(f"wrote fixtures to {OUT}")
 
 
