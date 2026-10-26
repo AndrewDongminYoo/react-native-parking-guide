@@ -1,11 +1,14 @@
 package com.parkingguide
 
+import android.graphics.Bitmap
+import android.media.ExifInterface
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
+import kotlin.random.Random
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Test
@@ -22,7 +25,7 @@ class DetectorLimitsTest {
   private val context = InstrumentationRegistry.getInstrumentation().context
   private val streams = mutableMapOf<PhotoSource, () -> InputStream>()
   private val opens = mutableMapOf<PhotoSource, Int>()
-  private val detector = ParkingDetector { source ->
+  private val detector = ParkingDetector(context.cacheDir) { source ->
     opens[source] = (opens[source] ?: 0) + 1
     streams[source]?.invoke() ?: (source as? PhotoSource.File)?.let { FileInputStream(it.path) }
   }
@@ -44,6 +47,7 @@ class DetectorLimitsTest {
     val error = assertThrows(ParkingDetector.Failure::class.java) { detector.run(fixture("solid.png"), model) }
     logPath("endless model", error, stream, DetectorTensors.MAX_MODEL_BYTES)
     assertEquals(ParkingDetector.E_MODEL_LOAD, error.code)
+    assertEquals(DetectorTensors.MAX_MODEL_BYTES + 1L, stream.served)
   }
 
   @Test fun rejectsAnEndlessPhoto() {
@@ -54,12 +58,13 @@ class DetectorLimitsTest {
     }
     logPath("endless photo", error, stream, DetectorTensors.MAX_PHOTO_BYTES)
     assertEquals(ParkingDetector.E_PHOTO_READ, error.code)
+    assertEquals(DetectorTensors.MAX_PHOTO_BYTES + 1L, stream.served)
   }
 
   /**
-   * Logs how many bytes were served before the error, against [maxBytes]. An OutOfMemoryError while the read buffer
-   * grows maps to the same error code as the cap, and it can happen even after [maxBytes] + 1 bytes were served, so
-   * check logcat for "Throwing OutOfMemoryError" to tell the two apart.
+   * Logs how many bytes were served before the error, against [maxBytes]. The cases assert that the cap stopped the
+   * read at exactly [maxBytes] + 1 bytes; an OutOfMemoryError maps to the same error code, so also check logcat for
+   * "Throwing OutOfMemoryError". The endless model case writes up to [maxBytes] bytes to the cache directory.
    */
   private fun logPath(case: String, error: ParkingDetector.Failure, stream: EndlessZeros, maxBytes: Int) {
     Log.i(TAG, "$case: ${error.code} after ${stream.served} of at most ${maxBytes + 1L} bytes")
@@ -77,6 +82,25 @@ class DetectorLimitsTest {
     val output = detector.run(photo, fixture("detector-nhwc.tflite"))
     assertEquals(1, opens[photo])
     assertEquals(0.8, output.getValue("scores")[0], 1e-3)
+  }
+
+  @Test fun readsTheExifOrientationThroughTheChunkedPhoto() {
+    // Noise keeps the JPEG above one DetectorTensors.CHUNK_BYTES chunk, so ExifInterface reads across chunks.
+    val random = Random(0)
+    val pixels = IntArray(512 * 512) { random.nextInt() or (0xff shl 24) }
+    val file = File(context.cacheDir, "rotated.jpg")
+    file.outputStream().use {
+      Bitmap.createBitmap(pixels, 512, 512, Bitmap.Config.ARGB_8888).compress(Bitmap.CompressFormat.JPEG, 100, it)
+    }
+    ExifInterface(file.path).apply {
+      setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_ROTATE_90.toString())
+      saveAttributes()
+    }
+    val bytes = FileInputStream(file).use { DetectorTensors.readAtMost(it, DetectorTensors.MAX_PHOTO_BYTES) }!!
+    assertTrue(bytes.size > DetectorTensors.CHUNK_BYTES)
+    val orientation = ExifInterface(bytes.inputStream())
+      .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+    assertEquals(ExifInterface.ORIENTATION_ROTATE_90, orientation)
   }
 
   @Test fun rejectsAnOutputAboveTheDetectionLimit() {

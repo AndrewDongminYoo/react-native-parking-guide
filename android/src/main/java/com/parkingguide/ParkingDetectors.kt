@@ -13,10 +13,23 @@ import java.util.WeakHashMap
  */
 object ParkingDetectors {
   private val detectors = WeakHashMap<ReactApplicationContext, ParkingDetector>()
+  private var copiesDeleted = false
 
+  /**
+   * Detectors keep `content://` model copies in [ParkingDetector.MODEL_COPY_DIR] inside the app cache directory, so the
+   * cleanup never touches host-app files. The first call in a process deletes the copies that an earlier process left
+   * there; no detector of this process has written one yet.
+   */
   @Synchronized
   fun forContext(context: ReactApplicationContext): ParkingDetector =
-    detectors.getOrPut(context) { ParkingDetector { openSource(context, it) } }
+    detectors.getOrPut(context) {
+      val copyDir = File(context.cacheDir, ParkingDetector.MODEL_COPY_DIR)
+      if (!copiesDeleted) {
+        ParkingDetector.deleteModelCopies(copyDir)
+        copiesDeleted = true
+      }
+      ParkingDetector(copyDir) { openSource(context, it) }
+    }
 
   @Synchronized
   fun close(context: ReactApplicationContext) {

@@ -1,7 +1,7 @@
 package com.parkingguide
 
-import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
@@ -31,15 +31,47 @@ object DetectorTensors {
   fun withinOutputLimit(name: String, count: Int): Boolean =
     count <= (if (name == "boxes") 4 * MAX_DETECTIONS else MAX_DETECTIONS)
 
-  /** Reads [input] to the end, or returns null as soon as it has more than [maxBytes] bytes. */
-  fun readAtMost(input: InputStream, maxBytes: Int): ByteArray? {
-    val out = ByteArrayOutputStream()
-    val buffer = ByteArray(64 * 1024)
+  /** Buffer and chunk size for [readAtMost] and [copyAtMost]. */
+  const val CHUNK_BYTES = 64 * 1024
+
+  /**
+   * Reads [input] to the end into [CHUNK_BYTES] chunks, or returns null as soon as it has more than [maxBytes] bytes.
+   * Reads at most [maxBytes] + 1 bytes, and never copies the bytes it has read.
+   */
+  fun readAtMost(input: InputStream, maxBytes: Int): ChunkedBytes? {
+    val chunks = mutableListOf<ByteArray>()
+    var total = 0L
+    var filled = CHUNK_BYTES
     while (true) {
-      val count = input.read(buffer, 0, minOf(buffer.size, maxBytes + 1 - out.size()))
-      if (count < 0) return out.toByteArray()
-      out.write(buffer, 0, count)
-      if (out.size() > maxBytes) return null
+      if (filled == CHUNK_BYTES) {
+        chunks.add(ByteArray(CHUNK_BYTES))
+        filled = 0
+      }
+      val request = minOf((CHUNK_BYTES - filled).toLong(), maxBytes + 1 - total).toInt()
+      val count = input.read(chunks.last(), filled, request)
+      if (count < 0) {
+        if (filled == 0) chunks.removeAt(chunks.lastIndex)
+        return ChunkedBytes(chunks, total.toInt())
+      }
+      filled += count
+      total += count
+      if (total > maxBytes) return null
+    }
+  }
+
+  /**
+   * Copies [input] to [output] until the end and returns true, or returns false as soon as [input] has more than
+   * [maxBytes] bytes. Reads at most [maxBytes] + 1 bytes and writes at most [maxBytes].
+   */
+  fun copyAtMost(input: InputStream, output: OutputStream, maxBytes: Long): Boolean {
+    val buffer = ByteArray(CHUNK_BYTES)
+    var total = 0L
+    while (true) {
+      val count = input.read(buffer, 0, minOf(buffer.size.toLong(), maxBytes + 1 - total).toInt())
+      if (count < 0) return true
+      total += count
+      if (total > maxBytes) return false
+      output.write(buffer, 0, count)
     }
   }
 
@@ -82,6 +114,58 @@ object DetectorTensors {
       ValueKind.FLOAT32 -> DoubleArray(data.remaining() / 4) { data.getFloat(it * 4).toDouble() }
       ValueKind.INT32 -> DoubleArray(data.remaining() / 4) { data.getInt(it * 4).toDouble() }
       ValueKind.INT64 -> DoubleArray(data.remaining() / 8) { data.getLong(it * 8).toDouble() }
+    }
+  }
+}
+
+/**
+ * [size] bytes held in [DetectorTensors.CHUNK_BYTES] chunks; every chunk but the last is full. [inputStream] reads
+ * them without copying, any number of times.
+ */
+class ChunkedBytes internal constructor(private val chunks: List<ByteArray>, val size: Int) {
+  /** A new stream over all [size] bytes, with mark and reset support. */
+  fun inputStream(): InputStream = object : InputStream() {
+    private var position = 0
+    private var marked = 0
+
+    override fun read(): Int {
+      if (position >= size) return -1
+      val chunk = chunks[position / DetectorTensors.CHUNK_BYTES]
+      return chunk[position++ % DetectorTensors.CHUNK_BYTES].toInt() and 0xff
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+      if (off < 0 || len < 0 || len > b.size - off) throw IndexOutOfBoundsException()
+      if (len == 0) return 0
+      if (position >= size) return -1
+      val count = minOf(len, size - position)
+      var copied = 0
+      while (copied < count) {
+        val offset = position % DetectorTensors.CHUNK_BYTES
+        val part = minOf(count - copied, DetectorTensors.CHUNK_BYTES - offset)
+        System.arraycopy(chunks[position / DetectorTensors.CHUNK_BYTES], offset, b, off + copied, part)
+        copied += part
+        position += part
+      }
+      return count
+    }
+
+    override fun skip(n: Long): Long {
+      val count = n.coerceIn(0L, (size - position).toLong()).toInt()
+      position += count
+      return count.toLong()
+    }
+
+    override fun available(): Int = size - position
+
+    override fun markSupported(): Boolean = true
+
+    override fun mark(readlimit: Int) {
+      marked = position
+    }
+
+    override fun reset() {
+      position = marked
     }
   }
 }
