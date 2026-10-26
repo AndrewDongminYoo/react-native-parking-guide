@@ -324,7 +324,8 @@ Input:
 - One float32 input tensor of shape `[1, 512, 512, 3]` (NHWC) or `[1, 3, 512, 512]` (NCHW), in RGB channel order.
   `runDetector` reads the shape from the model and fills the tensor in that layout on both platforms.
 
-Output: three tensors for N detections. N can be a fixed, padded count.
+Output: three tensors for N detections. N can be a fixed, padded count, and is at most 1000: `runDetector` and the
+`parkingDetector` plugins reject a larger output with `E_MODEL_CONTRACT` before copying it.
 
 | Tensor | Shape | Values |
 | --- | --- | --- |
@@ -382,10 +383,16 @@ const ruleResults = mapModelOutput(decodeDetectorOutput(tensors), { vehicleType:
 
 - `photoUri` accepts the same forms as `getFileSha256` (see [Photo verification](#photo-verification)): an absolute
   path or a `file:///` URI, and on Android also a `content://` URI. The photo is decoded, rotated by its EXIF
-  orientation, and stretched to 512 × 512.
+  orientation, and stretched to 512 × 512. A photo larger than 64 MiB is rejected, and the decoded image has at most
+  4096 pixels on its long side. On Android the photo is read once, so its size, pixels, and orientation come from the
+  same bytes.
 - `modelUri` accepts the same forms. On Android it is a LiteRT/TFLite flatbuffer (`.tflite`) with exactly one
-  signature. On iOS it is a compiled `.mlmodelc` directory, or an `.mlmodel` or `.mlpackage` that is compiled on the
-  first call; the path extension selects the form.
+  signature; a `content://` model is read into memory and rejected above 256 MiB (a smaller one can still fail with
+  `E_MODEL_LOAD` when the app runs out of memory). On iOS it is a compiled `.mlmodelc`
+  directory, or an `.mlmodel` or `.mlpackage` that is compiled on the first call; the path extension selects the form.
+- Copy a `content://` URI that another app supplied (for example a share intent) to the app's own storage, with a
+  size and time limit, before passing it. The limits above stop an oversized or endless stream, but not a provider
+  that blocks without sending data, and that call holds the single background thread described below.
 - Each platform caches the last loaded model and reuses it while `modelUri` resolves to the same file (an absolute
   path and its `file:///` form are the same model; on Android a `content://` URI is compared as its exact string).
   A different `modelUri` releases the cached model first; module invalidation (for example a JS reload) releases it
@@ -398,9 +405,9 @@ It rejects with these codes. Messages do not contain file paths.
 | Code | Reason |
 | --- | --- |
 | `E_INVALID_URI` | `photoUri` or `modelUri` is not one of the accepted forms. |
-| `E_MODEL_LOAD` | The model file cannot be read, compiled, or loaded, or its iOS extension is not `.mlmodelc`, `.mlmodel`, or `.mlpackage`. |
-| `E_MODEL_CONTRACT` | The model does not have exactly one float32 input of shape `[1, 512, 512, 3]` or `[1, 3, 512, 512]`, or lacks a `boxes`, `scores`, or `classes` output (Android: of type float32, int32, or int64), or (Android) does not have exactly one signature. |
-| `E_PHOTO_READ` | The photo cannot be opened or decoded. |
+| `E_MODEL_LOAD` | The model file cannot be read, compiled, or loaded, its iOS extension is not `.mlmodelc`, `.mlmodel`, or `.mlpackage`, or (Android) a `content://` model is larger than 256 MiB. |
+| `E_MODEL_CONTRACT` | The model does not have exactly one float32 input of shape `[1, 512, 512, 3]` or `[1, 3, 512, 512]`, or lacks a `boxes`, `scores`, or `classes` output (Android: of type float32, int32, or int64), or (Android) does not have exactly one signature, or an output holds more than 1000 detections (checked after inference). |
+| `E_PHOTO_READ` | The photo cannot be opened or decoded, or is larger than 64 MiB. |
 | `E_INFERENCE` | The inference call fails. |
 
 On Android, the package depends on `com.google.ai.edge.litert:litert:1.4.2` (the LiteRT Interpreter API), which adds

@@ -14,6 +14,10 @@ FOUNDATION_EXPORT NSURL *_Nullable ParkingGuideFileURL(NSString *uri);
 /// `UIImageOrientation` values are read as their unmirrored base; `mirrored` selects the mirrored result.
 FOUNDATION_EXPORT CGImagePropertyOrientation ParkingGuideUprightOrientation(NSInteger frameOrientation, BOOL mirrored);
 
+/// Whether an output tensor named `name` with `count` elements holds at most 1000 detections (`boxes` 4 per detection).
+/// Same rule as `DetectorTensors.withinOutputLimit` on Android.
+FOUNDATION_EXPORT BOOL ParkingGuideWithinOutputLimit(NSString *name, NSInteger count);
+
 /// Error codes shared with Android `ParkingDetector`.
 extern NSString *const ParkingGuideDetectorErrorModelLoad;
 extern NSString *const ParkingGuideDetectorErrorModelContract;

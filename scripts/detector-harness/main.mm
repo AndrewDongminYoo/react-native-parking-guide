@@ -112,6 +112,10 @@ int main(int argc, const char *argv[])
       printf("%s\n", json.UTF8String);
       return 0;
     }
+    if (argc == 4 && strcmp(argv[1], "--output-limit") == 0) {
+      printf("%s\n", ParkingGuideWithinOutputLimit(@(argv[2]), atol(argv[3])) ? "within" : "over");
+      return 0;
+    }
     if (argc == 3 && strcmp(argv[1], "--probe") == 0) {
       CVPixelBufferRef buffer = ParkingGuideTwoToneBuffer();
       std::vector<uint8_t> rgbx;

@@ -42,6 +42,9 @@ CGImagePropertyOrientation ParkingGuideUprightOrientation(NSInteger frameOrienta
 }
 
 static const NSInteger kInputSize = 512;
+// Same limits as `DetectorTensors` on Android.
+static const NSInteger kMaxDetections = 1000;
+static const unsigned long long kMaxPhotoBytes = 64ull * 1024 * 1024;
 static NSArray<NSString *> *const kOutputNames = @[ @"boxes", @"scores", @"classes" ];
 
 @implementation ParkingGuideDetector {
@@ -125,6 +128,11 @@ static BOOL ParkingGuideIsNHWC(NSArray<NSNumber *> *shape, BOOL *valid)
 /// Decodes the photo, applies its EXIF orientation, and stretches it to 512 x 512 RGB. Returns NO on failure.
 static BOOL ParkingGuideReadPixels(NSURL *photoURL, std::vector<uint8_t> &rgbx)
 {
+  NSNumber *fileSize = nil;
+  if (![photoURL getResourceValue:&fileSize forKey:NSURLFileSizeKey error:nil] || fileSize == nil ||
+      fileSize.unsignedLongLongValue > kMaxPhotoBytes) {
+    return NO;
+  }
   CGImageSourceRef source = CGImageSourceCreateWithURL((__bridge CFURLRef)photoURL, NULL);
   if (source == NULL) {
     return NO;
@@ -162,6 +170,18 @@ static BOOL ParkingGuideReadPixels(NSURL *photoURL, std::vector<uint8_t> &rgbx)
   CGContextRelease(context);
   CGImageRelease(image);
   return YES;
+}
+
+BOOL ParkingGuideWithinOutputLimit(NSString *name, NSInteger count)
+{
+  return count <= ([name isEqualToString:@"boxes"] ? 4 * kMaxDetections : kMaxDetections);
+}
+
+static NSString *ParkingGuideContractMessage(void)
+{
+  return [NSString stringWithFormat:@"The model must have one float32 input of shape [1, 512, 512, 3] or [1, 3, 512, 512] "
+                                    @"and multi-array outputs named boxes, scores, and classes for at most %ld detections.",
+                                    (long)kMaxDetections];
 }
 
 static NSArray<NSNumber *> *ParkingGuideFlatten(MLMultiArray *array)
@@ -270,8 +290,7 @@ static NSArray<NSNumber *> *ParkingGuideFlatten(MLMultiArray *array)
   if (inputs.count != 1 || input.type != MLFeatureTypeMultiArray ||
       constraint.dataType != MLMultiArrayDataTypeFloat32 || !validShape || !hasOutputs) {
     *errorCode = ParkingGuideDetectorErrorModelContract;
-    *message = @"The model must have one float32 input of shape [1, 512, 512, 3] or [1, 3, 512, 512] and "
-               @"multi-array outputs named boxes, scores, and classes.";
+    *message = ParkingGuideContractMessage();
     return nil;
   }
 
@@ -315,7 +334,7 @@ static NSArray<NSNumber *> *ParkingGuideFlatten(MLMultiArray *array)
     return nil;
   }
 
-  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *output = [NSMutableDictionary dictionary];
+  NSMutableDictionary<NSString *, MLMultiArray *> *arrays = [NSMutableDictionary dictionary];
   for (NSString *name in kOutputNames) {
     MLMultiArray *value = [result featureValueForName:name].multiArrayValue;
     if (value == nil) {
@@ -323,7 +342,17 @@ static NSArray<NSNumber *> *ParkingGuideFlatten(MLMultiArray *array)
       *message = @"The CoreML prediction returned no multi-array for boxes, scores, or classes.";
       return nil;
     }
-    output[name] = ParkingGuideFlatten(value);
+    // Check every count before boxing any value, so an oversized output is rejected without copying it.
+    if (!ParkingGuideWithinOutputLimit(name, value.count)) {
+      *errorCode = ParkingGuideDetectorErrorModelContract;
+      *message = ParkingGuideContractMessage();
+      return nil;
+    }
+    arrays[name] = value;
+  }
+  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *output = [NSMutableDictionary dictionary];
+  for (NSString *name in kOutputNames) {
+    output[name] = ParkingGuideFlatten(arrays[name]);
   }
   return output;
 }
