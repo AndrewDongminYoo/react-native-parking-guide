@@ -4,11 +4,11 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.math.min
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 
@@ -62,12 +62,19 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
       // No preallocated outputs: a model may return a different detection count per photo, so each output is read
       // after inference with the shape it resolved to.
       interpreter.runSignature(mapOf<String, Any>(inputName to inputBuffer), mutableMapOf(), key)
-      return DetectorTensors.OUTPUT_NAMES.associateWith {
-        val buffer = interpreter.getOutputTensorFromSignature(it, key).asReadOnlyBuffer()
-        DetectorTensors.readValues(buffer, kinds.getValue(it)!!)
-      }
     } catch (e: Exception) {
-      throw Failure(E_INFERENCE, "The LiteRT inference failed.")
+      throw inferenceFailure()
+    }
+    val outputs = DetectorTensors.OUTPUT_NAMES.associateWith { interpreter.getOutputTensorFromSignature(it, key) }
+    if (outputs.any { (name, tensor) -> !DetectorTensors.withinOutputLimit(name, tensor.numElements()) }) {
+      throw contractFailure()
+    }
+    return try {
+      outputs.mapValues { (name, tensor) -> DetectorTensors.readValues(tensor.asReadOnlyBuffer(), kinds.getValue(name)!!) }
+    } catch (e: Exception) {
+      throw inferenceFailure()
+    } catch (e: OutOfMemoryError) {
+      throw inferenceFailure()
     }
   }
 
@@ -85,7 +92,8 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
       when (model) {
         is PhotoSource.File -> Interpreter(File(model.path))
         is PhotoSource.Content -> {
-          val bytes = open(model)?.use { it.readBytes() } ?: throw Failure(E_MODEL_LOAD, MODEL_LOAD_MESSAGE)
+          val bytes = open(model)?.use { DetectorTensors.readAtMost(it, DetectorTensors.MAX_MODEL_BYTES) }
+            ?: throw Failure(E_MODEL_LOAD, MODEL_LOAD_MESSAGE)
           Interpreter(ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); rewind() })
         }
         PhotoSource.Invalid -> throw Failure(E_MODEL_LOAD, MODEL_LOAD_MESSAGE)
@@ -94,28 +102,32 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
       throw e
     } catch (e: Exception) {
       throw Failure(E_MODEL_LOAD, MODEL_LOAD_MESSAGE)
+    } catch (e: OutOfMemoryError) {
+      throw Failure(E_MODEL_LOAD, MODEL_LOAD_MESSAGE)
     }
     interpreter = loaded
     modelKey = model
     return loaded
   }
 
-  /** Decodes the photo, applies its EXIF orientation, and stretches it to 512 x 512 ARGB pixels. */
+  /**
+   * Reads the photo once (at most [DetectorTensors.MAX_PHOTO_BYTES]), so its size, pixels, and EXIF orientation come
+   * from the same bytes; decodes it with the long side at most [DetectorTensors.MAX_DECODED_SIDE], applies the
+   * orientation, and stretches it to 512 x 512 ARGB pixels.
+   */
   private fun readPixels(photo: PhotoSource): IntArray? = try {
+    val bytes = open(photo)?.use { DetectorTensors.readAtMost(it, DetectorTensors.MAX_PHOTO_BYTES) }
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    open(photo)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+    bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size, bounds) }
+    if (bytes == null || bounds.outWidth <= 0 || bounds.outHeight <= 0) {
       null
     } else {
-      // Keep at least 512 pixels on the short side before the stretch.
-      var sample = 1
-      while (min(bounds.outWidth, bounds.outHeight) / (sample * 2) >= DetectorTensors.INPUT_SIZE) sample *= 2
       val options = BitmapFactory.Options().apply {
-        inSampleSize = sample
+        inSampleSize = DetectorTensors.sampleSize(bounds.outWidth, bounds.outHeight)
         inPreferredConfig = Bitmap.Config.ARGB_8888
       }
-      open(photo)?.use { BitmapFactory.decodeStream(it, null, options) }?.let { decoded ->
-        val matrix = orientationMatrix(photo)
+      BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.let { decoded ->
+        val matrix = orientationMatrix(bytes)
         val oriented = if (matrix.isIdentity) {
           decoded
         } else {
@@ -128,13 +140,14 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
     }
   } catch (e: Exception) {
     null
+  } catch (e: OutOfMemoryError) {
+    null
   }
 
-  private fun orientationMatrix(photo: PhotoSource): Matrix {
+  private fun orientationMatrix(bytes: ByteArray): Matrix {
     val orientation = try {
-      open(photo)?.use {
-        ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-      } ?: ExifInterface.ORIENTATION_NORMAL
+      ExifInterface(ByteArrayInputStream(bytes))
+        .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
     } catch (e: Exception) {
       ExifInterface.ORIENTATION_NORMAL
     }
@@ -151,10 +164,12 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
     }
   }
 
+  private fun inferenceFailure() = Failure(E_INFERENCE, "The LiteRT inference failed.")
+
   private fun contractFailure() = Failure(
     E_MODEL_CONTRACT,
     "The model must have one signature with one float32 input of shape [1, 512, 512, 3] or [1, 3, 512, 512] " +
-      "and outputs named boxes, scores, and classes."
+      "and outputs named boxes, scores, and classes for at most ${DetectorTensors.MAX_DETECTIONS} detections."
   )
 
   companion object {

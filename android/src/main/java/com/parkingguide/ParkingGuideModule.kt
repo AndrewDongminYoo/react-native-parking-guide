@@ -62,7 +62,8 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
           promise.resolve(map)
         } catch (e: ParkingDetector.Failure) {
           promise.reject(e.code, e.message)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+          // Includes OutOfMemoryError, so the promise settles instead of the error reaching the thread's handler.
           promise.reject(ParkingDetector.E_INFERENCE, "The LiteRT inference failed.")
         }
       }

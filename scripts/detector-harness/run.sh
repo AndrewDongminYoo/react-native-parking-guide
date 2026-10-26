@@ -94,6 +94,30 @@ else
   status=1
 fi
 
+# The output limit: at most 1000 detections, so 4000 box values and 1000 scores or classes. This checks the predicate
+# that runWithModelURL applies before copying; no fixture model produces an output that large.
+for case in "boxes 4000 within" "boxes 4001 over" "scores 1000 within" "scores 1001 over" "classes 1001 over"; do
+  set -- $case
+  limit=$("$out/harness" --output-limit "$1" "$2")
+  if [ "$limit" = "$3" ]; then
+    echo "PASS output limit $1 $2"
+  else
+    echo "FAIL output limit $1 $2: got '$limit', want '$3'"
+    status=1
+  fi
+done
+
+# A photo file above the 64 MiB read limit must fail with E_PHOTO_READ before it is decoded. The sparse file starts
+# with the fixture PNG, so only its size differs from a photo that decodes.
+cp "$root/fixtures/detector/solid.png" "$out/large.png"
+truncate -s 67108865 "$out/large.png"
+if "$out/harness" "$out/large.png" "$root/fixtures/detector/detector-nhwc.mlpackage" | grep -q E_PHOTO_READ; then
+  echo "PASS photo above the size limit"
+else
+  echo "FAIL photo above the size limit"
+  status=1
+fi
+
 # A model that does not follow the contract (a TFLite file) must fail with E_MODEL_LOAD, not crash.
 if "$out/harness" "$root/fixtures/detector/solid.png" "$root/fixtures/detector/detector-nhwc.tflite" | grep -q E_MODEL_LOAD; then
   echo "PASS unsupported model file"

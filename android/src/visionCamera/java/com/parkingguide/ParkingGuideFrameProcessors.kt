@@ -126,7 +126,8 @@ private class ParkingDetectorFrameProcessor(
       )
     } catch (e: ParkingDetector.Failure) {
       mapOf("error" to e.code)
-    } catch (e: Exception) {
+    } catch (e: Throwable) {
+      // Includes OutOfMemoryError, which would otherwise leave the frame processor thread.
       mapOf("error" to ParkingDetector.E_INFERENCE)
     }
   }
