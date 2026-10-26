@@ -22,6 +22,14 @@ above 0.5. It returns two rows for `solid.png` and one row for `dark.png`, RGB (
 returns the same row-0 score of 0.8 without decoding the full size. `detector-large.tflite` (NHWC) returns 1001 zero
 rows (`boxes` [1001, 4], `scores` and `classes` [1001]), one more than the 1000-detection output limit.
 
+`detector-demo.{tflite,mlpackage}` (NHWC) is a color-gated demo for the example app on a device. It returns four rows
+with fixed boxes and a score of either 0.9 or 0:
+- row 0: kickboard at [0.375, 0.3125, 0.625, 0.5], 0.9 when the mean of that box region is red: red above 0.45 and
+  at least 0.2 above both green and blue;
+- row 1: crosswalk at [0, 0, 1, 1], 0.9 when the scene mean is green: green at least 0.1 above both red and blue;
+- row 2: sidewalk_block at [0, 0, 1, 1], 0.9 when the scene mean is blue by the same margin;
+- row 3: parking_zone at [0, 0, 1, 1], 0.9 when neither row 1 nor row 2 is 0.9.
+
 The models do not contain trained weights.
 """
 
@@ -40,6 +48,19 @@ BOXES = np.array([[[0.1, 0.2, 0.6, 0.9], [0.0, 0.0, 0.0, 0.0]]], dtype=np.float3
 CLASSES = np.array([[0.0, 3.0]], dtype=np.float32)
 SHAPES = {"nhwc": (1, SIZE, SIZE, 3), "nchw": (1, 3, SIZE, SIZE)}
 LARGE_ROWS = 1001
+DEMO_BOXES = np.array(
+    [[[0.375, 0.3125, 0.625, 0.5], [0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 1.0, 1.0]]],
+    dtype=np.float32,
+)
+# kickboard, crosswalk, sidewalk_block, parking_zone (indices into DETECTOR_CLASSES).
+DEMO_CLASSES = np.array([[0.0, 4.0, 6.0, 7.0]], dtype=np.float32)
+DEMO_SCORE = 0.9
+# The row-0 box in 512 x 512 input pixels: rows 160..255, columns 192..319.
+DEMO_REGION_BEGIN = [0, 160, 192, 0]
+DEMO_REGION_END = [1, 256, 320, 3]
+DEMO_RED_MIN = 0.45
+DEMO_RED_MARGIN = 0.2
+DEMO_SCENE_MARGIN = 0.1
 
 
 def write_png(path: Path, width: int, height: int, rgb: tuple[int, int, int]) -> None:
@@ -126,6 +147,95 @@ def check_large() -> None:
     assert result["scores"].shape == (LARGE_ROWS,) and result["classes"].shape == (LARGE_ROWS,), result
 
 
+def make_demo_tflite() -> None:
+    def dominance(means, channel):
+        others = [means[:, c] for c in range(3) if c != channel]
+        return means[:, channel] - tf.maximum(others[0], others[1])
+
+    class Fixture(tf.Module):
+        @tf.function(input_signature=[tf.TensorSpec(SHAPES["nhwc"], tf.float32, name="image")])
+        def serve(self, image):
+            (top, left), (bottom, right) = DEMO_REGION_BEGIN[1:3], DEMO_REGION_END[1:3]
+            region = tf.reduce_mean(image[:, top:bottom, left:right, :], axis=[1, 2])
+            scene = tf.reduce_mean(image, axis=[1, 2])
+            vehicle = tf.logical_and(region[:, 0] > DEMO_RED_MIN, dominance(region, 0) > DEMO_RED_MARGIN)
+            green = dominance(scene, 1) > DEMO_SCENE_MARGIN
+            blue = dominance(scene, 2) > DEMO_SCENE_MARGIN
+            parking = tf.logical_not(tf.logical_or(green, blue))
+            scores = DEMO_SCORE * tf.cast(tf.stack([vehicle, green, blue, parking], axis=1), tf.float32)
+            zero = tf.reduce_sum(scores) * 0.0
+            return {
+                "boxes": tf.constant(DEMO_BOXES) + zero,
+                "scores": scores,
+                "classes": tf.constant(DEMO_CLASSES) + zero,
+            }
+
+    module = Fixture()
+    converter = tf.lite.TFLiteConverter.from_concrete_functions([module.serve.get_concrete_function()], module)
+    (OUT / "detector-demo.tflite").write_bytes(converter.convert())
+
+
+def make_demo_coreml() -> None:
+    def channel(means, index):
+        return mb.slice_by_index(x=means, begin=[0, index], end=[1, index + 1])
+
+    def dominance(means, index):
+        others = [channel(means, c) for c in range(3) if c != index]
+        return mb.sub(x=channel(means, index), y=mb.maximum(x=others[0], y=others[1]))
+
+    def flag(condition):
+        return mb.cast(x=condition, dtype="fp32")
+
+    @mb.program(input_specs=[mb.TensorSpec(shape=SHAPES["nhwc"])], opset_version=ct.target.iOS15)
+    def program(image):
+        region = mb.slice_by_index(x=image, begin=DEMO_REGION_BEGIN, end=DEMO_REGION_END)
+        region = mb.reduce_mean(x=region, axes=[1, 2], keep_dims=False)
+        scene = mb.reduce_mean(x=image, axes=[1, 2], keep_dims=False)
+        vehicle = mb.logical_and(
+            x=mb.greater(x=channel(region, 0), y=DEMO_RED_MIN),
+            y=mb.greater(x=dominance(region, 0), y=DEMO_RED_MARGIN),
+        )
+        green = mb.greater(x=dominance(scene, 1), y=DEMO_SCENE_MARGIN)
+        blue = mb.greater(x=dominance(scene, 2), y=DEMO_SCENE_MARGIN)
+        parking = mb.logical_not(x=mb.logical_or(x=green, y=blue))
+        flags = mb.concat(values=[flag(vehicle), flag(green), flag(blue), flag(parking)], axis=1)
+        scores = mb.mul(x=flags, y=DEMO_SCORE, name="scores")
+        zero = mb.mul(x=mb.reduce_sum(x=scores, axes=[0, 1], keep_dims=True), y=0.0)
+        boxes = mb.add(x=DEMO_BOXES, y=mb.reshape(x=zero, shape=[1, 1, 1]), name="boxes")
+        classes = mb.add(x=DEMO_CLASSES, y=zero, name="classes")
+        return boxes, scores, classes
+
+    model = ct.convert(
+        program,
+        convert_to="mlprogram",
+        minimum_deployment_target=ct.target.iOS15,
+        compute_precision=ct.precision.FLOAT32,
+    )
+    model.save(str(OUT / "detector-demo.mlpackage"))
+
+
+def check_demo() -> None:
+    """Run both demo models on synthetic scenes with a red block in the row-0 box and assert the documented scores."""
+    red = [0.8, 0.1, 0.1]
+    scenes = [
+        ([0.5, 0.5, 0.5], red, [0.9, 0.0, 0.0, 0.9]),
+        ([0.2, 0.6, 0.2], red, [0.9, 0.9, 0.0, 0.0]),
+        ([0.2, 0.2, 0.6], red, [0.9, 0.0, 0.9, 0.0]),
+        ([0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [0.0, 0.0, 0.0, 0.9]),
+        ([0.5, 0.5, 0.5], [0.4, 0.1, 0.1], [0.0, 0.0, 0.0, 0.9]),
+    ]
+    runner = tf.lite.Interpreter(model_path=str(OUT / "detector-demo.tflite")).get_signature_runner()
+    coreml = ct.models.MLModel(str(OUT / "detector-demo.mlpackage"))
+    for background, block, expected in scenes:
+        image = np.empty(SHAPES["nhwc"], dtype=np.float32)
+        image[...] = background
+        image[:, 160:256, 192:320, :] = block
+        for name, result in [("tflite", runner(image=image)), ("coreml", coreml.predict({"image": image}))]:
+            np.testing.assert_allclose(result["boxes"], DEMO_BOXES, atol=1e-6, err_msg=f"{name} demo boxes")
+            np.testing.assert_allclose(result["scores"], [expected], atol=1e-6, err_msg=f"{name} demo {background}")
+            np.testing.assert_allclose(result["classes"], DEMO_CLASSES, atol=1e-6, err_msg=f"{name} demo classes")
+
+
 def make_coreml(layout: str) -> None:
     shape = SHAPES[layout]
     end = [1, SIZE, SIZE, 1] if layout == "nhwc" else [1, 1, SIZE, SIZE]
@@ -180,6 +290,9 @@ def main() -> None:
     check_dynamic()
     make_large_tflite()
     check_large()
+    make_demo_tflite()
+    make_demo_coreml()
+    check_demo()
     print(f"wrote fixtures to {OUT}")
 
 
