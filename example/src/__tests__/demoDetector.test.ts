@@ -176,4 +176,15 @@ describe('demo detector box in the example guide frame', () => {
       ).toEqual([]);
     }
   );
+
+  it.each(['bicycle', 'ebike', 'motorcycle'] as const)(
+    'finds no vehicle when the rider chose %s, because the demo reports a kickboard',
+    (vehicleType) => {
+      expect(
+        mapGuidanceIssues(decodeDetectorOutput(demoOutput(true, 'neutral')), {
+          vehicleType,
+        })
+      ).toEqual(['NO_VEHICLE']);
+    }
+  );
 });

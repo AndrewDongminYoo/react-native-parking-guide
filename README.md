@@ -804,6 +804,8 @@ image when the scene is mostly green, a sidewalk block when the scene is mostly 
   parkingguide.example --source fixtures/detector/detector-demo.mlpackage --destination
   Documents/detector-demo.mlpackage`, and set `DETECTOR_MODEL` to `'detector-demo.mlpackage'`. The copy stays in the
   data container when a new build is installed over the app.
+- Choose **Kickboard** on the home screen: the demo reports only a kickboard, so for any other vehicle guidance
+  reports `NO_VEHICLE`.
 - Expected: with a red object in the middle of the guide frame, guidance reports no issue and the shutter is enabled;
   without it, guidance reports `NO_VEHICLE` and the shutter is disabled. The result screen shows `PASS` on a neutral
   background, `WARN` (sidewalk block and parking zone) on a mostly blue background, and `FAIL` (crosswalk and parking
