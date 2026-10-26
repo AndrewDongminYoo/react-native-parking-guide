@@ -802,8 +802,8 @@ device, because the absolute path of the app's data container changes between in
 Device smoke test with the color-gated demo fixture `detector-demo` (no trained weights; see
 `scripts/make-fixture-models.py`). It reports a kickboard at the fixed box `[0.375, 0.3125, 0.625, 0.5]`, which lies
 inside the example guide frame on portrait phones, when that box region is red. It reads the ground from the region
-`[0.25, 0.53125, 0.75, 0.78125]` just below that box, and reports a crosswalk over the whole image when that region is
-green, a sidewalk block when it is blue, and a parking zone otherwise:
+`[0.25, 0.53125, 0.75, 0.78125]` just below that box, and reports a crosswalk over the whole image when at least 30% of
+that region's pixels are green, a sidewalk block when at least 30% are blue, and a parking zone otherwise:
 
 - Android: `adb push fixtures/detector/detector-demo.tflite /data/local/tmp/`, then
   `adb shell run-as parkingguide.example cp /data/local/tmp/detector-demo.tflite files/`, and set `DETECTOR_MODEL`
@@ -818,7 +818,7 @@ green, a sidewalk block when it is blue, and a parking zone otherwise:
 - Expected: with a red object in the middle of the guide frame, guidance reports no issue and the shutter is enabled;
   without it, guidance reports `NO_VEHICLE` and the shutter is disabled. The result screen shows `PASS` on a neutral
   surface, `WARN` (sidewalk block and parking zone) on a blue mat, and `FAIL` (crosswalk and parking zone) on a green
-  mat. The mat must fill the image area just below the object. A missing model file yields `detectorError` and a
+  mat. The mat must cover the image area just below the object. A missing model file yields `detectorError` and a
   disabled shutter without the "no vehicle" text.
 
 The fixture model's score is rotation-invariant, so the iOS harness checks rotation separately: it maps each VisionCamera

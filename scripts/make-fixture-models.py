@@ -26,9 +26,10 @@ rows (`boxes` [1001, 4], `scores` and `classes` [1001]), one more than the 1000-
 with fixed boxes and a score of either 0.9 or 0:
 - row 0: kickboard at [0.375, 0.3125, 0.625, 0.5], 0.9 when the mean of that box region is red: red above 0.45 and
   at least 0.2 above both green and blue;
-- row 1: crosswalk at [0, 0, 1, 1], 0.9 when the mean of the ground region [0.25, 0.53125, 0.75, 0.78125] below the
-  row-0 box is green: green at least 0.1 above both red and blue;
-- row 2: sidewalk_block at [0, 0, 1, 1], 0.9 when the ground region mean is blue by the same margin;
+- row 1: crosswalk at [0, 0, 1, 1], 0.9 when at least 30% of the pixels in the ground region
+  [0.25, 0.53125, 0.75, 0.78125] below the row-0 box are green: green at least 0.04 above both red and blue (a dark
+  green mouse pad measured about 0.06 on an iPhone);
+- row 2: sidewalk_block at [0, 0, 1, 1], 0.9 when at least 30% of the ground region pixels are blue by the same margin;
 - row 3: parking_zone at [0, 0, 1, 1], 0.9 when neither row 1 nor row 2 is 0.9.
 
 The models do not contain trained weights.
@@ -64,7 +65,8 @@ DEMO_GROUND_BEGIN = [0, 272, 128, 0]
 DEMO_GROUND_END = [1, 400, 384, 3]
 DEMO_RED_MIN = 0.45
 DEMO_RED_MARGIN = 0.2
-DEMO_SCENE_MARGIN = 0.1
+DEMO_PIXEL_MARGIN = 0.04
+DEMO_GROUND_SHARE = 0.3
 
 
 def write_png(path: Path, width: int, height: int, rgb: tuple[int, int, int]) -> None:
@@ -156,16 +158,21 @@ def make_demo_tflite() -> None:
         others = [means[:, c] for c in range(3) if c != channel]
         return means[:, channel] - tf.maximum(others[0], others[1])
 
+    def share(pixels, channel):
+        others = [pixels[..., c] for c in range(3) if c != channel]
+        lead = pixels[..., channel] - tf.maximum(others[0], others[1]) > DEMO_PIXEL_MARGIN
+        return tf.reduce_mean(tf.cast(lead, tf.float32), axis=[1, 2])
+
     class Fixture(tf.Module):
         @tf.function(input_signature=[tf.TensorSpec(SHAPES["nhwc"], tf.float32, name="image")])
         def serve(self, image):
             (top, left), (bottom, right) = DEMO_REGION_BEGIN[1:3], DEMO_REGION_END[1:3]
             region = tf.reduce_mean(image[:, top:bottom, left:right, :], axis=[1, 2])
             (top, left), (bottom, right) = DEMO_GROUND_BEGIN[1:3], DEMO_GROUND_END[1:3]
-            scene = tf.reduce_mean(image[:, top:bottom, left:right, :], axis=[1, 2])
+            ground = image[:, top:bottom, left:right, :]
             vehicle = tf.logical_and(region[:, 0] > DEMO_RED_MIN, dominance(region, 0) > DEMO_RED_MARGIN)
-            green = dominance(scene, 1) > DEMO_SCENE_MARGIN
-            blue = dominance(scene, 2) > DEMO_SCENE_MARGIN
+            green = share(ground, 1) > DEMO_GROUND_SHARE
+            blue = share(ground, 2) > DEMO_GROUND_SHARE
             parking = tf.logical_not(tf.logical_or(green, blue))
             scores = DEMO_SCORE * tf.cast(tf.stack([vehicle, green, blue, parking], axis=1), tf.float32)
             zero = tf.reduce_sum(scores) * 0.0
@@ -191,18 +198,27 @@ def make_demo_coreml() -> None:
     def flag(condition):
         return mb.cast(x=condition, dtype="fp32")
 
+    def share(pixels, index):
+        end = [DEMO_GROUND_END[0], DEMO_GROUND_END[1] - DEMO_GROUND_BEGIN[1], DEMO_GROUND_END[2] - DEMO_GROUND_BEGIN[2]]
+
+        def plane(c):
+            return mb.slice_by_index(x=pixels, begin=[0, 0, 0, c], end=[*end, c + 1])
+
+        others = [plane(c) for c in range(3) if c != index]
+        lead = mb.greater(x=mb.sub(x=plane(index), y=mb.maximum(x=others[0], y=others[1])), y=DEMO_PIXEL_MARGIN)
+        return mb.reshape(x=mb.reduce_mean(x=flag(lead), axes=[1, 2, 3], keep_dims=False), shape=[1, 1])
+
     @mb.program(input_specs=[mb.TensorSpec(shape=SHAPES["nhwc"])], opset_version=ct.target.iOS15)
     def program(image):
         region = mb.slice_by_index(x=image, begin=DEMO_REGION_BEGIN, end=DEMO_REGION_END)
         region = mb.reduce_mean(x=region, axes=[1, 2], keep_dims=False)
-        scene = mb.slice_by_index(x=image, begin=DEMO_GROUND_BEGIN, end=DEMO_GROUND_END)
-        scene = mb.reduce_mean(x=scene, axes=[1, 2], keep_dims=False)
+        ground = mb.slice_by_index(x=image, begin=DEMO_GROUND_BEGIN, end=DEMO_GROUND_END)
         vehicle = mb.logical_and(
             x=mb.greater(x=channel(region, 0), y=DEMO_RED_MIN),
             y=mb.greater(x=dominance(region, 0), y=DEMO_RED_MARGIN),
         )
-        green = mb.greater(x=dominance(scene, 1), y=DEMO_SCENE_MARGIN)
-        blue = mb.greater(x=dominance(scene, 2), y=DEMO_SCENE_MARGIN)
+        green = mb.greater(x=share(ground, 1), y=DEMO_GROUND_SHARE)
+        blue = mb.greater(x=share(ground, 2), y=DEMO_GROUND_SHARE)
         parking = mb.logical_not(x=mb.logical_or(x=green, y=blue))
         flags = mb.concat(values=[flag(vehicle), flag(green), flag(blue), flag(parking)], axis=1)
         scores = mb.mul(x=flags, y=DEMO_SCORE, name="scores")
@@ -232,6 +248,10 @@ def check_demo() -> None:
         (gray, [0.4, 0.1, 0.1], None, [0.0, 0.0, 0.0, 0.9]),
         # A green mat under the vehicle on a neutral scene.
         (gray, red, green, [0.9, 0.9, 0.0, 0.0]),
+        # The dark green mouse pad color measured on an iPhone screenshot.
+        (gray, red, [0.227, 0.34, 0.279], [0.9, 0.9, 0.0, 0.0]),
+        # A slightly green-tinted white desk stays a parking zone.
+        (gray, red, [0.8, 0.82, 0.8], [0.9, 0.0, 0.0, 0.9]),
     ]
     runner = tf.lite.Interpreter(model_path=str(OUT / "detector-demo.tflite")).get_signature_runner()
     coreml = ct.models.MLModel(str(OUT / "detector-demo.mlpackage"))
