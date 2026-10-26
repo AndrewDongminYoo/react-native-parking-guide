@@ -6,7 +6,8 @@
 
 #import "ParkingGuideDetector.h"
 
-/// Runs the shared `ParkingGuideDetector` on one camera frame; call it inside `runAsync`. Returns tensors or `error`.
+/// Runs the shared `ParkingGuideDetector` on one camera frame; call it through `createDetectorAsyncRunner`. Returns tensors or
+/// `error`.
 @interface ParkingGuideDetectorFrameProcessor : FrameProcessorPlugin
 @end
 
@@ -44,12 +45,17 @@ VISION_EXPORT_FRAME_PROCESSOR(ParkingGuideDetectorFrameProcessor, parkingDetecto
   __block NSString *code = nil;
   CVPixelBufferRetain(buffer);
   dispatch_sync([ParkingGuideDetector sharedQueue], ^{
-    NSString *message = nil;
-    output = [[ParkingGuideDetector shared] runWithPixelBuffer:buffer
-                                                   orientation:orientation
-                                                      modelURL:modelURL
-                                                     errorCode:&code
-                                                       message:&message];
+    // dispatch_sync runs this block on the calling thread. Off VisionCamera's video queue (a worklet context thread)
+    // no autorelease pool is ever drained, so the autoreleased CIImage would keep the camera's pixel buffer: after a
+    // few frames the capture pool runs out and the preview and frame processor stop.
+    @autoreleasepool {
+      NSString *message = nil;
+      output = [[ParkingGuideDetector shared] runWithPixelBuffer:buffer
+                                                     orientation:orientation
+                                                        modelURL:modelURL
+                                                       errorCode:&code
+                                                         message:&message];
+    }
   });
   CVPixelBufferRelease(buffer);
   return output ?: @{@"error" : code ?: ParkingGuideDetectorErrorInference};
