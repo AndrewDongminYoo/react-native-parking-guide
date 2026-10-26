@@ -20,11 +20,13 @@ import {
   useFrameProcessor,
   VisionCameraProxy,
 } from 'react-native-vision-camera';
+import type { Frame } from 'react-native-vision-camera';
 import { Worklets } from 'react-native-worklets-core';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   DEFAULT_AUTO_CAPTURE_HOLD_MS,
   copyDetectorResult,
+  createDetectorAsyncRunner,
   createParkingDetector,
   createParkingFrameAnalyzer,
   screenRectToFrameBox,
@@ -172,6 +174,10 @@ function CameraCapture({
         : createParkingDetector(VisionCameraProxy, { modelUri }),
     [modelUri]
   );
+  const runDetection = useMemo(
+    () => createDetectorAsyncRunner<Frame>(Worklets),
+    []
+  );
   const deliver = useMemo(
     () => Worklets.createRunOnJS(onFrameResult),
     [onFrameResult]
@@ -205,15 +211,17 @@ function CameraCapture({
         deliver(analyze(frame));
       });
       if (detect !== undefined) {
-        // A synchronous call: on an iOS device, runAsync stopped scheduling after a few calls (README "Live detector
-        // guidance").
+        // Not VisionCamera's runAsync, which loses its worklet context (README "Live detector guidance").
         runAtTargetFps(2, () => {
           'worklet';
-          deliverDetection(detect(frame));
+          runDetection(frame, () => {
+            'worklet';
+            deliverDetection(detect(frame));
+          });
         });
       }
     },
-    [analyze, deliver, detect, deliverDetection]
+    [analyze, deliver, detect, deliverDetection, runDetection]
   );
   const { autoCaptureDue, acknowledgeAutoCapture } = guidance;
   // Holds the latest capturePhoto, which is declared after the early return below.
