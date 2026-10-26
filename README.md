@@ -422,7 +422,9 @@ links the system `CoreML`, `CoreImage`, `ImageIO`, and `CoreGraphics` frameworks
 
 Synthetic fixtures in `fixtures/detector/` verify both platforms: `scripts/make-fixture-models.py` generates
 NHWC and NCHW `.tflite` and `.mlpackage` models that return a mean-red score, a `.tflite` model whose detection count
-depends on the photo, `detector-large.tflite` with 1001 detections (above the output limit), and the solid-color
+depends on the photo, `detector-large.tflite` with 1001 detections (above the output limit), the color-gated
+`detector-demo.tflite` and `detector-demo.mlpackage` for the example app (see
+[Live detector guidance](#live-detector-guidance)), and the solid-color
 images `solid.png`, `dark.png`, and the 512 x 60000 `tall.png` (above the decoded long-side limit). On Android,
 `DetectorLimitsTest` uses `tall.png` and `detector-large.tflite` to check the input and output limits. The fixtures
 contain no trained weights and are not part of the published package. See
@@ -771,7 +773,7 @@ const frameProcessor = useFrameProcessor((frame) => {
 ```
 
 `example/src/CaptureScreen.tsx` combines this with the quality analyzer when `example/src/detectorModel.ts` sets
-`DETECTOR_MODEL_URI`, and offers an **Auto capture** switch. Turning auto capture off clears its hold, so turning it
+`DETECTOR_MODEL`, and offers an **Auto capture** switch. Turning auto capture off clears its hold, so turning it
 on again starts a new hold. The example drops a result whose frame size differs from the previous one (the first
 result, or after a rotation), because its guide frame was mapped for the old size; guidance stays not ready until the
 next result. After a rotation (not for the first result) it also calls `reset()`, so the previous detection and the
@@ -782,20 +784,31 @@ After a photo is taken, `example/src/ResultScreen.tsx` shows the parking result 
 last live detection, which assumes that the photo and the camera frames cover the same field of view), `evaluatePolicy`,
 and `getParkingFeedback`. It uses `defaultPolicy` with `UPRIGHT` and
 `IMAGE_QUALITY` disabled, because a detector alone cannot evaluate them (with them enabled, the unknown `UPRIGHT` result
-fails every photo), and the screen says so. Without `DETECTOR_MODEL_URI` the screen shows no verdict.
+fails every photo), and the screen says so. Without `DETECTOR_MODEL` the screen shows no verdict.
 
-Device smoke test with the synthetic fixture (its row-0 score is the scene's mean red value, and its box is fixed at
-`[0.1, 0.2, 0.6, 0.9]`):
+`DETECTOR_MODEL` is an absolute path, a `file:///` or (Android) `content://` URI, or a file name in the app's files
+directory. The native example app passes that directory to `App` as the `filesDirectory` initial property: `Documents`
+on iOS (`SceneDelegate.swift`), `Context.getFilesDir()` on Android (`MainActivity.kt`). A file name is needed on an iOS
+device, because the absolute path of the app's data container changes between installs.
 
-- Android: `adb push fixtures/detector/detector-nhwc.tflite /data/local/tmp/`, then
-  `adb shell run-as parkingguide.example cp /data/local/tmp/detector-nhwc.tflite files/`, and set
-  `DETECTOR_MODEL_URI` to `/data/user/0/parkingguide.example/files/detector-nhwc.tflite`.
-- iOS: copy `fixtures/detector/detector-nhwc.mlpackage` into the app's Documents directory
-  (`xcrun simctl get_app_container booted parkingguide.example data` on a simulator) and set `DETECTOR_MODEL_URI` to
-  its absolute path.
-- Expected: a strongly red scene (score above `0.5`) yields a detection at the fixed box, so guidance reports a
-  distance or ground issue relative to the guide frame; any other scene yields `NO_VEHICLE` and a disabled shutter.
-  A missing model file yields `detectorError` and a disabled shutter without the "no vehicle" text.
+Device smoke test with the color-gated demo fixture `detector-demo` (no trained weights; see
+`scripts/make-fixture-models.py`). It reports a kickboard at the fixed box `[0.375, 0.3125, 0.625, 0.5]`, which lies
+inside the example guide frame on portrait phones, when that box region is red. It reports a crosswalk over the whole
+image when the scene is mostly green, a sidewalk block when the scene is mostly blue, and a parking zone otherwise:
+
+- Android: `adb push fixtures/detector/detector-demo.tflite /data/local/tmp/`, then
+  `adb shell run-as parkingguide.example cp /data/local/tmp/detector-demo.tflite files/`, and set `DETECTOR_MODEL`
+  to `'detector-demo.tflite'`.
+- iOS device: install the example app, then
+  `xcrun devicectl device copy to --device <UDID> --domain-type appDataContainer --domain-identifier
+  parkingguide.example --source fixtures/detector/detector-demo.mlpackage --destination
+  Documents/detector-demo.mlpackage`, and set `DETECTOR_MODEL` to `'detector-demo.mlpackage'`. The copy stays in the
+  data container when a new build is installed over the app.
+- Expected: with a red object in the middle of the guide frame, guidance reports no issue and the shutter is enabled;
+  without it, guidance reports `NO_VEHICLE` and the shutter is disabled. The result screen shows `PASS` on a neutral
+  background, `WARN` (sidewalk block and parking zone) on a mostly blue background, and `FAIL` (crosswalk and parking
+  zone) on a mostly green background. A missing model file yields `detectorError` and a disabled shutter without the
+  "no vehicle" text.
 
 The fixture model's score is rotation-invariant, so the iOS harness checks rotation separately: it maps each VisionCamera
 `Frame.orientation` to the upright transform (VisionCamera defines it as the frame's own orientation, so Left and Right

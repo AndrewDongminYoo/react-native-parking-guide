@@ -273,3 +273,11 @@ The shipped code on `feat/realtime-frame-detection` is the authority where it di
 - Task 6: `ParkingGuideFileURL` moved to `ios/ParkingGuideDetector.{h,mm}`. The final review found that VisionCamera's iOS `Frame.orientation` is the frame's own orientation, so the planned straight `UIImageOrientation` → `CGImagePropertyOrientation` mapping turned portrait frames upside down; `ParkingGuideUprightOrientation` swaps Left and Right, and the harness now checks the table and a two-tone frame's content.
 - Task 7: the example tests cover new pure helpers (`captureMessages`, `captureDisclaimer`, `frameSizeChange`, `usableGuideBox`) because the example test harness renders no hook-using component.
 - Final review fixes: detector results carry `capturedAt` (taken before inference) and freshness is measured from it; auto-capture state resets while auto capture is off; the example drops a result whose frame size changed; Android reports a frame conversion error as `E_PHOTO_READ`.
+
+## Reconciliation (2026-10-26, demo detector fixture)
+
+The shipped code on `feat/demo-detector` is the authority for the example model setting in Task 7.
+`example/src/detectorModel.ts` now exports `DETECTOR_MODEL` instead of `DETECTOR_MODEL_URI`, and `detectorModelUri` resolves a bare file name inside the app's files directory, which the native example app passes as the `filesDirectory` initial property.
+The reason: on an iOS device the absolute path of the app's data container changes between installs, so an absolute `DETECTOR_MODEL_URI` could not point at a model copied into `Documents`.
+The device smoke test now uses `fixtures/detector/detector-demo.*`, because the fixed box of `detector-nhwc` lies outside the guide frame and kept the shutter disabled.
+Tests: `example/src/__tests__/demoDetector.test.ts`.
