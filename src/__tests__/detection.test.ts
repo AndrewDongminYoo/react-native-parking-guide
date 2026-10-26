@@ -104,6 +104,12 @@ describe('toDetectionSnapshot', () => {
     expect(toDetectionSnapshot({ ...VEHICLE, classes: [] }, 10, {}).error).toBe(
       'E_MODEL_CONTRACT'
     );
+    const missing: Partial<typeof VEHICLE> = { ...VEHICLE };
+    delete missing.scores;
+    expect(
+      toDetectionSnapshot(missing as unknown as DetectorFrameResult, 10, {})
+        .error
+    ).toBe('E_MODEL_CONTRACT');
   });
 });
 
