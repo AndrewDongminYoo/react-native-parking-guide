@@ -1,6 +1,7 @@
 package com.parkingguide
 
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -56,17 +57,64 @@ class DetectorTensorsTest {
     assertFalse(DetectorTensors.withinOutputLimit("classes", max + 1))
   }
 
-  @Test fun readsAtMostTheLimit() {
-    assertArrayEquals(byteArrayOf(1, 2, 3), DetectorTensors.readAtMost(ByteArrayInputStream(byteArrayOf(1, 2, 3)), 3))
-    assertNull(DetectorTensors.readAtMost(ByteArrayInputStream(byteArrayOf(1, 2, 3, 4)), 3))
-    assertArrayEquals(byteArrayOf(), DetectorTensors.readAtMost(ByteArrayInputStream(byteArrayOf()), 3))
-    // An endless stream stops one byte past the limit instead of reading on.
-    val endless = object : InputStream() {
-      var reads = 0L
-      override fun read(): Int = 0.also { reads++ }
+  @Test fun readsExactBytesAroundChunkBoundaries() {
+    val chunk = DetectorTensors.CHUNK_BYTES
+    for (size in listOf(0, 1, chunk - 1, chunk, chunk + 1, 2 * chunk + 5)) {
+      val data = pattern(size)
+      val bytes = DetectorTensors.readAtMost(ByteArrayInputStream(data), size)!!
+      assertEquals(size, bytes.size)
+      // Two reads of the same bytes: one by single bytes, one with a buffer that crosses chunk boundaries.
+      assertArrayEquals(data, readByBytes(bytes.inputStream()))
+      assertArrayEquals(data, readByBuffer(bytes.inputStream(), 7))
     }
-    assertNull(DetectorTensors.readAtMost(endless, 1000))
-    assertTrue(endless.reads <= 1001)
+  }
+
+  @Test fun readsAtMostTheLimit() {
+    val chunk = DetectorTensors.CHUNK_BYTES
+    for (size in listOf(1, chunk, chunk + 1)) {
+      assertEquals(size, DetectorTensors.readAtMost(ByteArrayInputStream(pattern(size)), size)?.size)
+      assertNull(DetectorTensors.readAtMost(ByteArrayInputStream(pattern(size + 1)), size))
+    }
+    assertNull(DetectorTensors.readAtMost(ByteArrayInputStream(byteArrayOf(1)), 0))
+  }
+
+  @Test fun stopsAnEndlessStreamOneBytePastTheLimit() {
+    val chunk = DetectorTensors.CHUNK_BYTES
+    for (max in listOf(1000, chunk, 2 * chunk + 5)) {
+      val read = EndlessStream()
+      assertNull(DetectorTensors.readAtMost(read, max))
+      assertEquals(max + 1L, read.served)
+      val copy = EndlessStream()
+      assertFalse(DetectorTensors.copyAtMost(copy, ByteArrayOutputStream(), max.toLong()))
+      assertEquals(max + 1L, copy.served)
+    }
+  }
+
+  @Test fun supportsMarkResetAndSkip() {
+    val data = pattern(DetectorTensors.CHUNK_BYTES + 10)
+    val stream = DetectorTensors.readAtMost(ByteArrayInputStream(data), data.size)!!.inputStream()
+    assertTrue(stream.markSupported())
+    assertEquals(DetectorTensors.CHUNK_BYTES.toLong() - 2, stream.skip(DetectorTensors.CHUNK_BYTES.toLong() - 2))
+    stream.mark(16)
+    val first = readByBuffer(stream, 5)
+    stream.reset()
+    assertEquals(12, stream.available())
+    assertArrayEquals(first, readByBuffer(stream, 3))
+    assertArrayEquals(data.copyOfRange(DetectorTensors.CHUNK_BYTES - 2, data.size), first)
+    assertEquals(0L, stream.skip(1))
+    assertEquals(-1, stream.read())
+  }
+
+  @Test fun copiesExactBytesWithinTheLimit() {
+    val chunk = DetectorTensors.CHUNK_BYTES
+    for (size in listOf(0, 1, chunk - 1, chunk, chunk + 1, 2 * chunk + 5)) {
+      val data = pattern(size)
+      val out = ByteArrayOutputStream()
+      assertTrue(DetectorTensors.copyAtMost(ByteArrayInputStream(data), out, size.toLong()))
+      assertArrayEquals(data, out.toByteArray())
+      val longer = ByteArrayInputStream(data + 0x7f.toByte())
+      assertFalse(DetectorTensors.copyAtMost(longer, ByteArrayOutputStream(), size.toLong()))
+    }
   }
 
   @Test fun samplesPhotosToTheDecodeBounds() {
@@ -78,6 +126,35 @@ class DetectorTensorsTest {
     for ((width, height) in listOf(600 to 60000, 512 to 512, 9000 to 2000, 1 to 100000)) {
       val sample = DetectorTensors.sampleSize(width, height)
       assertTrue(maxOf(width, height) / sample <= DetectorTensors.MAX_DECODED_SIDE)
+    }
+  }
+
+  /** [size] bytes that include values of 0x80 and above, so a sign error in a single-byte read shows. */
+  private fun pattern(size: Int) = ByteArray(size) { (it * 31 + 0x80).toByte() }
+
+  private fun readByBytes(input: InputStream): ByteArray {
+    val out = ByteArrayOutputStream()
+    while (true) out.write(input.read().takeIf { it >= 0 } ?: return out.toByteArray())
+  }
+
+  private fun readByBuffer(input: InputStream, bufferSize: Int): ByteArray {
+    val out = ByteArrayOutputStream()
+    val buffer = ByteArray(bufferSize)
+    while (true) {
+      val count = input.read(buffer, 0, buffer.size)
+      if (count < 0) return out.toByteArray()
+      out.write(buffer, 0, count)
+    }
+  }
+
+  /** Zero bytes without end, one byte per read; counts the bytes it served. */
+  private class EndlessStream : InputStream() {
+    var served = 0L
+      private set
+
+    override fun read(): Int {
+      served++
+      return 0
     }
   }
 }

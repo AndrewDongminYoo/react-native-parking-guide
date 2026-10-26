@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
-import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
 import java.nio.ByteBuffer
@@ -16,13 +15,15 @@ import org.tensorflow.lite.Interpreter
  * Runs a host-supplied LiteRT (TFLite) detector on one photo, following the README "Detector model contract".
  * Same rules and error codes as `ios/ParkingGuideDetector.mm`. Caches the last model; every method is synchronized.
  *
- * [open] opens a [PhotoSource] for reading, or returns null.
+ * [cacheDir] holds a private copy of a `content://` model while it is loaded. [open] opens a [PhotoSource] for reading,
+ * or returns null.
  */
-class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
+class ParkingDetector(private val cacheDir: File, private val open: (PhotoSource) -> InputStream?) {
   class Failure(val code: String, message: String) : Exception(message)
 
   private var modelKey: PhotoSource? = null
   private var interpreter: Interpreter? = null
+  private var modelFile: File? = null
 
   /** Returns the flattened `boxes`, `scores`, and `classes` outputs for a photo, or throws [Failure]. */
   @Synchronized
@@ -83,6 +84,8 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
     interpreter?.close()
     interpreter = null
     modelKey = null
+    modelFile?.delete()
+    modelFile = null
   }
 
   private fun load(model: PhotoSource): Interpreter {
@@ -91,11 +94,7 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
     val loaded = try {
       when (model) {
         is PhotoSource.File -> Interpreter(File(model.path))
-        is PhotoSource.Content -> {
-          val bytes = open(model)?.use { DetectorTensors.readAtMost(it, DetectorTensors.MAX_MODEL_BYTES) }
-            ?: throw Failure(E_MODEL_LOAD, MODEL_LOAD_MESSAGE)
-          Interpreter(ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).apply { put(bytes); rewind() })
-        }
+        is PhotoSource.Content -> loadContent(model)
         PhotoSource.Invalid -> throw Failure(E_MODEL_LOAD, MODEL_LOAD_MESSAGE)
       }
     } catch (e: Failure) {
@@ -111,14 +110,33 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
   }
 
   /**
+   * Copies a `content://` model to a private file in [cacheDir] (at most [DetectorTensors.MAX_MODEL_BYTES]) and loads
+   * it memory-mapped, so no model bytes stay on the Java heap. The file is deleted on failure, or by [close]; a copy
+   * left by a process that ended first is deleted by [deleteModelCopies].
+   */
+  private fun loadContent(model: PhotoSource.Content): Interpreter {
+    val file = File.createTempFile(MODEL_COPY_PREFIX, MODEL_COPY_SUFFIX, cacheDir)
+    try {
+      val fits = open(model)?.use { input ->
+        file.outputStream().use { DetectorTensors.copyAtMost(input, it, DetectorTensors.MAX_MODEL_BYTES.toLong()) }
+      }
+      if (fits != true) throw Failure(E_MODEL_LOAD, MODEL_LOAD_MESSAGE)
+      return Interpreter(file).also { modelFile = file }
+    } catch (e: Throwable) {
+      file.delete()
+      throw e
+    }
+  }
+
+  /**
    * Reads the photo once (at most [DetectorTensors.MAX_PHOTO_BYTES]), so its size, pixels, and EXIF orientation come
-   * from the same bytes; decodes it with the long side at most [DetectorTensors.MAX_DECODED_SIDE], applies the
-   * orientation, and stretches it to 512 x 512 ARGB pixels.
+   * from the same bytes, each through its own stream over them without a copy; decodes it with the long side at most
+   * [DetectorTensors.MAX_DECODED_SIDE], applies the orientation, and stretches it to 512 x 512 ARGB pixels.
    */
   private fun readPixels(photo: PhotoSource): IntArray? = try {
     val bytes = open(photo)?.use { DetectorTensors.readAtMost(it, DetectorTensors.MAX_PHOTO_BYTES) }
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size, bounds) }
+    bytes?.let { BitmapFactory.decodeStream(it.inputStream(), null, bounds) }
     if (bytes == null || bounds.outWidth <= 0 || bounds.outHeight <= 0) {
       null
     } else {
@@ -126,7 +144,7 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
         inSampleSize = DetectorTensors.sampleSize(bounds.outWidth, bounds.outHeight)
         inPreferredConfig = Bitmap.Config.ARGB_8888
       }
-      BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.let { decoded ->
+      BitmapFactory.decodeStream(bytes.inputStream(), null, options)?.let { decoded ->
         val matrix = orientationMatrix(bytes)
         val oriented = if (matrix.isIdentity) {
           decoded
@@ -144,9 +162,9 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
     null
   }
 
-  private fun orientationMatrix(bytes: ByteArray): Matrix {
+  private fun orientationMatrix(bytes: ChunkedBytes): Matrix {
     val orientation = try {
-      ExifInterface(ByteArrayInputStream(bytes))
+      ExifInterface(bytes.inputStream())
         .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
     } catch (e: Exception) {
       ExifInterface.ORIENTATION_NORMAL
@@ -178,5 +196,17 @@ class ParkingDetector(private val open: (PhotoSource) -> InputStream?) {
     const val E_PHOTO_READ = "E_PHOTO_READ"
     const val E_INFERENCE = "E_INFERENCE"
     private const val MODEL_LOAD_MESSAGE = "Could not load the LiteRT model."
+    private const val MODEL_COPY_PREFIX = "parking-guide-model"
+    private const val MODEL_COPY_SUFFIX = ".tflite"
+
+    /**
+     * Deletes every `content://` model copy in [cacheDir], including copies left by a process that ended before
+     * [close]. Call it only while no detector that uses [cacheDir] is loading or holds a copy.
+     */
+    fun deleteModelCopies(cacheDir: File) {
+      cacheDir.listFiles()
+        ?.filter { it.name.startsWith(MODEL_COPY_PREFIX) && it.name.endsWith(MODEL_COPY_SUFFIX) }
+        ?.forEach { it.delete() }
+    }
   }
 }

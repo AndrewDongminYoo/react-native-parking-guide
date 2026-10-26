@@ -387,9 +387,12 @@ const ruleResults = mapModelOutput(decodeDetectorOutput(tensors), { vehicleType:
   4096 pixels on its long side. On Android the photo is read once, so its size, pixels, and orientation come from the
   same bytes.
 - `modelUri` accepts the same forms. On Android it is a LiteRT/TFLite flatbuffer (`.tflite`) with exactly one
-  signature; a `content://` model is read into memory and rejected above 256 MiB (a smaller one can still fail with
-  `E_MODEL_LOAD` when the app runs out of memory). On iOS it is a compiled `.mlmodelc`
-  directory, or an `.mlmodel` or `.mlpackage` that is compiled on the first call; the path extension selects the form.
+  signature; a `content://` model is copied to a private file in the app's cache directory and memory-mapped like a
+  file model. It fails with `E_MODEL_LOAD` above 256 MiB, or when the cache directory cannot hold the copy (for
+  example, the storage is full or the directory is not writable). The copy is deleted when the model changes or is
+  released; a copy left by a process that ended first (for example, killed in the background) is deleted the first
+  time the module creates its detector in a later process. On iOS it is a compiled `.mlmodelc` directory, or an
+  `.mlmodel` or `.mlpackage` that is compiled on the first call; the path extension selects the form.
 - Copy a `content://` URI that another app supplied (for example a share intent) to the app's own storage, with a
   size and time limit, before passing it. The limits above stop an oversized or endless stream, but not a provider
   that blocks without sending data, and that call holds the single background thread described below.

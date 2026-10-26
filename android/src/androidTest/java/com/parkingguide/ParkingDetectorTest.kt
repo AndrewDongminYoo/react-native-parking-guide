@@ -17,14 +17,14 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class ParkingDetectorTest {
-  private val detector = ParkingDetector { source ->
+  private val context = InstrumentationRegistry.getInstrumentation().context
+  private val detector = ParkingDetector(context.cacheDir) { source ->
     (source as? PhotoSource.File)?.let { FileInputStream(it.path) }
   }
 
   @After fun close() = detector.close()
 
   private fun fixture(name: String): PhotoSource.File {
-    val context = InstrumentationRegistry.getInstrumentation().context
     val file = File(context.cacheDir, name)
     context.assets.open(name).use { input -> file.outputStream().use { input.copyTo(it) } }
     return PhotoSource.File(file.path)
@@ -70,6 +70,15 @@ class ParkingDetectorTest {
       detector.run(fixture("solid.png"), PhotoSource.File("/nonexistent/model.tflite"))
     }
     assertEquals(ParkingDetector.E_MODEL_LOAD, error.code)
+  }
+
+  @Test fun deletesOnlyModelCopies() {
+    val dir = File(context.cacheDir, "model-copies").apply { deleteRecursively(); mkdirs() }
+    val copy = File(dir, "parking-guide-model123.tflite").apply { writeText("model") }
+    val others = listOf("parking-guide-model123.png", "model.tflite").map { File(dir, it).apply { writeText("x") } }
+    ParkingDetector.deleteModelCopies(dir)
+    assertFalse(copy.exists())
+    others.forEach { assertTrue(it.name, it.exists()) }
   }
 
   @Test fun rejectsAnUnreadablePhoto() {
