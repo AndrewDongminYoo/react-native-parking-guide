@@ -156,6 +156,24 @@ describe('reduceGuidanceSession', () => {
     expect(state.guidance.guidance.ready).toBe(false);
   });
 
+  it('dates a detection from a clock that runs ahead at its arrival', () => {
+    // On a device, capturedAt from the worklet runtime was 11 ms after the JS runtime's arrival time.
+    let state = reduceGuidanceSession(
+      createGuidanceSession(),
+      {
+        type: 'detection',
+        result: { ...VEHICLE, capturedAt: 1011 },
+        generation: 0,
+        now: 1000,
+      },
+      DETECTION
+    );
+    state = frame(state, 1005, DETECTION);
+    expect(state.guidance.guidance.ready).toBe(true);
+    state = frame(state, 2600, DETECTION);
+    expect(state.guidance.guidance.ready).toBe(false);
+  });
+
   it('behaves as before without detection', () => {
     const options = { debounceFrames: 1 };
     const state = frame(createGuidanceSession(), 0, options);

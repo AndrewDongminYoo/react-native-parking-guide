@@ -2,11 +2,15 @@ import { describe, expect, it } from '@jest/globals';
 
 import {
   DEFAULT_DETECTION_STALE_MS,
+  copyDetectorResult,
   mergeDetection,
   toDetectionSnapshot,
   validateDetectionOptions,
 } from '../guidance/detection';
-import type { DetectionSnapshot } from '../guidance/detection';
+import type {
+  DetectionSnapshot,
+  DetectorFrameResult,
+} from '../guidance/detection';
 import type { GuidanceFrameResult } from '../guidance/reducer';
 
 const VEHICLE = {
@@ -24,6 +28,36 @@ const EMPTY = {
   frameHeight: 640,
 };
 const QUALITY: GuidanceFrameResult = { ready: true, issues: [], progress: 1 };
+
+/**
+ * Imitates how react-native-worklets-core delivers a worklet value on the JS thread: a host object whose `in` operator
+ * reports every key, with arrays that are array-like host objects instead of arrays.
+ */
+function hostObject(value: Record<string, unknown>): DetectorFrameResult {
+  const wrap = (item: unknown) =>
+    Array.isArray(item) ? { ...item, length: item.length } : item;
+  return new Proxy(
+    Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, wrap(item)])
+    ),
+    { has: () => true }
+  ) as unknown as DetectorFrameResult;
+}
+
+describe('copyDetectorResult', () => {
+  it('copies a host-object result into plain values', () => {
+    const copy = copyDetectorResult(hostObject({ ...VEHICLE, capturedAt: 5 }));
+    expect('error' in copy).toBe(false);
+    expect(copy).toEqual({ ...VEHICLE, capturedAt: 5 });
+    expect(Array.isArray('boxes' in copy && copy.boxes)).toBe(true);
+  });
+
+  it('keeps an error result', () => {
+    expect(
+      copyDetectorResult(hostObject({ error: 'E_MODEL_LOAD', capturedAt: 5 }))
+    ).toEqual({ error: 'E_MODEL_LOAD', capturedAt: 5 });
+  });
+});
 
 describe('toDetectionSnapshot', () => {
   it('maps a vehicle detection to model issues', () => {
@@ -47,6 +81,14 @@ describe('toDetectionSnapshot', () => {
     ).toEqual(['TOO_CLOSE', 'GROUND_NOT_VISIBLE']);
   });
 
+  it('maps a host-object detection instead of reading it as an error', () => {
+    expect(toDetectionSnapshot(hostObject(EMPTY), 10, {})).toEqual({
+      issues: ['NO_VEHICLE'],
+      error: null,
+      at: 10,
+    });
+  });
+
   it('turns a native error into a snapshot error', () => {
     expect(toDetectionSnapshot({ error: 'E_MODEL_LOAD' }, 10, {})).toEqual({
       issues: [],
@@ -62,6 +104,12 @@ describe('toDetectionSnapshot', () => {
     expect(toDetectionSnapshot({ ...VEHICLE, classes: [] }, 10, {}).error).toBe(
       'E_MODEL_CONTRACT'
     );
+    const missing: Partial<typeof VEHICLE> = { ...VEHICLE };
+    delete missing.scores;
+    expect(
+      toDetectionSnapshot(missing as unknown as DetectorFrameResult, 10, {})
+        .error
+    ).toBe('E_MODEL_CONTRACT');
   });
 });
 

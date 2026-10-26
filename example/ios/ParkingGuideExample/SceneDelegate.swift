@@ -32,8 +32,18 @@ class SceneDelegate: RCTDefaultReactNativeFactoryDelegate, UIWindowSceneDelegate
     reactNativeFactory?.startReactNative(
       withModuleName: "ParkingGuideExample",
       in: window,
+      initialProperties: initialProperties(),
       launchOptions: launchOptions(from: connectionOptions)
     )
+  }
+
+  // `filesDirectory` lets example/src/detectorModel.ts name a model file in Documents instead of an absolute path,
+  // which changes between installs.
+  private func initialProperties() -> [String: Any]? {
+    guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+      return nil
+    }
+    return ["filesDirectory": documents.path]
   }
 
   // Cold-start links must be passed as launch options so `Linking.getInitialURL()` can read them.

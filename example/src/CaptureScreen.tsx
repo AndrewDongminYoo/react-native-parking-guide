@@ -14,7 +14,6 @@ import {
 import type { LayoutChangeEvent } from 'react-native';
 import {
   Camera,
-  runAsync,
   runAtTargetFps,
   useCameraDevice,
   useCameraPermission,
@@ -25,6 +24,7 @@ import { Worklets } from 'react-native-worklets-core';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   DEFAULT_AUTO_CAPTURE_HOLD_MS,
+  copyDetectorResult,
   createParkingDetector,
   createParkingFrameAnalyzer,
   screenRectToFrameBox,
@@ -42,7 +42,6 @@ import {
   captureMessages,
   captureTitle,
 } from './captureCopy';
-import { DETECTOR_MODEL_URI } from './detectorModel';
 import type { CapturedPhoto } from './parkingResult';
 import {
   GUIDE_FRAME_HINT_GAP,
@@ -58,6 +57,8 @@ const IDLE_COLOR = 'rgba(255, 255, 255, 0.9)';
 
 interface CaptureScreenProps {
   vehicleType: VehicleType;
+  /** The detector model URI, or undefined to check image quality only. */
+  modelUri: string | undefined;
   onClose: () => void;
   /** Called with each photo taken; the caller shows the parking result. */
   onCaptured: (photo: CapturedPhoto) => void;
@@ -118,6 +119,7 @@ function CaptureHeader({
 
 function CameraCapture({
   vehicleType,
+  modelUri,
   onClose,
   onCaptured,
 }: CaptureScreenProps) {
@@ -134,7 +136,7 @@ function CameraCapture({
   const [hintHeight, setHintHeight] = useState<number | null>(null);
   const [autoCapture, setAutoCapture] = useState(false);
   const insets = useSafeAreaInsets();
-  const detectorConfigured = DETECTOR_MODEL_URI !== undefined;
+  const detectorConfigured = modelUri !== undefined;
   // The guide frame in camera-frame coordinates, once the layouts and the first detection's frame size are known.
   const guideFrame =
     frameArea && guideRect && cameraView && frameSize
@@ -165,12 +167,10 @@ function CameraCapture({
   );
   const detect = useMemo(
     () =>
-      DETECTOR_MODEL_URI === undefined
+      modelUri === undefined
         ? undefined
-        : createParkingDetector(VisionCameraProxy, {
-            modelUri: DETECTOR_MODEL_URI,
-          }),
-    []
+        : createParkingDetector(VisionCameraProxy, { modelUri }),
+    [modelUri]
   );
   const deliver = useMemo(
     () => Worklets.createRunOnJS(onFrameResult),
@@ -178,7 +178,9 @@ function CameraCapture({
   );
   const deliverDetection = useMemo(
     () =>
-      Worklets.createRunOnJS((result: DetectorFrameResult) => {
+      Worklets.createRunOnJS((delivered: DetectorFrameResult) => {
+        // The worklet delivers a host object; read a plain copy.
+        const result = copyDetectorResult(delivered);
         const previous = frameSizeRef.current;
         const changed = frameSizeChange(previous, result);
         if (changed !== null) {
@@ -203,12 +205,11 @@ function CameraCapture({
         deliver(analyze(frame));
       });
       if (detect !== undefined) {
+        // A synchronous call: on an iOS device, runAsync stopped scheduling after a few calls (README "Live detector
+        // guidance").
         runAtTargetFps(2, () => {
           'worklet';
-          runAsync(frame, () => {
-            'worklet';
-            deliverDetection(detect(frame));
-          });
+          deliverDetection(detect(frame));
         });
       }
     },
@@ -400,6 +401,7 @@ function CameraCapture({
 
 export function CaptureScreen({
   vehicleType,
+  modelUri,
   onClose,
   onCaptured,
 }: CaptureScreenProps) {
@@ -449,6 +451,7 @@ export function CaptureScreen({
         active ? (
           <CameraCapture
             vehicleType={vehicleType}
+            modelUri={modelUri}
             onClose={onClose}
             onCaptured={onCaptured}
           />

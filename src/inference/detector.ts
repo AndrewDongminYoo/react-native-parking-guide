@@ -33,11 +33,16 @@ const VEHICLE_TYPES: ReadonlySet<string> = new Set<
 
 /**
  * Converts detector output tensors to a `RawModelOutput`. Pure and deterministic; does not filter by confidence,
- * clamp values, or execute a model. Throws `RangeError` for mismatched lengths, an invalid class index, or any
- * value that `mapModelOutput` rejects.
+ * clamp values, or execute a model. Throws `RangeError` for a tensor that is not an array, mismatched lengths, an
+ * invalid class index, or any value that `mapModelOutput` rejects.
  */
 export function decodeDetectorOutput(output: DetectorOutput): RawModelOutput {
   const { boxes, scores, classes } = output;
+  if (![boxes, scores, classes].every(Array.isArray)) {
+    throw new RangeError(
+      'Detector output boxes, scores, and classes must be arrays.'
+    );
+  }
   const count = scores.length;
   if (classes.length !== count || boxes.length !== count * 4) {
     throw new RangeError(

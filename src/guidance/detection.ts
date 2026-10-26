@@ -45,6 +45,43 @@ export function validateDetectionOptions(options: DetectionOptions): void {
 }
 
 /**
+ * A plain copy of one detector result. `react-native-worklets-core` delivers a worklet value to the JS thread as a host
+ * object: the `in` operator reports every key on it, and its arrays fail `Array.isArray`. Copy a result before
+ * reading it. An `error` that is not a string, or a tensor field that is not a list, is copied as it is, so decoding
+ * rejects it as `E_MODEL_CONTRACT`.
+ */
+export function copyDetectorResult(
+  result: DetectorFrameResult
+): DetectorFrameResult {
+  const source = result as unknown as Record<string, unknown>;
+  const capturedAt = source.capturedAt as number | undefined;
+  if (typeof source.error === 'string') {
+    return { error: source.error, capturedAt };
+  }
+  return {
+    boxes: copyList(source.boxes),
+    scores: copyList(source.scores),
+    classes: copyList(source.classes),
+    frameWidth: source.frameWidth as number,
+    frameHeight: source.frameHeight as number,
+    capturedAt,
+  };
+}
+
+function copyList(value: unknown): number[] {
+  if (Array.isArray(value)) {
+    return [...value];
+  }
+  if (value !== null && typeof value === 'object') {
+    const { length } = value as { length?: unknown };
+    if (typeof length === 'number' && Number.isInteger(length) && length >= 0) {
+      return Array.from({ length }, (_, index) => (value as number[])[index]!);
+    }
+  }
+  return value as number[];
+}
+
+/**
  * Decodes one detector result and maps it to model-based guidance issues. Invalid model output becomes
  * `E_MODEL_CONTRACT` instead of throwing; validate `options` first with `validateDetectionOptions`.
  */
@@ -53,11 +90,12 @@ export function toDetectionSnapshot(
   at: number,
   options: DetectionOptions
 ): DetectionSnapshot {
-  if ('error' in result) {
-    return { issues: [], error: result.error, at };
+  const copy = copyDetectorResult(result);
+  if ('error' in copy) {
+    return { issues: [], error: copy.error, at };
   }
   try {
-    const output = decodeDetectorOutput(result);
+    const output = decodeDetectorOutput(copy);
     return { issues: mapGuidanceIssues(output, options), error: null, at };
   } catch (error) {
     if (error instanceof RangeError) {

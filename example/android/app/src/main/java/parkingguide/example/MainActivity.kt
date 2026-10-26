@@ -1,5 +1,6 @@
 package parkingguide.example
 
+import android.os.Bundle
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
@@ -18,5 +19,9 @@ class MainActivity : ReactActivity() {
    * which allows you to enable New Architecture with a single boolean flags [fabricEnabled]
    */
   override fun createReactActivityDelegate(): ReactActivityDelegate =
-      DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
+      object : DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled) {
+        // `filesDirectory` lets example/src/detectorModel.ts name a model file in the app's files directory.
+        override fun getLaunchOptions(): Bundle =
+            Bundle().apply { putString("filesDirectory", filesDir.absolutePath) }
+      }
 }

@@ -11,7 +11,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Verdict, VehicleType } from 'react-native-parking-guide';
 
-import { DETECTOR_MODEL_URI } from './detectorModel';
 import {
   DEMO_POLICY_NOTE,
   judgeParking,
@@ -28,6 +27,8 @@ const VERDICT_COLORS: Record<Verdict, string> = {
 
 interface ResultScreenProps {
   vehicleType: VehicleType;
+  /** The detector model URI, or undefined when no model is configured. */
+  modelUri: string | undefined;
   photo: CapturedPhoto;
   onRetake: () => void;
   onDone: () => void;
@@ -35,6 +36,7 @@ interface ResultScreenProps {
 
 export function ResultScreen({
   vehicleType,
+  modelUri,
   photo,
   onRetake,
   onDone,
@@ -44,7 +46,7 @@ export function ResultScreen({
 
   useEffect(() => {
     let current = true;
-    judgeParking(photo, vehicleType, DETECTOR_MODEL_URI).then((result) => {
+    judgeParking(photo, vehicleType, modelUri).then((result) => {
       if (current) {
         setJudgment(result);
       }
@@ -52,7 +54,7 @@ export function ResultScreen({
     return () => {
       current = false;
     };
-  }, [photo, vehicleType]);
+  }, [photo, vehicleType, modelUri]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
@@ -124,7 +126,7 @@ function JudgmentBody({ judgment }: { judgment: ParkingJudgment | null }) {
           No parking result
         </Text>
         <Text style={styles.detail}>
-          No detector model is configured. Set DETECTOR_MODEL_URI in
+          No detector model is configured. Set DETECTOR_MODEL in
           example/src/detectorModel.ts to judge the photo.
         </Text>
       </>

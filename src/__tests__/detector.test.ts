@@ -137,6 +137,10 @@ describe('decodeDetectorOutput', () => {
       'NaN box coordinate',
       { boxes: [0, Number.NaN, 1, 1], scores: [1], classes: [3] },
     ],
+    [
+      'missing scores',
+      { boxes: [0, 0, 1, 1], classes: [3] } as unknown as DetectorOutput,
+    ],
   ])('throws RangeError: %s', (_, output) => {
     expect(() => decodeDetectorOutput(output)).toThrow(RangeError);
   });

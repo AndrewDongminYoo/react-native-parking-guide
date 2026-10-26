@@ -8,18 +8,24 @@ import type { VehicleType } from 'react-native-parking-guide';
 
 import { CaptureScreen } from './CaptureScreen';
 import { CAPTURE_VEHICLE_TYPES, vehicleLabel } from './captureCopy';
+import { DETECTOR_MODEL, detectorModelUri } from './detectorModel';
 import type { CapturedPhoto } from './parkingResult';
 import { ResultScreen } from './ResultScreen';
 
-export default function App() {
+interface AppProps {
+  /** The app's files directory, passed as an initial property by `SceneDelegate.swift` and `MainActivity.kt`. */
+  filesDirectory?: string;
+}
+
+export default function App({ filesDirectory }: AppProps = {}) {
   return (
     <SafeAreaProvider>
-      <Home />
+      <Home modelUri={detectorModelUri(DETECTOR_MODEL, filesDirectory)} />
     </SafeAreaProvider>
   );
 }
 
-function Home() {
+function Home({ modelUri }: { modelUri: string | undefined }) {
   const insets = useSafeAreaInsets();
   const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
   // The photo whose parking result is shown; null while capturing.
@@ -34,6 +40,7 @@ function Home() {
     return (
       <ResultScreen
         vehicleType={vehicleType}
+        modelUri={modelUri}
         photo={photo}
         onRetake={retake}
         onDone={close}
@@ -44,6 +51,7 @@ function Home() {
     return (
       <CaptureScreen
         vehicleType={vehicleType}
+        modelUri={modelUri}
         onClose={close}
         onCaptured={setPhoto}
       />

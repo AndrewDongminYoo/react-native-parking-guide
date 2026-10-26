@@ -92,10 +92,12 @@ export function reduceGuidanceSession(
         return state;
       }
       const { capturedAt } = event.result;
+      // `capturedAt` comes from the worklet runtime's clock, which can run ahead of this one; a detection is never
+      // dated after it arrived.
       const snapshot = toDetectionSnapshot(
         event.result,
         capturedAt !== undefined && Number.isFinite(capturedAt)
-          ? capturedAt
+          ? Math.min(capturedAt, event.now)
           : event.now,
         options.detection ?? {}
       );

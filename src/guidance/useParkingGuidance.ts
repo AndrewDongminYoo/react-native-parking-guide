@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { copyDetectorResult } from './detection';
 import type { DetectorFrameResult } from './detection';
 import type { GuidanceFrameResult } from './reducer';
 import {
@@ -50,7 +51,9 @@ export function useParkingGuidance(
   }, []);
   const { generation } = state;
   const onDetectorResult = useCallback(
-    (result: DetectorFrameResult) => {
+    (delivered: DetectorFrameResult) => {
+      // Snapshot the handoff (a host object from the worklet) before React processes the queued updater.
+      const result = copyDetectorResult(delivered);
       const now = Date.now();
       setState((previous) =>
         reduceGuidanceSession(
