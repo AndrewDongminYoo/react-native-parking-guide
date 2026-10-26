@@ -14,7 +14,6 @@ import {
 import type { LayoutChangeEvent } from 'react-native';
 import {
   Camera,
-  runAsync,
   runAtTargetFps,
   useCameraDevice,
   useCameraPermission,
@@ -25,6 +24,7 @@ import { Worklets } from 'react-native-worklets-core';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   DEFAULT_AUTO_CAPTURE_HOLD_MS,
+  copyDetectorResult,
   createParkingDetector,
   createParkingFrameAnalyzer,
   screenRectToFrameBox,
@@ -178,7 +178,9 @@ function CameraCapture({
   );
   const deliverDetection = useMemo(
     () =>
-      Worklets.createRunOnJS((result: DetectorFrameResult) => {
+      Worklets.createRunOnJS((delivered: DetectorFrameResult) => {
+        // The worklet delivers a host object; read a plain copy.
+        const result = copyDetectorResult(delivered);
         const previous = frameSizeRef.current;
         const changed = frameSizeChange(previous, result);
         if (changed !== null) {
@@ -203,12 +205,11 @@ function CameraCapture({
         deliver(analyze(frame));
       });
       if (detect !== undefined) {
+        // A synchronous call: on an iOS device, runAsync stopped scheduling after a few calls (README "Live detector
+        // guidance").
         runAtTargetFps(2, () => {
           'worklet';
-          runAsync(frame, () => {
-            'worklet';
-            deliverDetection(detect(frame));
-          });
+          deliverDetection(detect(frame));
         });
       }
     },
