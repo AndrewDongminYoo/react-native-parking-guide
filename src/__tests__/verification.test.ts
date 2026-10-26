@@ -244,6 +244,19 @@ describe('verifyParking', () => {
         },
       }),
     ],
+    [
+      'only rules whose policy weight is 0',
+      options({
+        ruleResults: [{ id: 'GEOFENCE', verdict: 'FAIL', confidence: 1 }],
+        policy: {
+          ...defaultPolicy,
+          rules: {
+            ...defaultPolicy.rules,
+            GEOFENCE: { enabled: true, weight: 0, severity: 'WARN' },
+          },
+        },
+      }),
+    ],
     ['invalid policy', options({ policy: invalid({ version: 1 }) as never })],
     [
       'pitch above pi',
@@ -272,6 +285,25 @@ describe('verifyParking', () => {
   ])('rejects with RangeError before hashing: %s', async (_, input) => {
     await expect(verifyParking(input)).rejects.toBeInstanceOf(RangeError);
     expect(mockGetFileSha256).not.toHaveBeenCalled();
+  });
+
+  it('accepts a weight-0 rule next to a rule with a positive weight', async () => {
+    const policy: ParkingPolicy = {
+      ...defaultPolicy,
+      rules: {
+        ...defaultPolicy.rules,
+        GEOFENCE: { enabled: true, weight: 0, severity: 'WARN' },
+      },
+    };
+    const ruleResults: RuleResult[] = [
+      { id: 'GEOFENCE', verdict: 'FAIL', confidence: 1 },
+      { id: 'VEHICLE_DETECTED', verdict: 'FAIL', confidence: 1 },
+    ];
+
+    const result = await verifyParking(options({ ruleResults, policy }));
+
+    expect(result.verdict).toBe(evaluatePolicy(ruleResults, policy).verdict);
+    expect(result.verdict).toBe('FAIL');
   });
 
   it('accepts the tilt and heading range boundaries', async () => {
