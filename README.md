@@ -418,8 +418,10 @@ links the system `CoreML`, `CoreImage`, `ImageIO`, and `CoreGraphics` frameworks
 
 Synthetic fixtures in `fixtures/detector/` verify both platforms: `scripts/make-fixture-models.py` generates
 NHWC and NCHW `.tflite` and `.mlpackage` models that return a mean-red score, a `.tflite` model whose detection count
-depends on the photo, and the solid-color images `solid.png` and `dark.png`. They contain no trained weights and are
-not part of the published package. See
+depends on the photo, `detector-large.tflite` with 1001 detections (above the output limit), and the solid-color
+images `solid.png`, `dark.png`, and the 512 x 60000 `tall.png` (above the decoded long-side limit). On Android,
+`DetectorLimitsTest` uses `tall.png` and `detector-large.tflite` to check the input and output limits. The fixtures
+contain no trained weights and are not part of the published package. See
 [Development](#development) for the commands.
 
 ### Geofence
