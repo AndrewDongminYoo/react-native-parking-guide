@@ -23,7 +23,7 @@ export interface VerifyParkingOptions {
   };
   /**
    * Rule results for this photo, for example from `mapModelOutput` and `evaluateGeofence`. At least one must have an
-   * `id` that `policy` enables.
+   * `id` that `policy` enables with a weight above 0.
    */
   readonly ruleResults: readonly RuleResult[];
   /** Must pass `validatePolicy`. Default: `defaultPolicy`. */
@@ -101,16 +101,18 @@ function validateOptions(options: VerifyParkingOptions): ParkingPolicy {
   if (Array.isArray(policy)) {
     throw new RangeError(`Invalid policy: ${policy.join(' ')}`);
   }
-  // evaluatePolicy scores a set with no enabled rule as 1, which would be PASS for a photo nothing evaluated.
+  // evaluatePolicy scores a set whose enabled rules have a weight sum of 0 as 1, which would be PASS for a photo
+  // nothing evaluated: either no rule result is enabled, or every enabled one has weight 0.
   if (
     !ruleResults.some(
       (rule: RuleResult) =>
         Object.prototype.hasOwnProperty.call(policy.rules, rule.id) &&
-        policy.rules[rule.id]?.enabled === true
+        policy.rules[rule.id]?.enabled === true &&
+        (policy.rules[rule.id]?.weight ?? 1) > 0
     )
   ) {
     throw new RangeError(
-      'ruleResults must contain a result for at least one rule that the policy enables.'
+      'ruleResults must contain a result for at least one rule that the policy enables with a weight above 0.'
     );
   }
   if (
