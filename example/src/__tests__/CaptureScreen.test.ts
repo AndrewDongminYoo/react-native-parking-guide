@@ -6,6 +6,7 @@ import { Camera, useCameraPermission } from 'react-native-vision-camera';
 
 import App from '../App';
 import { CaptureScreen } from '../CaptureScreen';
+import { ResultScreen } from '../ResultScreen';
 import {
   CAPTURE_VEHICLE_TYPES,
   captureDisclaimer,
@@ -22,6 +23,7 @@ jest.mock('react-native', () => ({
   StatusBar: {},
   StyleSheet: { create: (styles: unknown) => styles, absoluteFill: {} },
   Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
   Text: 'Text',
   View: 'View',
 }));
@@ -56,7 +58,11 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock(
   'react-native-parking-guide',
-  () => jest.requireActual<object>('../../../src/feedback/feedback'),
+  () => ({
+    ...jest.requireActual<object>('../../../src/feedback/feedback'),
+    // App imports the result screen, whose demo policy spreads defaultPolicy at module load.
+    ...jest.requireActual<object>('../../../src/policy/defaultPolicy'),
+  }),
   { virtual: true }
 );
 
@@ -96,7 +102,11 @@ function expand(node: ReactNode): unknown {
 function renderPermissionScreen() {
   return JSON.stringify(
     expand(
-      CaptureScreen({ vehicleType: 'kickboard', onClose: () => undefined })
+      CaptureScreen({
+        vehicleType: 'kickboard',
+        onClose: () => undefined,
+        onCaptured: () => undefined,
+      })
     )
   );
 }
@@ -133,10 +143,10 @@ describe('example capture copy', () => {
 
   it('describes what the capture screen checks', () => {
     expect(captureDisclaimer(false)).toBe(
-      'Checks image quality only. Vehicle detection and the parking result are not available yet.'
+      'Checks image quality only. Vehicle detection and the parking result need a detector model.'
     );
     expect(captureDisclaimer(true)).toBe(
-      'Checks image quality and vehicle placement with the configured model. The parking result is not available yet.'
+      'Checks image quality and vehicle placement with the configured model, then shows a parking result for the photo.'
     );
   });
 
@@ -155,6 +165,24 @@ describe('example home screen', () => {
     for (const label of ['Kickboard', 'Bicycle', 'E-bike', 'Motorcycle']) {
       expect(screen).toContain(label);
     }
+  });
+});
+
+describe('example result screen', () => {
+  it('shows a checking state with retake and done before the result arrives', () => {
+    const screen = JSON.stringify(
+      expand(
+        ResultScreen({
+          vehicleType: 'kickboard',
+          photo: { path: '/tmp/photo.jpg', guideFrame: undefined },
+          onRetake: () => undefined,
+          onDone: () => undefined,
+        })
+      )
+    );
+    expect(screen).toContain('Checking your parking…');
+    expect(screen).toContain('Retake');
+    expect(screen).toContain('Done');
   });
 });
 
@@ -205,7 +233,11 @@ describe('example capture lifecycle', () => {
       });
 
       const names = componentNames(
-        CaptureScreen({ vehicleType: 'kickboard', onClose: () => undefined })
+        CaptureScreen({
+          vehicleType: 'kickboard',
+          onClose: () => undefined,
+          onCaptured: () => undefined,
+        })
       );
 
       expect(names.includes('CameraCapture')).toBe(mounted);
@@ -229,7 +261,11 @@ describe('example capture AppState subscription', () => {
       .mocked(BackHandler.addEventListener)
       .mockReturnValue({ remove: jest.fn() });
 
-    CaptureScreen({ vehicleType: 'kickboard', onClose: () => undefined });
+    CaptureScreen({
+      vehicleType: 'kickboard',
+      onClose: () => undefined,
+      onCaptured: () => undefined,
+    });
     // CaptureScreen calls useState for permissionDenied, then for active.
     const setActive = mockStateSetters[1]!;
     const cleanups = jest
