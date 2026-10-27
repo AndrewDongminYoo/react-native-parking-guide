@@ -36,9 +36,14 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 | 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`); `verifyParking` (native photo SHA-256, caller-supplied rule results, and capture metadata → `VerificationResult`); the example app's capture → verdict and reasons → retake flow (see [Live detector guidance](#live-detector-guidance)) | Producing rule results from the photo inside `verifyParking` |
 
 Outside the three goal steps, `uploadVerification` (an opt-in upload of a `VerificationResult` to a caller-owned
-endpoint) is implemented; the package provides no server.
+endpoint) and `requestAttestation` (an opt-in App Attest or Play Integrity token bound to the photo hash, see
+[Attestation](#attestation)) are implemented; the package provides no server and does not verify tokens. A token from
+`requestAttestation` has not yet been checked on a physical device.
 
-`getFileSha256(uri)` and `runDetector(photoUri, modelUri)` are implemented natively on iOS and Android.
+`getFileSha256(uri)`, `runDetector(photoUri, modelUri)`, and `requestAttestation(options)` are implemented natively on
+iOS and Android. On Android, `requestAttestation` works only when the app sets the Gradle property
+`ParkingGuide_enableAttestation=true`; otherwise every call rejects with `E_ATTESTATION_UNSUPPORTED` (see
+[Attestation](#attestation)).
 
 ## Architecture
 
@@ -78,8 +83,8 @@ list, input resolution, and licenses, is recorded in
   parking zone), and geofence integration. On-device inference (`runDetector`), model-based guidance from camera
   frames (`createParkingDetector`), the zone rules (`mapModelOutput`), and `evaluateGeofence` are implemented; the
   reference model is not published yet.
-- **v1.0**: photo capture into `VerificationResult` (`verifyParking` is implemented), a rider-facing result screen in the example app (implemented), attestation support,
-  and opt-in upload and server-side verification integration.
+- **v1.0**: photo capture into `VerificationResult` (`verifyParking` is implemented), a rider-facing result screen in the example app (implemented), attestation support
+  (`requestAttestation` is implemented; device check pending), and opt-in upload and server-side verification integration.
 
 ## Installation
 
@@ -190,6 +195,10 @@ a model. See [Photo verification](#photo-verification).
   as JSON to a caller-owned `https://` endpoint, only when called. See [Opt-in upload](#opt-in-upload).
 - `DEFAULT_UPLOAD_TIMEOUT_MS` (`10000`), `DEFAULT_UPLOAD_RETRIES` (`2`), and `DEFAULT_UPLOAD_RETRY_DELAY_MS` (`500`) are
   the `UploadOptions` defaults.
+- `requestAttestation(options: AttestationOptions): Promise<string>` returns an App Attest (iOS) or Play Integrity
+  (Android) token bound to a photo hash and a server challenge, only when called. See [Attestation](#attestation).
+- `resetAttestationKey(): Promise<void>` discards the stored App Attest key on iOS, so that the next
+  `requestAttestation` call attests a new key; on Android it does nothing. See [Attestation](#attestation).
 - `verifyParking(options: VerifyParkingOptions): Promise<VerificationResult>` hashes the photo and assembles a
   `VerificationResult`. See [Photo verification](#photo-verification).
 - `getFileSha256(uri: string): Promise<string>` returns the lowercase hexadecimal SHA-256 of a file, computed natively
@@ -883,7 +892,7 @@ host supplies the model file, so it also knows its version; the package does not
 | `heading` | omitted | finite degrees in `[0, 360)`, clockwise from true north | Device heading at capture time. |
 | `location` | omitted | `GeoLocation`: `lat` in `[-90, 90]`, `lng` in `[-180, 180]`, `accuracy` finite and `>= 0` meters | Rider location. Pass it only after the rider consents; the package never reads the device location. |
 | `capturedAt` | the time `verifyParking` is called | valid `Date` | Written as an ISO 8601 UTC string, for example `2026-10-25T01:02:03.004Z`. |
-| `attestation` | omitted | string | Device attestation token, copied as-is. |
+| `attestation` | omitted | string | Device attestation token, for example from `requestAttestation` (see [Attestation](#attestation)), copied as-is. |
 | `modelVersion` | none (required) | non-empty string | Version of the host-supplied model that produced `ruleResults`, copied as-is to `metadata.modelVersion`. |
 
 Other errors: `verifyParking` rejects with `Error` when `Platform.OS` is neither `'ios'` nor `'android'`, when
@@ -989,6 +998,128 @@ if (!upload.ok) {
 }
 ```
 
+### Attestation
+
+`requestAttestation(options)` returns a device attestation token that binds one photo hash and one server challenge to
+the app instance: Apple App Attest on iOS and the Play Integrity Standard API on Android. It runs only when the app calls
+it; `verifyParking` does not call it. Pass the returned string to `verifyParking({ attestation })`, which copies it to
+`metadata.attestation`. The package does not verify tokens; the host server must verify them (see below).
+
+Options (invalid values reject with `RangeError` before the native call):
+
+| Option | Default | Constraint | Meaning |
+| --- | --- | --- | --- |
+| `photoSha256` | none (required) | 64 lowercase hexadecimal digits | SHA-256 of the photo, from `getFileSha256(uri)`. It equals `VerificationResult.photo.sha256` for the same file. |
+| `challenge` | none (required) | non-empty string with no lone UTF-16 surrogate | A single-use value that the host server issued for this verification. |
+| `cloudProjectNumber` | omitted | safe integer `> 0`; required on Android, ignored on iOS | The Google Cloud project number linked to the app in the Play Console. |
+
+Request hash. Native code computes the SHA-256 of the UTF-8 bytes of `photoSha256 + ':' + challenge`. Because
+`photoSha256` always has 64 characters, the first `:` separates the two values. iOS passes the 32 digest bytes as the
+App Attest `clientDataHash`. Android passes the 64-character lowercase hexadecimal digest as the Play Integrity
+`requestHash`.
+
+Token. The promise resolves with a JSON string. `requestHash` is the lowercase hexadecimal request hash.
+
+- iOS: `{"platform":"ios","type":"attestation"|"assertion","keyId":"<base64>","data":"<base64>","requestHash":"<hex>"}`.
+  The package keeps one App Attest key per app and stores its key ID in the Keychain
+  (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`), after the key is attested. When no key is stored, the call
+  generates and attests a key, and `type` is `"attestation"` with the attestation object in `data`. Later calls return
+  `type` `"assertion"` with the assertion in `data`. When App Attest reports the stored key as invalid
+  (`DCErrorInvalidKey`), the call deletes it and generates and attests a new key once. Until its attestation succeeds,
+  a generated key ID is stored in the Keychain as pending, together with the request hash of its attestation, and is
+  never used for an assertion. When the attestation fails with `DCErrorServerUnavailable`, the pending key is kept: a
+  next call with the same `photoSha256` and `challenge` attests the same key with the same request hash again, and a
+  next call with a different `photoSha256` or `challenge` discards the pending key and generates a new key. To reuse
+  the pending key, the host retries with the same `challenge`, so the server must keep that challenge valid until it
+  receives a token for it. After any other attestation error, the pending key is discarded and the next call generates
+  a new key, as Apple's
+  [Establishing your app's integrity](https://developer.apple.com/documentation/devicecheck/establishing-your-app-s-integrity)
+  recommends. Calls are serialized.
+- Android: `{"platform":"android","type":"integrity","data":"<token>","requestHash":"<hex>"}`. `data` is the Play
+  Integrity token. The package prepares one token provider per `cloudProjectNumber` and reuses it; concurrent requests
+  for the same `cloudProjectNumber` share one preparation, and a failed preparation is retried by the next call. When a
+  request reports `INTEGRITY_TOKEN_PROVIDER_INVALID`, it prepares a new provider and requests again once.
+
+Deliver every `"attestation"` token to the server: the server needs the attested public key to verify the assertions
+that follow. The package stores the key ID when the attestation succeeds, before the token reaches the server, so a
+token can be lost (for example, the app is terminated or the upload fails). When the server reports that it does not
+know the `keyId` of an assertion, call `resetAttestationKey()` and then call `requestAttestation` again with a new
+challenge: the reset deletes the stored key ID and the pending key ID, and the next call returns `type`
+`"attestation"` for a new key.
+`resetAttestationKey()` runs on the same serial queue as `requestAttestation`, resolves when no key ID is stored, and
+rejects with `E_ATTESTATION_FAILED` when the Keychain delete fails. On Android it resolves without an action, because
+Play Integrity stores no key on the device.
+
+Errors. The promise rejects with code:
+
+- `E_ATTESTATION_UNSUPPORTED` when the device, platform, or build cannot attest: App Attest is not supported (for
+  example on the iOS Simulator) or reports `DCErrorFeatureUnsupported`; the Android build does not enable attestation;
+  or Play Integrity reports `API_NOT_AVAILABLE`, `PLAY_STORE_NOT_FOUND`, or `PLAY_SERVICES_NOT_FOUND`.
+- `E_ATTESTATION_FAILED` for every other failure. The message names the failed step and contains the platform error:
+  on iOS the `NSError` domain and code (`App Attest <step> failed (<domain> <code>).`), on Android the
+  `StandardIntegrityErrorCode` value (for example `Play Integrity request failed (StandardIntegrityErrorCode -3).`).
+
+Attestation is optional: treat `E_ATTESTATION_UNSUPPORTED` as "no token" and call `verifyParking` without
+`attestation`.
+
+Setup:
+
+- iOS: add the App Attest capability to the app target in Xcode. It adds the entitlement
+  `com.apple.developer.devicecheck.appattest-environment` with the value `development`; set `production` to test against
+  the production servers during development. Builds distributed through TestFlight, the App Store, or the Apple
+  Developer Enterprise Program always use the production environment. See Apple's
+  [Establishing your app's integrity](https://developer.apple.com/documentation/devicecheck/establishing-your-app-s-integrity)
+  and [App Attest Environment](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.devicecheck.appattest-environment).
+  `ParkingGuide.podspec` links the `DeviceCheck` and `Security` system frameworks.
+- Android: set `ParkingGuide_enableAttestation=true` in the app's `android/gradle.properties` (or
+  `ext.ParkingGuide_enableAttestation = true` in the root `android/build.gradle`). Only then does
+  `android/build.gradle` add `com.google.android.play:integrity:1.6.0` and the Play Integrity code; otherwise every call
+  rejects with `E_ATTESTATION_UNSUPPORTED`. Enable the Play Integrity API for the app in the Play Console, link a
+  Google Cloud project, and pass that project's number as `cloudProjectNumber`. See Google's
+  [Make a standard API request](https://developer.android.com/google/play/integrity/standard).
+
+Network use. App Attest key attestation contacts Apple servers, and Play Integrity contacts Google Play services and
+Google servers. The package logs nothing; the token contains no photo bytes and no location.
+
+Server verification (not part of this package). The server must:
+
+1. Issue `challenge` itself, accept each value once, and expire it.
+2. Recompute the request hash from the received `photo.sha256` and the challenge it issued, and compare it with the
+   value that the platform signed, not only with the token's `requestHash` field.
+3. Verify `data` with the platform's rules: for iOS, Apple's
+   [Validating apps that connect to your server](https://developer.apple.com/documentation/devicecheck/validating-apps-that-connect-to-your-server)
+   (an attestation with the request hash as client data hash, then assertions against the stored public key and
+   counter for `keyId`); for Android, decode the token with Google's server API and check its request details and
+   verdicts as described in [Integrity verdicts](https://developer.android.com/google/play/integrity/verdicts).
+
+```ts
+import {
+  getFileSha256,
+  requestAttestation,
+  verifyParking,
+} from 'react-native-parking-guide';
+
+const photo = await camera.current.takePhoto();
+const challenge = await fetchChallengeFromServer();
+let attestation: string | undefined;
+try {
+  attestation = await requestAttestation({
+    photoSha256: await getFileSha256(photo.path),
+    challenge,
+    cloudProjectNumber: 123456789012,
+  });
+} catch (error) {
+  // E_ATTESTATION_UNSUPPORTED or E_ATTESTATION_FAILED: continue without a token.
+}
+const result = await verifyParking({
+  photo: { uri: photo.path, width: photo.width, height: photo.height },
+  ruleResults,
+  deviceTilt: { pitch, roll },
+  attestation,
+  modelVersion: '2026.10.1',
+});
+```
+
 ### Exported types
 
 These are the types exported by `src/index.tsx`. Numeric fields are TypeScript `number` values; unless a range is
@@ -1017,6 +1148,7 @@ stated.
 | `GuidanceMappingOptions`, `GuidanceThresholds` | Model-based capture guidance types. See [Model-based capture guidance](#model-based-capture-guidance). |
 | `GeoLocation`, `GeoPoint`, `GeofenceOptions`, `GeofenceZone`, `GeofenceZoneKind` | Geofence types. See [Geofence](#geofence). |
 | `UploadErrorKind`, `UploadOptions`, `UploadResult<T>` | Opt-in upload types. See [Opt-in upload](#opt-in-upload). |
+| `AttestationOptions` | Required `photoSha256: string` and `challenge: string`; optional `cloudProjectNumber: number`. See [Attestation](#attestation). |
 | `DetectorOutput` | Required `boxes`, `scores`, and `classes` (`readonly number[]`). See [Detector model contract](#detector-model-contract). |
 | `VerifyParkingOptions` | Photo verification options. See [Photo verification](#photo-verification). |
 | `InferenceRuleId`, `MappingOptions`, `MappingThresholds`, `ModelAssessment`, `ModelBox`, `ModelClass`, `ModelDetection`, `ModelMask`, `RawModelOutput` | Model-output mapping types. See [Model-output mapping](#model-output-mapping). |
