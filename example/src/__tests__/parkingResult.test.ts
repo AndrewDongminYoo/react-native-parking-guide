@@ -3,9 +3,13 @@ import type { RuleId } from 'react-native-parking-guide';
 
 import {
   DEMO_POLICY,
+  NO_RESULT_TITLE,
   judgeParking,
+  noResultDetail,
+  resultAnnouncement,
   resultReasons,
   resultTitle,
+  scoreText,
 } from '../parkingResult';
 
 jest.mock(
@@ -131,5 +135,46 @@ describe('result copy', () => {
   it('says so when nothing needs fixing', () => {
     expect(resultReasons([])).toEqual(['No problems found.']);
     expect(resultReasons(['Move it.'])).toEqual(['Move it.']);
+  });
+
+  it('shows the score as points and reads it as words', () => {
+    expect(scoreText(0.724)).toEqual({
+      shown: 'Score 72 / 100',
+      spoken: 'Score 72 out of 100',
+    });
+    expect(scoreText(1).spoken).toBe('Score 100 out of 100');
+  });
+});
+
+describe('result announcement', () => {
+  it('announces the verdict, the score, and only the first reason', () => {
+    expect(
+      resultAnnouncement({
+        kind: 'verdict',
+        verdict: 'FAIL',
+        score: 0.4,
+        reasons: ['Move it off the crosswalk.', 'Park inside the zone.'],
+      })
+    ).toBe('Park again, FAIL. Score 40 out of 100. Move it off the crosswalk.');
+  });
+
+  it('announces that nothing needs fixing when there is no reason', () => {
+    expect(
+      resultAnnouncement({
+        kind: 'verdict',
+        verdict: 'PASS',
+        score: 1,
+        reasons: [],
+      })
+    ).toBe('Parked correctly, PASS. Score 100 out of 100. No problems found.');
+  });
+
+  it('announces the shown explanation when there is no verdict', () => {
+    expect(resultAnnouncement({ kind: 'noModel' })).toBe(
+      `${NO_RESULT_TITLE}. ${noResultDetail({ kind: 'noModel' })}`
+    );
+    expect(resultAnnouncement({ kind: 'error', code: 'E_MODEL_LOAD' })).toBe(
+      'No parking result. The parking model could not run (E_MODEL_LOAD). Retake the photo.'
+    );
   });
 });

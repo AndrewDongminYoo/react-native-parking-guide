@@ -12,7 +12,9 @@ import {
   captureDisclaimer,
   captureMessages,
   captureTitle,
+  guidanceLines,
   guidanceMessages,
+  shutterHint,
   vehicleLabel,
 } from '../captureCopy';
 
@@ -148,6 +150,24 @@ describe('example capture copy', () => {
     );
     expect(captureDisclaimer(true)).toBe(
       'Checks image quality and vehicle placement with the configured model, then shows a parking result for the photo.'
+    );
+  });
+
+  it('shows the messages, or one status line when there is none', () => {
+    expect(guidanceLines(['Hold the phone steady.'], true)).toEqual([
+      'Hold the phone steady.',
+    ]);
+    expect(guidanceLines([], true)).toEqual(['Ready. Take the photo.']);
+    expect(guidanceLines([], false)).toEqual([
+      'Checking the image. Hold the phone steady.',
+    ]);
+  });
+
+  it('hints why the shutter is disabled', () => {
+    expect(shutterHint(true, false)).toBeUndefined();
+    expect(shutterHint(false, true)).toBe('Taking the photo.');
+    expect(shutterHint(false, false)).toBe(
+      'Available when the guidance says Ready.'
     );
   });
 

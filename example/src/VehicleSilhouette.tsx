@@ -84,7 +84,9 @@ export function VehicleSilhouette({
   const scale = width / BOX.width;
   return (
     <View
+      // Decorative: hidden from VoiceOver (accessibilityElementsHidden) and TalkBack (importantForAccessibility).
       accessible={false}
+      accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       pointerEvents="none"
       style={{ width, height: BOX.height * scale }}

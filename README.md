@@ -818,6 +818,14 @@ and `getParkingFeedback`. It uses `defaultPolicy` with `UPRIGHT` and
 `IMAGE_QUALITY` disabled, because a detector alone cannot evaluate them (with them enabled, the unknown `UPRIGHT` result
 fails every photo), and the screen says so. Without `DETECTOR_MODEL` the screen shows no verdict.
 
+Screen reader support in the example: Android reads the capture guidance and the result through
+`accessibilityLiveRegion`, which iOS does not support, so on iOS the example calls
+`AccessibilityInfo.announceForAccessibility`. The capture screen announces its first guidance line when that line
+changes, with the throttle that `decideGuidanceAnnouncement` in `example/src/announcements.ts` defines. The result screen
+announces `resultAnnouncement` from `example/src/parkingResult.ts` (the verdict, the score, and the first reason) when the
+result arrives. The guide frame shows readiness by more than color: a solid border and a **Ready** label when ready, a
+dashed border when not. The vehicle silhouette is hidden from screen readers, and the disabled shutter has a hint.
+
 `DETECTOR_MODEL` is an absolute path, a `file:///` or (Android) `content://` URI, or a file name in the app's files
 directory. The native example app passes that directory to `App` as the `filesDirectory` initial property: `Documents`
 on iOS (`SceneDelegate.swift`), `Context.getFilesDir()` on Android (`MainActivity.kt`). A file name is needed on an iOS

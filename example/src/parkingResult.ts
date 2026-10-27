@@ -97,3 +97,35 @@ export function resultTitle(verdict: Verdict): string {
 export function resultReasons(reasons: readonly string[]): string[] {
   return reasons.length > 0 ? [...reasons] : ['No problems found.'];
 }
+
+export const NO_RESULT_TITLE = 'No parking result';
+
+/** The explanation that the result screen shows under `NO_RESULT_TITLE`. */
+export function noResultDetail(
+  judgment: Exclude<ParkingJudgment, { kind: 'verdict' }>
+): string {
+  return judgment.kind === 'noModel'
+    ? 'No detector model is configured. Set DETECTOR_MODEL in example/src/detectorModel.ts to judge the photo.'
+    : `The parking model could not run (${judgment.code}). Retake the photo.`;
+}
+
+/** The score as the result screen shows it, and as a screen reader reads it. */
+export function scoreText(score: number): { shown: string; spoken: string } {
+  const points = Math.round(score * 100);
+  return {
+    shown: `Score ${points} / 100`,
+    spoken: `Score ${points} out of 100`,
+  };
+}
+
+/** What iOS announces when the parking result arrives: the verdict, the score, and the first reason. */
+export function resultAnnouncement(judgment: ParkingJudgment): string {
+  if (judgment.kind !== 'verdict') {
+    return `${NO_RESULT_TITLE}. ${noResultDetail(judgment)}`;
+  }
+  return [
+    `${resultTitle(judgment.verdict)}, ${judgment.verdict}.`,
+    `${scoreText(judgment.score).spoken}.`,
+    resultReasons(judgment.reasons)[0],
+  ].join(' ');
+}

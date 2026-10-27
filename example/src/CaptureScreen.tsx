@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   AppState,
   BackHandler,
   Linking,
@@ -39,10 +40,14 @@ import type {
   VehicleType,
 } from 'react-native-parking-guide';
 
+import { decideGuidanceAnnouncement } from './announcements';
+import type { GuidanceAnnouncement } from './announcements';
 import {
   captureDisclaimer,
   captureMessages,
   captureTitle,
+  guidanceLines,
+  shutterHint,
 } from './captureCopy';
 import type { CapturedPhoto } from './parkingResult';
 import {
@@ -117,6 +122,38 @@ function CaptureHeader({
       </Text>
     </View>
   );
+}
+
+/**
+ * Announces the first guidance line to VoiceOver when it changes, at most once per interval
+ * (`decideGuidanceAnnouncement`). Android reads the guidance through `accessibilityLiveRegion` instead.
+ */
+function useGuidanceAnnouncement(line: string | null) {
+  const lastRef = useRef<GuidanceAnnouncement | null>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || line === null) {
+      return;
+    }
+    const announce = () => {
+      lastRef.current = { line, at: Date.now() };
+      AccessibilityInfo.announceForAccessibility(line);
+    };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const decision = decideGuidanceAnnouncement(
+      lastRef.current,
+      line,
+      Date.now()
+    );
+    if (decision.kind === 'announce') {
+      announce();
+    } else if (decision.kind === 'wait') {
+      // Announce when the wait ends instead of deciding again, so a clock that went backwards delays the line by
+      // `delayMs` only.
+      timer = setTimeout(announce, decision.delayMs);
+    }
+    // A newer line cancels the pending announcement of this one.
+    return () => clearTimeout(timer);
+  }, [line]);
 }
 
 function CameraCapture({
@@ -240,6 +277,12 @@ function CameraCapture({
       captureRef.current();
     }
   }, [autoCaptureDue, acknowledgeAutoCapture]);
+  const lines = guidanceLines(
+    captureMessages(guidance.issues, guidance.detectorError),
+    guidance.ready
+  );
+  // Without a camera the screen shows no guidance.
+  useGuidanceAnnouncement(device ? lines[0]! : null);
 
   const title = captureTitle(vehicleType);
   if (!device) {
@@ -257,7 +300,6 @@ function CameraCapture({
 
   const canCapture =
     guidance.ready && guidance.issues.length === 0 && !capturing;
-  const messages = captureMessages(guidance.issues, guidance.detectorError);
   const frameColor = guidance.ready ? READY_COLOR : IDLE_COLOR;
   const frameWidth =
     frameArea && hintHeight !== null
@@ -325,6 +367,8 @@ function CameraCapture({
           <View
             style={[
               styles.guideFrame,
+              // Readiness is shown by the border style and the label too, not by color alone.
+              guidance.ready ? styles.guideFrameReady : styles.guideFrameIdle,
               { width: frameWidth, borderColor: frameColor },
             ]}
             onLayout={(event: LayoutChangeEvent) => {
@@ -332,6 +376,17 @@ function CameraCapture({
               setGuideRect({ x, y, width, height });
             }}
           >
+            {guidance.ready ? (
+              // Screen readers get readiness from the guidance line, so the visual label is hidden from them.
+              <Text
+                accessible={false}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+                style={styles.readyLabel}
+              >
+                Ready
+              </Text>
+            ) : null}
             <VehicleSilhouette
               vehicleType={vehicleType}
               width={frameWidth * 0.7}
@@ -359,19 +414,11 @@ function CameraCapture({
         ]}
       >
         <View style={styles.messages} accessibilityLiveRegion="polite">
-          {messages.length > 0 ? (
-            messages.map((message) => (
-              <Text key={message} style={styles.message}>
-                {message}
-              </Text>
-            ))
-          ) : (
-            <Text style={styles.message}>
-              {guidance.ready
-                ? 'Ready. Take the photo.'
-                : 'Checking the image. Hold the phone steady.'}
+          {lines.map((line) => (
+            <Text key={line} style={styles.message}>
+              {line}
             </Text>
-          )}
+          ))}
           {status ? <Text style={styles.status}>{status}</Text> : null}
           {detectorConfigured ? (
             <View style={styles.autoCapture}>
@@ -390,6 +437,7 @@ function CameraCapture({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Take photo"
+          accessibilityHint={shutterHint(canCapture, capturing)}
           accessibilityState={{ disabled: !canCapture }}
           disabled={!canCapture}
           onPress={capturePhoto}
@@ -579,9 +627,26 @@ const styles = StyleSheet.create({
     aspectRatio: 4 / 3,
     borderWidth: 3,
     borderRadius: 20,
-    borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  guideFrameReady: {
+    borderStyle: 'solid',
+  },
+  guideFrameIdle: {
+    borderStyle: 'dashed',
+  },
+  readyLabel: {
+    position: 'absolute',
+    top: 8,
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: READY_COLOR,
+    color: 'black',
+    fontSize: 14,
+    fontWeight: '700',
   },
   frameHint: {
     color: 'white',
