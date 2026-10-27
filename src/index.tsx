@@ -98,6 +98,8 @@ export {
   uploadVerification,
 } from './upload';
 export type { UploadErrorKind, UploadOptions, UploadResult } from './upload';
+export { requestAttestation, resetAttestationKey } from './attestation';
+export type { AttestationOptions } from './attestation';
 export { verifyParking } from './verification';
 export type { VerifyParkingOptions } from './verification';
 export { defaultPolicy } from './policy/defaultPolicy';

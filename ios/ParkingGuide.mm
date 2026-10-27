@@ -1,4 +1,5 @@
 #import "ParkingGuide.h"
+#import "ParkingGuideAttestation.h"
 #import "ParkingGuideDetector.h"
 
 #import <CommonCrypto/CommonDigest.h>
@@ -87,6 +88,33 @@ static NSString *ParkingGuideSha256Hex(NSURL *url)
       reject(code, message, nil);
     } else {
       resolve(output);
+    }
+  });
+}
+
+- (void)requestAttestation:(NSString *)photoSha256
+                 challenge:(NSString *)challenge
+        cloudProjectNumber:(double)cloudProjectNumber
+                   resolve:(RCTPromiseResolveBlock)resolve
+                    reject:(RCTPromiseRejectBlock)reject
+{
+  // cloudProjectNumber is a Play Integrity setting; App Attest does not use it.
+  ParkingGuideRequestAttestation(photoSha256, challenge, ^(NSString *token, NSString *code, NSString *message) {
+    if (token == nil) {
+      reject(code, message, nil);
+    } else {
+      resolve(token);
+    }
+  });
+}
+
+- (void)resetAttestationKey:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject
+{
+  ParkingGuideResetAttestationKey(^(NSString *code, NSString *message) {
+    if (code == nil) {
+      resolve(nil);
+    } else {
+      reject(code, message, nil);
     }
   });
 }

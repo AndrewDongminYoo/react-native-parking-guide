@@ -27,6 +27,10 @@ def frameProcessorsEnabled = camera != null &&
   (rootProject.ext.has("VisionCamera_enableFrameProcessors") ?
     rootProject.ext.get("VisionCamera_enableFrameProcessors").toString() :
     project.findProperty("VisionCamera_enableFrameProcessors")?.toString()) != "false"
+// Play Integrity is opt-in: the dependency and its source set are included only when the property is "true".
+def attestationEnabled = (rootProject.ext.has("ParkingGuide_enableAttestation") ?
+    rootProject.ext.get("ParkingGuide_enableAttestation").toString() :
+    project.findProperty("ParkingGuide_enableAttestation")?.toString()) == "true"
 
 android {
   namespace "com.parkingguide"
@@ -39,6 +43,7 @@ android {
   }
 
   sourceSets.main.java.srcDir(frameProcessorsEnabled ? "src/visionCamera/java" : "src/noCamera/java")
+  sourceSets.main.java.srcDir(attestationEnabled ? "src/attestation/java" : "src/noAttestation/java")
   // Synthetic detector fixtures from scripts/make-fixture-models.py; outside the published package files.
   sourceSets.androidTest.assets.srcDir("../fixtures/detector")
 
@@ -56,6 +61,9 @@ dependencies {
   implementation "com.google.ai.edge.litert:litert:1.4.2"
   if (frameProcessorsEnabled) {
     implementation project(":react-native-vision-camera")
+  }
+  if (attestationEnabled) {
+    implementation "com.google.android.play:integrity:1.6.0"
   }
   testImplementation "junit:junit:4.13.2"
   androidTestImplementation "androidx.test:runner:1.7.0"
