@@ -72,8 +72,29 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
     }
   }
 
+  override fun requestAttestation(
+    photoSha256: String,
+    challenge: String,
+    cloudProjectNumber: Double,
+    promise: Promise
+  ) {
+    ParkingGuideAttestation.request(
+      reactApplicationContext,
+      photoSha256,
+      challenge,
+      cloudProjectNumber.toLong(),
+      promise
+    )
+  }
+
+  // Play Integrity keeps no key on the device, so there is nothing to reset.
+  override fun resetAttestationKey(promise: Promise) {
+    promise.resolve(null)
+  }
+
   override fun invalidate() {
     fileExecutor.shutdownNow()
+    ParkingGuideAttestation.invalidate()
     ParkingDetectors.close(reactApplicationContext)
     ParkingGuideFrameProcessors.invalidate(reactApplicationContext)
     super.invalidate()
