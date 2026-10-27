@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
+  AccessibilityInfo,
   BackHandler,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -13,9 +15,13 @@ import type { Verdict, VehicleType } from 'react-native-parking-guide';
 
 import {
   DEMO_POLICY_NOTE,
+  NO_RESULT_TITLE,
   judgeParking,
+  noResultDetail,
+  resultAnnouncement,
   resultReasons,
   resultTitle,
+  scoreText,
 } from './parkingResult';
 import type { CapturedPhoto, ParkingJudgment } from './parkingResult';
 
@@ -49,6 +55,14 @@ export function ResultScreen({
     judgeParking(photo, vehicleType, modelUri).then((result) => {
       if (current) {
         setJudgment(result);
+        // accessibilityLiveRegion below is Android-only; VoiceOver needs an explicit announcement.
+        // Queued, so that it does not cut off VoiceOver reading the screen that just opened.
+        if (Platform.OS === 'ios') {
+          AccessibilityInfo.announceForAccessibilityWithOptions(
+            resultAnnouncement(result),
+            { queue: true }
+          );
+        }
       }
     });
     return () => {
@@ -119,31 +133,17 @@ function JudgmentBody({ judgment }: { judgment: ParkingJudgment | null }) {
   if (judgment === null) {
     return <Text style={styles.detail}>Checking your parking…</Text>;
   }
-  if (judgment.kind === 'noModel') {
+  if (judgment.kind !== 'verdict') {
     return (
       <>
         <Text accessibilityRole="header" style={styles.title}>
-          No parking result
+          {NO_RESULT_TITLE}
         </Text>
-        <Text style={styles.detail}>
-          No detector model is configured. Set DETECTOR_MODEL in
-          example/src/detectorModel.ts to judge the photo.
-        </Text>
+        <Text style={styles.detail}>{noResultDetail(judgment)}</Text>
       </>
     );
   }
-  if (judgment.kind === 'error') {
-    return (
-      <>
-        <Text accessibilityRole="header" style={styles.title}>
-          No parking result
-        </Text>
-        <Text style={styles.detail}>
-          The parking model could not run ({judgment.code}). Retake the photo.
-        </Text>
-      </>
-    );
-  }
+  const score = scoreText(judgment.score);
   return (
     <>
       <Text
@@ -157,8 +157,8 @@ function JudgmentBody({ judgment }: { judgment: ParkingJudgment | null }) {
       <Text accessibilityRole="header" style={styles.title}>
         {resultTitle(judgment.verdict)}
       </Text>
-      <Text style={styles.detail}>
-        Score {Math.round(judgment.score * 100)} / 100
+      <Text style={styles.detail} accessibilityLabel={score.spoken}>
+        {score.shown}
       </Text>
       <View style={styles.reasons}>
         {resultReasons(judgment.reasons).map((reason) => (
