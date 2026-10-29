@@ -24,6 +24,12 @@ export default defineConfig([
     },
   },
   {
-    ignores: ['node_modules/', 'lib/', 'example/dist/', '.github/skills/'],
+    ignores: [
+      'node_modules/',
+      'lib/',
+      'android/build/',
+      'example/dist/',
+      '.github/skills/',
+    ],
   },
 ]);

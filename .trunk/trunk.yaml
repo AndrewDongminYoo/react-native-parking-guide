@@ -27,7 +27,7 @@ lint:
     - actionlint@1.7.8
     - black@26.10.1
     - checkov@3.4.0
-    - eslint@10.13.0
+    - eslint@9.39.5
     - git-diff-check
     - isort@9.0.2
     - ktlint@1.7.1
@@ -43,6 +43,12 @@ lint:
     - trufflehog@3.90.13
     - yamllint@1.38.0
   ignore:
+    # Preserve skill files from the upstream commit recorded in .github/skills/README.md.
+    - linters:
+        - prettier
+      paths:
+        - .github/skills/**
+        - '!.github/skills/README.md'
     - linters:
         - eslint
       paths:
