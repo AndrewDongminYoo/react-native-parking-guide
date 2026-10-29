@@ -32,7 +32,7 @@ describe('reduceAutoCapture', () => {
     let state = reduceAutoCapture(
       createAutoCaptureState(),
       { ready: true, now: 0 },
-      0
+      0,
     );
     expect(state.due).toBe(true);
     state = reduceAutoCapture(state, { ready: true, now: 10 }, 0);
@@ -43,7 +43,7 @@ describe('reduceAutoCapture', () => {
     let state = reduceAutoCapture(
       createAutoCaptureState(),
       { ready: true, now: 0 },
-      0
+      0,
     );
     state = reduceAutoCapture(state, { ready: false, now: 1 }, 0);
     expect(state.due).toBe(false);
@@ -51,14 +51,14 @@ describe('reduceAutoCapture', () => {
 
   it('rejects a negative or non-finite hold', () => {
     expect(() =>
-      reduceAutoCapture(createAutoCaptureState(), { ready: true, now: 0 }, -1)
+      reduceAutoCapture(createAutoCaptureState(), { ready: true, now: 0 }, -1),
     ).toThrow(RangeError);
     expect(() =>
       reduceAutoCapture(
         createAutoCaptureState(),
         { ready: true, now: 0 },
-        Number.NaN
-      )
+        Number.NaN,
+      ),
     ).toThrow(RangeError);
   });
 });

@@ -134,7 +134,7 @@ export function getFileSha256(uri: string): Promise<string> {
  */
 export function runDetector(
   photoUri: string,
-  modelUri: string
+  modelUri: string,
 ): Promise<DetectorOutput> {
   return ParkingGuide.runDetector(photoUri, modelUri);
 }

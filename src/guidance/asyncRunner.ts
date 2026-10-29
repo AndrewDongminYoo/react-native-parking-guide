@@ -2,7 +2,7 @@
 export interface DetectorRunnerWorklets {
   createContext(name: string): {
     createRunAsync<Args extends unknown[]>(
-      fn: (...args: Args) => void
+      fn: (...args: Args) => void,
     ): (...args: Args) => unknown;
   };
   createSharedValue<T>(value: T): { value: T };
@@ -45,7 +45,7 @@ let retained:
  * flag, so detector calls on the JS runtime run one at a time.
  */
 export function createDetectorAsyncRunner<Frame>(
-  worklets: DetectorRunnerWorklets
+  worklets: DetectorRunnerWorklets,
 ): DetectorAsyncRunner<Frame> {
   if (retained === undefined) {
     const context = worklets.createContext('ParkingGuide.detector');
@@ -62,7 +62,7 @@ export function createDetectorAsyncRunner<Frame>(
             busy.value = false;
           }
         }
-      }
+      },
     );
     retained = { context, run, busy };
   }

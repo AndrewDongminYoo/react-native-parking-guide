@@ -31,7 +31,7 @@ function square(
   kind: GeofenceZone['kind'],
   halfSize: number,
   east = 0,
-  north = 0
+  north = 0,
 ): GeofenceZone {
   return {
     kind,
@@ -64,16 +64,16 @@ describe('evaluateGeofence', () => {
 
   it('passes inside an allowed zone farther than the accuracy from its boundary', () => {
     expect(evaluateGeofence(location(0, 0), [square('allowed', 100)])).toEqual(
-      PASS
+      PASS,
     );
     expect(evaluateGeofence(location(85, 0), [square('allowed', 100)])).toEqual(
-      PASS
+      PASS,
     );
   });
 
   it('fails outside every allowed zone farther than the accuracy', () => {
     expect(
-      evaluateGeofence(location(150, 0), [square('allowed', 100)])
+      evaluateGeofence(location(150, 0), [square('allowed', 100)]),
     ).toEqual(FAIL);
   });
 
@@ -95,7 +95,7 @@ describe('evaluateGeofence', () => {
     const zones = [square('allowed', 500), square('prohibited', 50)];
     expect(evaluateGeofence(location(0, 0), zones)).toEqual(FAIL);
     expect(
-      evaluateGeofence(location(0, 0), [square('prohibited', 50)])
+      evaluateGeofence(location(0, 0), [square('prohibited', 50)]),
     ).toEqual(FAIL);
   });
 
@@ -122,10 +122,10 @@ describe('evaluateGeofence', () => {
       ],
     };
     expect(evaluateGeofence({ lat: 0.5, lng: 0, accuracy: 0 }, [zone])).toEqual(
-      WARN
+      WARN,
     );
     expect(
-      evaluateGeofence({ lat: 0.5, lng: 0.5, accuracy: 0 }, [zone])
+      evaluateGeofence({ lat: 0.5, lng: 0.5, accuracy: 0 }, [zone]),
     ).toEqual(PASS);
   });
 
@@ -154,7 +154,7 @@ describe('evaluateGeofence', () => {
     };
     for (const point of [location(0, 0), location(95, 0), location(150, 0)]) {
       expect(evaluateGeofence(point, [closed])).toEqual(
-        evaluateGeofence(point, [open])
+        evaluateGeofence(point, [open]),
       );
     }
   });
@@ -170,13 +170,13 @@ describe('evaluateGeofence', () => {
       ],
     };
     expect(
-      evaluateGeofence({ lat: 0, lng: 180, accuracy: 10 }, [zone])
+      evaluateGeofence({ lat: 0, lng: 180, accuracy: 10 }, [zone]),
     ).toEqual(PASS);
     expect(
-      evaluateGeofence({ lat: 0, lng: -179.995, accuracy: 10 }, [zone])
+      evaluateGeofence({ lat: 0, lng: -179.995, accuracy: 10 }, [zone]),
     ).toEqual(PASS);
     expect(
-      evaluateGeofence({ lat: 0, lng: 179.9, accuracy: 10 }, [zone])
+      evaluateGeofence({ lat: 0, lng: 179.9, accuracy: 10 }, [zone]),
     ).toEqual(FAIL);
   });
 
@@ -191,7 +191,7 @@ describe('evaluateGeofence', () => {
       ],
     };
     expect(evaluateGeofence({ lat: 0, lng: 0, accuracy: 10 }, [zone])).toEqual(
-      FAIL
+      FAIL,
     );
     const newYork = { lat: 40.71, lng: -74, accuracy: 10 };
     const prohibited: GeofenceZone = {
@@ -213,7 +213,7 @@ describe('evaluateGeofence', () => {
       return at(1000 * Math.cos(angle), 1000 * Math.sin(angle));
     });
     expect(
-      evaluateGeofence(location(0, 0), [{ kind: 'allowed', polygon }])
+      evaluateGeofence(location(0, 0), [{ kind: 'allowed', polygon }]),
     ).toEqual(PASS);
   });
 
@@ -229,27 +229,27 @@ describe('evaluateGeofence', () => {
     expect(evaluateGeofence(location(0, 0, 50), zones)).toEqual(FAIL);
     expect(evaluateGeofence(location(0, 0, 50.5), zones)).toEqual(unchecked);
     expect(
-      evaluateGeofence(location(0, 0, 3000), zones, { maxAccuracy: 5000 })
+      evaluateGeofence(location(0, 0, 3000), zones, { maxAccuracy: 5000 }),
     ).toEqual(WARN);
     expect(
-      evaluateGeofence(location(0, 0, 3000), zones, { maxAccuracy: Infinity })
+      evaluateGeofence(location(0, 0, 3000), zones, { maxAccuracy: Infinity }),
     ).toEqual(WARN);
     expect(
       evaluatePolicy(
         [evaluateGeofence(location(0, 0, 3000), zones)],
-        defaultPolicy
-      ).verdict
+        defaultPolicy,
+      ).verdict,
     ).toBe('FAIL');
     for (const maxAccuracy of [-1, Number.NaN]) {
       expect(() =>
-        evaluateGeofence(location(0, 0), zones, { maxAccuracy })
+        evaluateGeofence(location(0, 0), zones, { maxAccuracy }),
       ).toThrow(RangeError);
     }
     for (const maxAccuracy of ['invalid', '10', true]) {
       expect(() =>
         evaluateGeofence(location(0, 0, 3000), zones, {
           maxAccuracy: maxAccuracy as unknown as number,
-        })
+        }),
       ).toThrow(RangeError);
     }
   });
@@ -269,7 +269,7 @@ describe('evaluateGeofence', () => {
     expect(() =>
       evaluateGeofence(point, [
         { kind: 'allowed', polygon: zone.polygon.slice(0, 2) },
-      ])
+      ]),
     ).toThrow(RangeError);
     expect(() =>
       evaluateGeofence(point, [
@@ -277,12 +277,12 @@ describe('evaluateGeofence', () => {
           kind: 'allowed',
           polygon: [...zone.polygon.slice(1), { lat: 0, lng: 200 }],
         },
-      ])
+      ]),
     ).toThrow(RangeError);
     expect(() =>
       evaluateGeofence(point, [
         { kind: 'other' as GeofenceZone['kind'], polygon: zone.polygon },
-      ])
+      ]),
     ).toThrow(RangeError);
     const holed = [...zone.polygon];
     delete holed[1];
@@ -294,16 +294,16 @@ describe('evaluateGeofence', () => {
       expect(() =>
         evaluateGeofence(point, [
           { kind: 'allowed', polygon: polygon as GeofenceZone['polygon'] },
-        ])
+        ]),
       ).toThrow(RangeError);
     }
     // eslint-disable-next-line no-sparse-arrays
     expect(() => evaluateGeofence(point, [, zone] as GeofenceZone[])).toThrow(
-      RangeError
+      RangeError,
     );
     // Invalid zones are rejected even without a location.
     expect(() =>
-      evaluateGeofence(undefined, [{ kind: 'allowed', polygon: [] }])
+      evaluateGeofence(undefined, [{ kind: 'allowed', polygon: [] }]),
     ).toThrow(RangeError);
   });
 

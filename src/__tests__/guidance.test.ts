@@ -25,7 +25,7 @@ describe('reduceGuidance', () => {
     expect(first.guidance.progress).toBe(0.25);
     expect(second.guidance.progress).toBe(0.4375);
     expect(
-      reduceGuidance(second, { ...goodFrame, progress: 0 }).guidance.progress
+      reduceGuidance(second, { ...goodFrame, progress: 0 }).guidance.progress,
     ).toBe(0.328125);
   });
 
@@ -100,7 +100,7 @@ describe('reduceGuidance', () => {
     expect(
       reduceGuidance(createGuidanceState(), goodFrame, {
         smoothingFactor: 0.5,
-      }).guidance.progress
+      }).guidance.progress,
     ).toBe(0.5);
   });
 
@@ -109,8 +109,8 @@ describe('reduceGuidance', () => {
       reduceGuidance(
         createGuidanceState(),
         { ...goodFrame, ready: false },
-        { debounceFrames: 1 }
-      ).guidance.ready
+        { debounceFrames: 1 },
+      ).guidance.ready,
     ).toBe(false);
   });
 
@@ -125,8 +125,8 @@ describe('reduceGuidance', () => {
       reduceGuidance(
         createGuidanceState(),
         { ...goodFrame, progress },
-        { smoothingFactor: 1 }
-      ).guidance.progress
+        { smoothingFactor: 1 },
+      ).guidance.progress,
     ).toBe(expected);
   });
 
@@ -134,18 +134,18 @@ describe('reduceGuidance', () => {
     'rejects invalid smoothingFactor %s',
     (smoothingFactor) => {
       expect(() =>
-        reduceGuidance(createGuidanceState(), goodFrame, { smoothingFactor })
+        reduceGuidance(createGuidanceState(), goodFrame, { smoothingFactor }),
       ).toThrow(RangeError);
-    }
+    },
   );
 
   it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53])(
     'rejects invalid debounceFrames %s',
     (debounceFrames) => {
       expect(() =>
-        reduceGuidance(createGuidanceState(), goodFrame, { debounceFrames })
+        reduceGuidance(createGuidanceState(), goodFrame, { debounceFrames }),
       ).toThrow(RangeError);
-    }
+    },
   );
 
   it('is deterministic and does not mutate or retain frame arrays', () => {

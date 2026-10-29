@@ -45,7 +45,7 @@ describe('mapGuidanceIssues', () => {
   it('reports only NO_VEHICLE when no vehicle is selected', () => {
     expect(mapGuidanceIssues(scene())).toEqual(['NO_VEHICLE']);
     expect(
-      mapGuidanceIssues(scene(vehicle([0.3, 0.2, 0.6, 0.8], 0.4)))
+      mapGuidanceIssues(scene(vehicle([0.3, 0.2, 0.6, 0.8], 0.4))),
     ).toEqual(['NO_VEHICLE']);
     expect(
       mapGuidanceIssues(
@@ -54,17 +54,17 @@ describe('mapGuidanceIssues', () => {
           confidence: 0.9,
           box: [0.3, 0.2, 0.6, 0.8],
           mask: { width: 1, height: 1, data: [0] },
-        })
-      )
+        }),
+      ),
     ).toEqual(['NO_VEHICLE']);
     expect(issues([0, 0, 0.1, 0.1])).toEqual(['NO_VEHICLE']);
     expect(
       mapGuidanceIssues(
         scene(
           { classId: 'crosswalk', confidence: 0.9, box: [0, 0, 1, 1] },
-          vehicle([0.3, 0.2, 0.6, 0.8], 0.2)
-        )
-      )
+          vehicle([0.3, 0.2, 0.6, 0.8], 0.2),
+        ),
+      ),
     ).toEqual(['NO_VEHICLE']);
   });
 
@@ -115,7 +115,7 @@ describe('mapGuidanceIssues', () => {
   it('selects the same vehicle as mapModelOutput', () => {
     const output = scene(
       vehicle([0.45, 0.5, 0.55, 0.7], 0.6),
-      vehicle([0.9, 0, 1, 1], 0.99)
+      vehicle([0.9, 0, 1, 1], 0.99),
     );
     // The higher-confidence vehicle only touches the frame edge, so it is not a candidate.
     expect(mapGuidanceIssues(output, { guideFrame: frame })).toEqual([
@@ -129,21 +129,21 @@ describe('mapGuidanceIssues', () => {
       mapGuidanceIssues(
         scene(
           vehicle([0.3, 0.2, 0.6, 0.8], 0.6),
-          vehicle([0.45, 0.5, 0.55, 0.7], 0.99)
-        )
-      )
+          vehicle([0.45, 0.5, 0.55, 0.7], 0.99),
+        ),
+      ),
     ).toEqual(['TOO_FAR']);
   });
 
   it('applies partial threshold overrides', () => {
     expect(
-      issues([0.45, 0.5, 0.55, 0.7], { thresholds: { tooFarBelow: 0.2 } })
+      issues([0.45, 0.5, 0.55, 0.7], { thresholds: { tooFarBelow: 0.2 } }),
     ).toEqual([]);
     expect(
-      issues([0.3, 0.2, 0.6, 0.8], { thresholds: { tooCloseAbove: 0.7 } })
+      issues([0.3, 0.2, 0.6, 0.8], { thresholds: { tooCloseAbove: 0.7 } }),
     ).toEqual(['TOO_CLOSE']);
     expect(
-      issues([0.3, 0.2, 0.6, 0.8], { thresholds: { groundMarginBelow: 0.2 } })
+      issues([0.3, 0.2, 0.6, 0.8], { thresholds: { groundMarginBelow: 0.2 } }),
     ).toEqual(['GROUND_NOT_VISIBLE']);
     expect(
       issues([0.45, 0.5, 0.55, 0.7], {
@@ -152,7 +152,7 @@ describe('mapGuidanceIssues', () => {
           tooCloseAbove: undefined,
           groundMarginBelow: undefined,
         },
-      })
+      }),
     ).toEqual(['TOO_FAR']);
   });
 
@@ -167,17 +167,17 @@ describe('mapGuidanceIssues', () => {
       { groundMarginBelow: -0.01 },
     ]) {
       expect(() => mapGuidanceIssues(output, { thresholds })).toThrow(
-        RangeError
+        RangeError,
       );
     }
     expect(() =>
-      mapGuidanceIssues(output, { guideFrame: [0.5, 0, 0.5, 1] })
+      mapGuidanceIssues(output, { guideFrame: [0.5, 0, 0.5, 1] }),
     ).toThrow(RangeError);
     expect(() => mapGuidanceIssues(output, { minimumConfidence: 2 })).toThrow(
-      RangeError
+      RangeError,
     );
     expect(() =>
-      mapGuidanceIssues(scene(vehicle([0.3, 0.2, 0.6, 0.8], 1.5)))
+      mapGuidanceIssues(scene(vehicle([0.3, 0.2, 0.6, 0.8], 1.5))),
     ).toThrow(RangeError);
   });
 
@@ -198,20 +198,23 @@ describe('mapGuidanceIssues', () => {
   it('selects the vehicle with the same vehicleType filter as mapModelOutput', () => {
     const output = scene(
       { ...vehicle([0.1, 0.1, 0.9, 0.9], 0.9), vehicleType: 'motorcycle' },
-      { ...vehicle([0.3, 0.2, 0.6, 0.8], 0.6), vehicleType: 'ebike' }
+      { ...vehicle([0.3, 0.2, 0.6, 0.8], 0.6), vehicleType: 'ebike' },
     );
     expect(mapGuidanceIssues(output, { guideFrame: frame })).toEqual([
       'TOO_CLOSE',
       'GROUND_NOT_VISIBLE',
     ]);
     expect(
-      mapGuidanceIssues(output, { guideFrame: frame, vehicleType: 'bicycle' })
+      mapGuidanceIssues(output, { guideFrame: frame, vehicleType: 'bicycle' }),
     ).toEqual([]);
     expect(
-      mapGuidanceIssues(output, { guideFrame: frame, vehicleType: 'kickboard' })
+      mapGuidanceIssues(output, {
+        guideFrame: frame,
+        vehicleType: 'kickboard',
+      }),
     ).toEqual(['NO_VEHICLE']);
     expect(() =>
-      mapGuidanceIssues(output, { vehicleType: 'car' as never })
+      mapGuidanceIssues(output, { vehicleType: 'car' as never }),
     ).toThrow(RangeError);
   });
 });

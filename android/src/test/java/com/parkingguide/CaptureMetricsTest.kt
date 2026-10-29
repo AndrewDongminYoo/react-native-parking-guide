@@ -1,17 +1,21 @@
 package com.parkingguide
 
+import org.junit.Assert.*
+import org.junit.Test
 import java.nio.ByteBuffer
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
-import org.junit.Assert.*
-import org.junit.Test
 
 class CaptureMetricsTest {
   private val thresholds = CaptureThresholds(100.0, 50.0, PI / 9)
   private val upright = CaptureTilt(0.0, 0.0)
 
-  private fun measure(width: Int = 8, height: Int = 8, value: (Int, Int) -> Int): ImageMetrics {
+  private fun measure(
+    width: Int = 8,
+    height: Int = 8,
+    value: (Int, Int) -> Int,
+  ): ImageMetrics {
     val data = ByteBuffer.allocate(width * height)
     for (y in 0 until height) for (x in 0 until width) data.put(value(x, y).toByte())
     data.flip()
@@ -55,12 +59,12 @@ class CaptureMetricsTest {
       CaptureMetrics.measureLuma(data, 3, 3, 3, 1, false),
       CaptureMetrics.measureLuma(data, 3, 3, 2, 1, false),
       CaptureMetrics.measureLuma(data, 3, 3, 3, 0, false),
-      CaptureMetrics.measureLuma(data, Int.MAX_VALUE, Int.MAX_VALUE, Int.MAX_VALUE, 2, false)
+      CaptureMetrics.measureLuma(data, Int.MAX_VALUE, Int.MAX_VALUE, Int.MAX_VALUE, 2, false),
     )) {
       assertFalse(metrics.valid)
       assertEquals(
         mapOf("ready" to false, "issues" to emptyList<String>(), "progress" to 0.0),
-        CaptureMetrics.assess(metrics, upright, thresholds)
+        CaptureMetrics.assess(metrics, upright, thresholds),
       )
     }
   }
@@ -71,12 +75,14 @@ class CaptureMetricsTest {
     assertEquals(
       listOf("BLURRY", "LOW_LIGHT", "TILTED"),
       CaptureMetrics.assess(
-        ImageMetrics(true, 49.999, 99.999), CaptureTilt(PI / 9 + 0.001, 0.0), thresholds
-      )["issues"]
+        ImageMetrics(true, 49.999, 99.999),
+        CaptureTilt(PI / 9 + 0.001, 0.0),
+        thresholds,
+      )["issues"],
     )
     assertEquals(
       listOf("TILTED"),
-      CaptureMetrics.assess(boundary, CaptureTilt(0.0, -PI / 9 - 0.001), thresholds)["issues"]
+      CaptureMetrics.assess(boundary, CaptureTilt(0.0, -PI / 9 - 0.001), thresholds)["issues"],
     )
   }
 
@@ -115,9 +121,12 @@ class CaptureMetricsTest {
   }
 
   @Test fun rejectsInvalidInitializationThresholds() {
-    val options = mapOf<String, Any>(
-      "minLaplacianVariance" to 100.0, "minMeanLuminance" to 50.0, "maxTiltRadians" to PI / 9
-    )
+    val options =
+      mapOf<String, Any>(
+        "minLaplacianVariance" to 100.0,
+        "minMeanLuminance" to 50.0,
+        "maxTiltRadians" to PI / 9,
+      )
     assertEquals(thresholds, CaptureThresholds.from(options))
     for (value in listOf(0, -1, Double.NaN, Double.POSITIVE_INFINITY, "100")) {
       assertThrows(IllegalArgumentException::class.java) {

@@ -28,8 +28,8 @@ describe('guidance public API', () => {
       reduceGuidance(
         createGuidanceState(),
         { ready: true, issues: [], progress: 1 },
-        { debounceFrames: 1, smoothingFactor: 1 }
-      ).guidance
+        { debounceFrames: 1, smoothingFactor: 1 },
+      ).guidance,
     ).toEqual({ ready: true, issues: [], progress: 1 });
   });
 

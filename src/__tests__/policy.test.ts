@@ -17,7 +17,7 @@ describe('validatePolicy', () => {
       validatePolicy({
         passThreshold: 0.75,
         rules: {},
-      })
+      }),
     ).toEqual(expect.arrayContaining(['version is required.']));
   });
 
@@ -27,9 +27,9 @@ describe('validatePolicy', () => {
       expect(validatePolicy({ version: 1, passThreshold, rules: {} })).toEqual(
         expect.arrayContaining([
           'passThreshold must be a finite number between 0 and 1.',
-        ])
+        ]),
       );
-    }
+    },
   );
 
   it('rejects unknown rule IDs', () => {
@@ -40,9 +40,9 @@ describe('validatePolicy', () => {
         rules: {
           UNKNOWN: { enabled: true },
         },
-      })
+      }),
     ).toEqual(
-      expect.arrayContaining(['rules.UNKNOWN is not a recognized RuleId.'])
+      expect.arrayContaining(['rules.UNKNOWN is not a recognized RuleId.']),
     );
   });
 
@@ -54,13 +54,13 @@ describe('validatePolicy', () => {
           version: 1,
           passThreshold: 0.75,
           rules: { UPRIGHT: { enabled: true, weight } },
-        })
+        }),
       ).toEqual(
         expect.arrayContaining([
           'rules.UPRIGHT.weight must be a finite non-negative number.',
-        ])
+        ]),
       );
-    }
+    },
   );
 
   it.each([-0.1, 1.1, Number.NaN])(
@@ -71,12 +71,12 @@ describe('validatePolicy', () => {
           version: 1,
           passThreshold: 0.75,
           rules: { UPRIGHT: { enabled: true, failBelow } },
-        })
+        }),
       ).toEqual(
         expect.arrayContaining([
           'rules.UPRIGHT.failBelow must be a finite number between 0 and 1.',
-        ])
+        ]),
       );
-    }
+    },
   );
 });

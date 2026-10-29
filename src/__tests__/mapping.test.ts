@@ -72,7 +72,7 @@ describe('mapModelOutput', () => {
   it('maps prohibited zones, uprightness and image quality to failures', () => {
     const results = mapModelOutput(prohibitedScene);
     expect(results.slice(1).every(({ verdict }) => verdict === 'FAIL')).toBe(
-      true
+      true,
     );
     expect(rule(prohibitedScene, 'TACTILE_PAVING').score).toBe(0);
     for (const id of ['CROSSWALK', 'ROADWAY', 'SIDEWALK_BLOCK'] as const) {
@@ -99,10 +99,10 @@ describe('mapModelOutput', () => {
       expect(
         rule(
           { detections: [], imageQuality: { score, confidence: 1 } },
-          'IMAGE_QUALITY'
-        ).verdict
+          'IMAGE_QUALITY',
+        ).verdict,
       ).toBe(verdict);
-    }
+    },
   );
 
   it('allows per-rule thresholds and ignores undefined overrides', () => {
@@ -115,7 +115,7 @@ describe('mapModelOutput', () => {
     };
     expect(rule(prohibitedScene, 'CROSSWALK', options).verdict).toBe('PASS');
     expect(rule(prohibitedScene, 'IMAGE_QUALITY', options).verdict).toBe(
-      'WARN'
+      'WARN',
     );
     expect(rule(prohibitedScene, 'ROADWAY', options).verdict).toBe('FAIL');
     expect(Object.isFrozen(DEFAULT_MAPPING_THRESHOLDS)).toBe(true);
@@ -137,8 +137,8 @@ describe('mapModelOutput', () => {
           (result) =>
             result.verdict === 'WARN' &&
             result.score === 0 &&
-            result.confidence === 0
-        )
+            result.confidence === 0,
+        ),
     ).toBe(true);
     expect(evaluatePolicy(results, defaultPolicy).verdict).toBe('FAIL');
   });
@@ -181,7 +181,7 @@ describe('mapModelOutput', () => {
     expect(rule(output, 'IMAGE_QUALITY').confidence).toBe(0);
     expect(rule(output, 'ROADWAY', { minimumConfidence: 0.49 }).score).toBe(0);
     expect(
-      rule(output, 'VEHICLE_DETECTED', { minimumConfidence: 0.51 }).verdict
+      rule(output, 'VEHICLE_DETECTED', { minimumConfidence: 0.51 }).verdict,
     ).toBe('FAIL');
   });
 
@@ -222,7 +222,7 @@ describe('mapModelOutput', () => {
     'computes the box union for %j',
     (boxes, score) => {
       expect(rule(boxesScene(boxes), 'CROSSWALK').score).toBeCloseTo(score);
-    }
+    },
   );
 
   it.each([
@@ -245,7 +245,7 @@ describe('mapModelOutput', () => {
       expect(result.score).toBe(score);
       expect(result.verdict).toBe(verdict);
       expect(evaluatePolicy([result], defaultPolicy).verdict).toBe('PASS');
-    }
+    },
   );
 
   it('compares thresholds with more than 6 decimal places against rounded scores', () => {
@@ -258,7 +258,7 @@ describe('mapModelOutput', () => {
     expect(
       rule(output, 'CROSSWALK', {
         thresholds: { CROSSWALK: { failBelow: 0.9000001, passAt: 0.99 } },
-      })
+      }),
     ).toMatchObject({ score: 0.9, verdict: 'FAIL' });
   });
 
@@ -275,8 +275,8 @@ describe('mapModelOutput', () => {
         {
           detections: [...maskedScene.detections, maskedScene.detections[1]!],
         },
-        'CROSSWALK'
-      ).score
+        'CROSSWALK',
+      ).score,
     ).toBe(0.5);
   });
 
@@ -289,7 +289,7 @@ describe('mapModelOutput', () => {
       mask: { width: 2, height: 2, data: [0, 1, 0, 0] },
     };
     expect(
-      rule({ detections: [vehicle, firstZone, secondZone] }, 'CROSSWALK')
+      rule({ detections: [vehicle, firstZone, secondZone] }, 'CROSSWALK'),
     ).toMatchObject({ score: 0, confidence: 0.7 });
     expect(
       rule(
@@ -302,8 +302,8 @@ describe('mapModelOutput', () => {
             },
           ],
         },
-        'CROSSWALK'
-      ).score
+        'CROSSWALK',
+      ).score,
     ).toBe(1);
   });
 
@@ -342,8 +342,8 @@ describe('mapModelOutput', () => {
       expect(
         results.every(
           ({ score, confidence }) =>
-            Number.isFinite(score) && Number.isFinite(confidence)
-        )
+            Number.isFinite(score) && Number.isFinite(confidence),
+        ),
       ).toBe(true);
     }
   });
@@ -356,35 +356,35 @@ describe('mapModelOutput', () => {
           detections: [
             { classId: 'vehicle', confidence: invalid, box: [0, 0, 1, 1] },
           ],
-        })
+        }),
       ).toThrow(RangeError);
       expect(() =>
         mapModelOutput({
           detections: [],
           imageQuality: { score: invalid, confidence: 1 },
-        })
+        }),
       ).toThrow(RangeError);
       expect(() => mapModelOutput(boxesScene([[0, 0, invalid, 1]]))).toThrow(
-        RangeError
+        RangeError,
       );
       expect(() =>
-        mapModelOutput(compliantScene, { minimumConfidence: invalid })
+        mapModelOutput(compliantScene, { minimumConfidence: invalid }),
       ).toThrow(RangeError);
       expect(() =>
         mapModelOutput(compliantScene, {
           thresholds: { UPRIGHT: { failBelow: 0, passAt: invalid } },
-        })
+        }),
       ).toThrow(RangeError);
-    }
+    },
   );
 
   it('rejects inverted boxes, malformed masks and inverted thresholds', () => {
     expect(() => mapModelOutput(boxesScene([[1, 0, 0, 1]]))).toThrow(
-      RangeError
+      RangeError,
     );
     expect(() =>
       // eslint-disable-next-line no-sparse-arrays
-      mapModelOutput(boxesScene([[, 0, 1, 1] as unknown as ModelBox]))
+      mapModelOutput(boxesScene([[, 0, 1, 1] as unknown as ModelBox])),
     ).toThrow(RangeError);
     for (const mask of [
       { width: 0, height: 1, data: [] },
@@ -397,7 +397,7 @@ describe('mapModelOutput', () => {
       expect(() =>
         mapModelOutput({
           detections: [{ ...maskedScene.detections[0]!, mask }],
-        } as RawModelOutput)
+        } as RawModelOutput),
       ).toThrow(RangeError);
     }
     expect(() =>
@@ -411,12 +411,12 @@ describe('mapModelOutput', () => {
             mask: { width: 1, height: 1, data: [1] },
           },
         ],
-      })
+      }),
     ).toThrow(RangeError);
     expect(() =>
       mapModelOutput(compliantScene, {
         thresholds: { UPRIGHT: { failBelow: 0.9, passAt: 0.8 } },
-      })
+      }),
     ).toThrow(RangeError);
   });
 
@@ -459,7 +459,7 @@ describe('mapModelOutput guideFrame', () => {
   function vehicle(
     box: ModelBox,
     confidence: number,
-    uprightScore: number
+    uprightScore: number,
   ): ModelDetection {
     return {
       classId: 'vehicle',
@@ -501,20 +501,20 @@ describe('mapModelOutput guideFrame', () => {
     const small = vehicle([0.25, 0.25, 0.35, 0.35], 1, 0);
     const large = vehicle([0.2, 0.2, 0.6, 0.6], 0.6, 1);
     expect(
-      selected({ detections: [small, large] }, { guideFrame }).upright
+      selected({ detections: [small, large] }, { guideFrame }).upright,
     ).toBe(1);
 
     const lowConfidence = vehicle([0.3, 0.3, 0.5, 0.5], 0.6, 0);
     const highConfidence = vehicle([0.5, 0.5, 0.7, 0.7], 0.9, 1);
     expect(
       selected({ detections: [lowConfidence, highConfidence] }, { guideFrame })
-        .upright
+        .upright,
     ).toBe(1);
 
     const first = vehicle([0.3, 0.3, 0.5, 0.5], 0.8, 0);
     const second = vehicle([0.5, 0.5, 0.7, 0.7], 0.8, 1);
     expect(
-      selected({ detections: [first, second] }, { guideFrame }).upright
+      selected({ detections: [first, second] }, { guideFrame }).upright,
     ).toBe(0);
   });
 
@@ -522,7 +522,7 @@ describe('mapModelOutput guideFrame', () => {
     const first = vehicle([0.3, 0.3, 0.5, 0.5], 0.9, 0);
     const second = vehicle([0.5, 0.5, 0.7000000001, 0.7], 0.6, 1);
     expect(
-      selected({ detections: [first, second] }, { guideFrame }).upright
+      selected({ detections: [first, second] }, { guideFrame }).upright,
     ).toBe(0);
   });
 
@@ -564,14 +564,14 @@ describe('mapModelOutput guideFrame', () => {
       expect(() =>
         mapModelOutput(compliantScene, {
           guideFrame: frame as unknown as ModelBox,
-        })
+        }),
       ).toThrow(RangeError);
     }
   });
 
   it('does not change selection when guideFrame is undefined', () => {
     expect(mapModelOutput(compliantScene, { guideFrame: undefined })).toEqual(
-      mapModelOutput(compliantScene)
+      mapModelOutput(compliantScene),
     );
   });
 });
@@ -582,7 +582,7 @@ describe('zone proximity', () => {
 
   function scene(
     zones: readonly ModelDetection[],
-    vehicle: Partial<ModelDetection> = {}
+    vehicle: Partial<ModelDetection> = {},
   ): RawModelOutput {
     return {
       detections: [
@@ -595,7 +595,7 @@ describe('zone proximity', () => {
   function zone(
     classId: ModelDetection['classId'],
     box: ModelBox,
-    confidence = 0.9
+    confidence = 0.9,
   ): ModelDetection {
     return { classId, confidence, box };
   }
@@ -669,7 +669,7 @@ describe('zone proximity', () => {
           mask: { width: 2, height: 2, data: [1, 0, 0, 0] },
         },
       ],
-      { mask: { width: 2, height: 2, data: [0, 0, 0, 1] } }
+      { mask: { width: 2, height: 2, data: [0, 0, 0, 1] } },
     );
     const result = rule(output, 'CROSSWALK');
     expect(result.score).toBe(1);
@@ -698,11 +698,11 @@ describe('zone proximity', () => {
     const output = scene([]);
     for (const proximityThreshold of [-0.1, Number.NaN, Infinity]) {
       expect(() => mapModelOutput(output, { proximityThreshold })).toThrow(
-        RangeError
+        RangeError,
       );
     }
     expect(() =>
-      mapModelOutput(output, { proximityThreshold: 2.5 })
+      mapModelOutput(output, { proximityThreshold: 2.5 }),
     ).not.toThrow();
   });
 });
@@ -711,7 +711,7 @@ describe('mapModelOutput vehicleType', () => {
   function typed(
     vehicleType: ModelDetection['vehicleType'],
     confidence: number,
-    uprightScore: number
+    uprightScore: number,
   ): ModelDetection {
     return {
       classId: 'vehicle',
@@ -746,7 +746,7 @@ describe('mapModelOutput vehicleType', () => {
       detections: [typed('motorcycle', 0.9, 1)],
     };
     expect(
-      rule(output, 'VEHICLE_DETECTED', { vehicleType: 'bicycle' })
+      rule(output, 'VEHICLE_DETECTED', { vehicleType: 'bicycle' }),
     ).toEqual({
       id: 'VEHICLE_DETECTED',
       verdict: 'FAIL',
@@ -762,7 +762,7 @@ describe('mapModelOutput vehicleType', () => {
     expect(uprightOf(ebike, { vehicleType: 'bicycle' })).toBe(1);
     expect(uprightOf(ebike, { vehicleType: 'ebike' })).toBe(1);
     expect(
-      rule(bicycle, 'VEHICLE_DETECTED', { vehicleType: 'kickboard' }).verdict
+      rule(bicycle, 'VEHICLE_DETECTED', { vehicleType: 'kickboard' }).verdict,
     ).toBe('FAIL');
   });
 
@@ -797,14 +797,14 @@ describe('mapModelOutput vehicleType', () => {
       ],
     };
     expect(rule(output, 'CROSSWALK', { vehicleType: 'kickboard' }).score).toBe(
-      0
+      0,
     );
   });
 
   it('rejects an unknown vehicleType in options or detections', () => {
     const output: RawModelOutput = { detections: [typed('kickboard', 0.9, 1)] };
     expect(() =>
-      mapModelOutput(output, { vehicleType: 'car' as never })
+      mapModelOutput(output, { vehicleType: 'car' as never }),
     ).toThrow(RangeError);
     for (const vehicleType of ['auto', 'car', '']) {
       const invalid: RawModelOutput = {

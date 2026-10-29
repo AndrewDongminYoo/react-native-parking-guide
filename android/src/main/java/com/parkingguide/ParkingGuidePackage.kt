@@ -11,24 +11,28 @@ class ParkingGuidePackage : BaseReactPackage() {
     ParkingGuideFrameProcessors.register()
   }
 
-  override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? {
-    return if (name == ParkingGuideModule.NAME) {
+  override fun getModule(
+    name: String,
+    reactContext: ReactApplicationContext,
+  ): NativeModule? =
+    if (name == ParkingGuideModule.NAME) {
       ParkingGuideModule(reactContext)
     } else {
       null
     }
-  }
 
-  override fun getReactModuleInfoProvider() = ReactModuleInfoProvider {
-    mapOf(
-      ParkingGuideModule.NAME to ReactModuleInfo(
-        name = ParkingGuideModule.NAME,
-        className = ParkingGuideModule.NAME,
-        canOverrideExistingModule = false,
-        needsEagerInit = false,
-        isCxxModule = false,
-        isTurboModule = true
+  override fun getReactModuleInfoProvider() =
+    ReactModuleInfoProvider {
+      mapOf(
+        ParkingGuideModule.NAME to
+          ReactModuleInfo(
+            name = ParkingGuideModule.NAME,
+            className = ParkingGuideModule.NAME,
+            canOverrideExistingModule = false,
+            needsEagerInit = false,
+            isCxxModule = false,
+            isTurboModule = true,
+          ),
       )
-    )
-  }
+    }
 }

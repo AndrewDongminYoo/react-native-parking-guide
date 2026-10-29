@@ -124,13 +124,6 @@
       "javaPackageName": "com.parkingguide"
     }
   },
-  "prettier": {
-    "quoteProps": "consistent",
-    "singleQuote": true,
-    "tabWidth": 2,
-    "trailingComma": "es5",
-    "useTabs": false
-  },
   "jest": {
     "preset": "@react-native/jest-preset",
     "testEnvironmentOptions": {

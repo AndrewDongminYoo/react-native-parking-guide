@@ -51,7 +51,7 @@ export function validateDetectionOptions(options: DetectionOptions): void {
  * rejects it as `E_MODEL_CONTRACT`.
  */
 export function copyDetectorResult(
-  result: DetectorFrameResult
+  result: DetectorFrameResult,
 ): DetectorFrameResult {
   const source = result as unknown as Record<string, unknown>;
   const capturedAt = source.capturedAt as number | undefined;
@@ -88,7 +88,7 @@ function copyList(value: unknown): number[] {
 export function toDetectionSnapshot(
   result: DetectorFrameResult,
   at: number,
-  options: DetectionOptions
+  options: DetectionOptions,
 ): DetectionSnapshot {
   const copy = copyDetectorResult(result);
   if ('error' in copy) {
@@ -113,7 +113,7 @@ export function mergeDetection(
   frame: GuidanceFrameResult,
   snapshot: DetectionSnapshot | null,
   now: number,
-  staleAfterMs: number
+  staleAfterMs: number,
 ): { frame: GuidanceFrameResult; detectorError: string | null } {
   if (snapshot?.error != null) {
     return { frame: { ...frame, ready: false }, detectorError: snapshot.error };

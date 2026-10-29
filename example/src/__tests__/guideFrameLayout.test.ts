@@ -26,7 +26,7 @@ describe('fitGuideFrameWidth', () => {
 
   it('caps the frame at the maximum width on a wide, tall area', () => {
     expect(fitGuideFrameWidth({ width: 1024, height: 900 }, 20)).toBe(
-      GUIDE_FRAME_MAX_WIDTH
+      GUIDE_FRAME_MAX_WIDTH,
     );
   });
 
@@ -62,12 +62,12 @@ describe('frameSizeChange', () => {
     expect(
       frameSizeChange(
         { width: 480, height: 640 },
-        { ...tensors, frameWidth: 480, frameHeight: 640 }
-      )
+        { ...tensors, frameWidth: 480, frameHeight: 640 },
+      ),
     ).toBeNull();
     expect(frameSizeChange(null, { error: 'E_INFERENCE' })).toBeNull();
     expect(
-      frameSizeChange(null, { ...tensors, frameWidth: 0, frameHeight: 640 })
+      frameSizeChange(null, { ...tensors, frameWidth: 0, frameHeight: 640 }),
     ).toBeNull();
   });
 });

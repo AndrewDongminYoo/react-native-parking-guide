@@ -8,8 +8,14 @@ import java.nio.charset.CodingErrorAction
 import java.security.MessageDigest
 
 sealed class PhotoSource {
-  data class File(val path: String) : PhotoSource()
-  data class Content(val uri: String) : PhotoSource()
+  data class File(
+    val path: String,
+  ) : PhotoSource()
+
+  data class Content(
+    val uri: String,
+  ) : PhotoSource()
+
   object Invalid : PhotoSource()
 }
 
@@ -22,20 +28,22 @@ object FileSha256 {
    * Same rule as `ParkingGuideFileURL` in `ios/ParkingGuideDetector.mm`: an absolute path, or a `file:///` URI whose text
    * after `file://` is strictly percent-decoded as UTF-8. Android also accepts `content://` URIs.
    */
-  fun resolve(uri: String): PhotoSource = when {
-    uri.startsWith("/") -> PhotoSource.File(uri)
-    uri.startsWith("$FILE_PREFIX/") ->
-      percentDecode(uri.substring(FILE_PREFIX.length))?.let { PhotoSource.File(it) } ?: PhotoSource.Invalid
-    uri.startsWith(CONTENT_PREFIX) && uri.length > CONTENT_PREFIX.length -> PhotoSource.Content(uri)
-    else -> PhotoSource.Invalid
-  }
+  fun resolve(uri: String): PhotoSource =
+    when {
+      uri.startsWith("/") -> PhotoSource.File(uri)
+      uri.startsWith("$FILE_PREFIX/") ->
+        percentDecode(uri.substring(FILE_PREFIX.length))?.let { PhotoSource.File(it) } ?: PhotoSource.Invalid
+      uri.startsWith(CONTENT_PREFIX) && uri.length > CONTENT_PREFIX.length -> PhotoSource.Content(uri)
+      else -> PhotoSource.Invalid
+    }
 
-  private fun hexValue(c: Char): Int = when (c) {
-    in '0'..'9' -> c - '0'
-    in 'a'..'f' -> c - 'a' + 10
-    in 'A'..'F' -> c - 'A' + 10
-    else -> -1
-  }
+  private fun hexValue(c: Char): Int =
+    when (c) {
+      in '0'..'9' -> c - '0'
+      in 'a'..'f' -> c - 'a' + 10
+      in 'A'..'F' -> c - 'A' + 10
+      else -> -1
+    }
 
   /** Returns null for a malformed `%XX` sequence or bytes that are not valid UTF-8. */
   fun percentDecode(text: String): String? {
@@ -57,7 +65,8 @@ object FileSha256 {
       }
     }
     return try {
-      Charsets.UTF_8.newDecoder()
+      Charsets.UTF_8
+        .newDecoder()
         .onMalformedInput(CodingErrorAction.REPORT)
         .onUnmappableCharacter(CodingErrorAction.REPORT)
         .decode(ByteBuffer.wrap(bytes.toByteArray()))

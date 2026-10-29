@@ -29,7 +29,7 @@ export function getRuleScore(rule: RuleResult): number {
 /** True when this rule alone makes `evaluatePolicy` return `FAIL`. Does not check `enabled`. */
 export function isHardFail(
   result: RuleResult,
-  rulePolicy: RulePolicy
+  rulePolicy: RulePolicy,
 ): boolean {
   const score = getRuleScore(result);
   const failBelowTriggered =
@@ -42,7 +42,7 @@ export function isHardFail(
 
 export function evaluatePolicy(
   ruleResults: RuleResult[],
-  policy: ParkingPolicy
+  policy: ParkingPolicy,
 ): { verdict: Verdict; score: number } {
   let weightedScoreSum = 0;
   let weightSum = 0;

@@ -1,13 +1,13 @@
 package com.parkingguide
 
+import org.junit.Assert.*
+import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
-import org.junit.Assert.*
-import org.junit.Test
 
 class DetectorTensorsTest {
   private val size = DetectorTensors.INPUT_SIZE
@@ -23,10 +23,11 @@ class DetectorTensorsTest {
 
   @Test fun fillsNhwcAndNchwInUnitRange() {
     // Pixel 0 is opaque RGB (255, 128, 0); pixel 1 is RGB (0, 0, 51); the rest are black.
-    val pixels = IntArray(plane).also {
-      it[0] = 0xffff8000.toInt()
-      it[1] = 0xff000033.toInt()
-    }
+    val pixels =
+      IntArray(plane).also {
+        it[0] = 0xffff8000.toInt()
+        it[1] = 0xff000033.toInt()
+      }
     val nhwc = FloatBuffer.allocate(plane * 3)
     DetectorTensors.fillInput(pixels, InputLayout.NHWC, nhwc)
     assertArrayEquals(floatArrayOf(1f, 128 / 255f, 0f, 0f, 0f, 0.2f), FloatArray(6) { nhwc.get(it) }, 1e-6f)
@@ -40,11 +41,26 @@ class DetectorTensorsTest {
   }
 
   @Test fun readsFloatIntAndLongOutputs() {
-    val floats = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder()).putFloat(0.5f).putFloat(0.25f)
+    val floats =
+      ByteBuffer
+        .allocateDirect(8)
+        .order(ByteOrder.nativeOrder())
+        .putFloat(0.5f)
+        .putFloat(0.25f)
     assertArrayEquals(doubleArrayOf(0.5, 0.25), DetectorTensors.readValues(floats, ValueKind.FLOAT32), 0.0)
-    val ints = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder()).putInt(3).putInt(7)
+    val ints =
+      ByteBuffer
+        .allocateDirect(8)
+        .order(ByteOrder.nativeOrder())
+        .putInt(3)
+        .putInt(7)
     assertArrayEquals(doubleArrayOf(3.0, 7.0), DetectorTensors.readValues(ints, ValueKind.INT32), 0.0)
-    val longs = ByteBuffer.allocateDirect(16).order(ByteOrder.nativeOrder()).putLong(0).putLong(5)
+    val longs =
+      ByteBuffer
+        .allocateDirect(16)
+        .order(ByteOrder.nativeOrder())
+        .putLong(0)
+        .putLong(5)
     assertArrayEquals(doubleArrayOf(0.0, 5.0), DetectorTensors.readValues(longs, ValueKind.INT64), 0.0)
   }
 
@@ -137,7 +153,10 @@ class DetectorTensorsTest {
     while (true) out.write(input.read().takeIf { it >= 0 } ?: return out.toByteArray())
   }
 
-  private fun readByBuffer(input: InputStream, bufferSize: Int): ByteArray {
+  private fun readByBuffer(
+    input: InputStream,
+    bufferSize: Int,
+  ): ByteArray {
     val out = ByteArrayOutputStream()
     val buffer = ByteArray(bufferSize)
     while (true) {

@@ -13,7 +13,7 @@ export const DETECTOR_MODEL: string | undefined = undefined;
  */
 export function detectorModelUri(
   model: string | undefined,
-  filesDirectory: string | undefined
+  filesDirectory: string | undefined,
 ): string | undefined {
   if (
     model === undefined ||

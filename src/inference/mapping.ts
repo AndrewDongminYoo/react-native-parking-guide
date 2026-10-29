@@ -107,7 +107,7 @@ const DETECTED_VEHICLE_TYPES: ReadonlySet<unknown> = new Set<
 >(['bicycle', 'ebike', 'kickboard', 'motorcycle']);
 
 export function validateVehicleType(
-  vehicleType: VehicleType | undefined
+  vehicleType: VehicleType | undefined,
 ): void {
   if (
     vehicleType !== undefined &&
@@ -115,7 +115,7 @@ export function validateVehicleType(
     !DETECTED_VEHICLE_TYPES.has(vehicleType)
   ) {
     throw new RangeError(
-      "vehicleType must be 'bicycle', 'ebike', 'kickboard', 'motorcycle', or 'auto'."
+      "vehicleType must be 'bicycle', 'ebike', 'kickboard', 'motorcycle', or 'auto'.",
     );
   }
 }
@@ -127,7 +127,7 @@ function isBicycleLike(vehicleType: VehicleType): boolean {
 /** `'auto'` and untyped detections are compatible with everything; bicycle and ebike are compatible. */
 function isCompatibleVehicle(
   detection: ModelDetection,
-  vehicleType: VehicleType
+  vehicleType: VehicleType,
 ): boolean {
   const detected = detection.vehicleType;
   return (
@@ -141,7 +141,7 @@ function isCompatibleVehicle(
 export function validateUnit(value: number): void {
   if (!Number.isFinite(value) || value < 0 || value > 1) {
     throw new RangeError(
-      'Model values and thresholds must be finite and in [0, 1].'
+      'Model values and thresholds must be finite and in [0, 1].',
     );
   }
 }
@@ -181,7 +181,7 @@ export function validateOutput(output: RawModelOutput): void {
       !DETECTED_VEHICLE_TYPES.has(detection.vehicleType)
     ) {
       throw new RangeError(
-        "Detection vehicleType must be 'bicycle', 'ebike', 'kickboard', or 'motorcycle'."
+        "Detection vehicleType must be 'bicycle', 'ebike', 'kickboard', or 'motorcycle'.",
       );
     }
     const { box, mask } = detection;
@@ -204,7 +204,7 @@ export function validateOutput(output: RawModelOutput): void {
       !isBinaryMaskData(mask.data)
     ) {
       throw new RangeError(
-        'Model masks must have positive dimensions and binary data.'
+        'Model masks must have positive dimensions and binary data.',
       );
     }
     if (grid && (mask.width !== grid.width || mask.height !== grid.height)) {
@@ -230,11 +230,11 @@ export function validateGuideFrame(frame: ModelBox | undefined): void {
 /** Detections at or above minimumConfidence with a nonempty box and, if present, a nonempty mask. */
 export function acceptedDetections(
   output: RawModelOutput,
-  minimumConfidence: number
+  minimumConfidence: number,
 ): ModelDetection[] {
   return output.detections.filter(
     (detection) =>
-      detection.confidence >= minimumConfidence && hasArea(detection)
+      detection.confidence >= minimumConfidence && hasArea(detection),
   );
 }
 
@@ -276,7 +276,7 @@ function boxIntersectionArea(a: ModelBox, b: ModelBox): number {
 export function selectVehicle(
   detections: readonly ModelDetection[],
   guideFrame: ModelBox | undefined,
-  vehicleType: VehicleType = 'auto'
+  vehicleType: VehicleType = 'auto',
 ): ModelDetection | undefined {
   let best: ModelDetection | undefined;
   let bestArea = 0;
@@ -307,7 +307,7 @@ export function selectVehicle(
 /** Exact union area of axis-aligned boxes; duplicate zones are not counted twice. */
 function unionArea(boxes: readonly ModelBox[]): number {
   const edges = [...new Set(boxes.flatMap((box) => [box[0], box[2]]))].sort(
-    (a, b) => a - b
+    (a, b) => a - b,
   );
   let area = 0;
   for (let i = 1; i < edges.length; i++) {
@@ -332,7 +332,7 @@ function unionArea(boxes: readonly ModelBox[]): number {
 function zoneProximity(
   vehicle: ModelDetection,
   zones: readonly ModelDetection[],
-  threshold: number
+  threshold: number,
 ): ZoneProximity {
   const [left, top, right, bottom] = vehicle.box;
   const longerSide = Math.max(right - left, bottom - top);
@@ -348,7 +348,7 @@ function zoneProximity(
 
 function overlapRatio(
   vehicle: ModelDetection,
-  zones: readonly ModelDetection[]
+  zones: readonly ModelDetection[],
 ): number {
   if (zones.length === 0) {
     return 0;
@@ -386,7 +386,7 @@ function overlapRatio(
 /** Pure, deterministic model-to-rule adapter. Does not execute a model or evaluate a policy. */
 export function mapModelOutput(
   output: RawModelOutput,
-  options: MappingOptions = {}
+  options: MappingOptions = {},
 ): RuleResult[] {
   const minimumConfidence = options.minimumConfidence ?? 0.5;
   validateUnit(minimumConfidence);
@@ -412,7 +412,7 @@ export function mapModelOutput(
   function result(
     id: InferenceRuleId,
     score: number,
-    confidence: number
+    confidence: number,
   ): RuleResult {
     const threshold = thresholds[id];
     return {
@@ -434,7 +434,7 @@ export function mapModelOutput(
 
   function assessmentResult(
     id: InferenceRuleId,
-    assessment: ModelAssessment | undefined
+    assessment: ModelAssessment | undefined,
   ): RuleResult {
     return assessment && assessment.confidence >= minimumConfidence
       ? result(id, assessment.score, assessment.confidence)
@@ -445,7 +445,7 @@ export function mapModelOutput(
   const vehicle = selectVehicle(
     detections,
     options.guideFrame,
-    options.vehicleType
+    options.vehicleType,
   );
   const vehicleResult: RuleResult = vehicle
     ? {
@@ -462,7 +462,7 @@ export function mapModelOutput(
         return unknown(id);
       }
       const zones = detections.filter(
-        (detection) => detection.classId === classId
+        (detection) => detection.classId === classId,
       );
       const ratio = overlapRatio(vehicle, zones);
       const zoneResult = result(
@@ -470,8 +470,8 @@ export function mapModelOutput(
         roundGeometricScore(id === 'PARKING_ZONE' ? ratio : 1 - ratio),
         zones.reduce(
           (lowest, zone) => Math.min(lowest, zone.confidence),
-          vehicle.confidence
-        )
+          vehicle.confidence,
+        ),
       );
       return PROXIMITY_RULES.has(id) && zones.length > 0
         ? {

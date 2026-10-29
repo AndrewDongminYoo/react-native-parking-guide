@@ -53,7 +53,7 @@ describe('decideGuidanceAnnouncement', () => {
 
   it('waits at most one interval when the clock went backwards', () => {
     expect(
-      decideGuidanceAnnouncement({ line: STEADY, at: 5000 }, READY, 1000)
+      decideGuidanceAnnouncement({ line: STEADY, at: 5000 }, READY, 1000),
     ).toEqual({ kind: 'wait', delayMs: GUIDANCE_ANNOUNCEMENT_INTERVAL_MS });
   });
 

@@ -1,25 +1,47 @@
 package com.parkingguide
 
-import java.nio.ByteBuffer
 import org.junit.Assert.*
 import org.junit.Test
+import java.nio.ByteBuffer
 
 class FramePixelsTest {
   private val size = DetectorTensors.INPUT_SIZE
 
   /** Packed planes: Y is width x height, U and V are (width / 2) x (height / 2) with pixel stride 1. */
-  private class Planes(val y: ByteBuffer, val u: ByteBuffer, val v: ByteBuffer, val yRowStride: Int, val uvRowStride: Int, val uvPixelStride: Int)
+  private class Planes(
+    val y: ByteBuffer,
+    val u: ByteBuffer,
+    val v: ByteBuffer,
+    val yRowStride: Int,
+    val uvRowStride: Int,
+    val uvPixelStride: Int,
+  )
 
-  private fun packed(width: Int, height: Int, luma: (Int, Int) -> Int, chroma: Int = 128): Planes {
+  private fun packed(
+    width: Int,
+    height: Int,
+    luma: (Int, Int) -> Int,
+    chroma: Int = 128,
+  ): Planes {
     val y = ByteArray(width * height) { luma(it % width, it / width).toByte() }
     val uv = ByteArray((width / 2) * (height / 2)) { chroma.toByte() }
     return Planes(ByteBuffer.wrap(y), ByteBuffer.wrap(uv.copyOf()), ByteBuffer.wrap(uv.copyOf()), width, width / 2, 1)
   }
 
-  private fun convert(p: Planes, width: Int, height: Int, rotation: Int, mirrored: Boolean = false, videoRange: Boolean = false) =
-    FramePixels.toArgb(p.y, p.u, p.v, width, height, p.yRowStride, p.uvRowStride, p.uvPixelStride, rotation, mirrored, videoRange)
+  private fun convert(
+    p: Planes,
+    width: Int,
+    height: Int,
+    rotation: Int,
+    mirrored: Boolean = false,
+    videoRange: Boolean = false,
+  ) = FramePixels.toArgb(p.y, p.u, p.v, width, height, p.yRowStride, p.uvRowStride, p.uvPixelStride, rotation, mirrored, videoRange)
 
-  private fun at(pixels: IntArray, x: Int, y: Int) = pixels[y * size + x]
+  private fun at(
+    pixels: IntArray,
+    x: Int,
+    y: Int,
+  ) = pixels[y * size + x]
 
   // Left half white (Y = 255), right half black (Y = 0), full-range neutral chroma.
   private val halves = packed(4, 2, { x, _ -> if (x < 2) 255 else 0 })

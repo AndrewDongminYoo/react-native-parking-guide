@@ -40,7 +40,7 @@ function validateOptions(options: AttestationOptions): void {
   const { photoSha256, challenge, cloudProjectNumber } = options;
   if (typeof photoSha256 !== 'string' || !SHA256_PATTERN.test(photoSha256)) {
     throw new RangeError(
-      'photoSha256 must be 64 lowercase hexadecimal digits.'
+      'photoSha256 must be 64 lowercase hexadecimal digits.',
     );
   }
   if (
@@ -49,7 +49,7 @@ function validateOptions(options: AttestationOptions): void {
     !isWellFormed(challenge)
   ) {
     throw new RangeError(
-      'challenge must be a non-empty string without lone surrogates.'
+      'challenge must be a non-empty string without lone surrogates.',
     );
   }
   if (
@@ -71,14 +71,14 @@ function validateOptions(options: AttestationOptions): void {
  * "Attestation".
  */
 export async function requestAttestation(
-  options: AttestationOptions
+  options: AttestationOptions,
 ): Promise<string> {
   validateOptions(options);
   const { photoSha256, challenge, cloudProjectNumber } = options;
   const token = await ParkingGuide.requestAttestation(
     photoSha256,
     challenge,
-    cloudProjectNumber ?? 0
+    cloudProjectNumber ?? 0,
   );
   if (typeof token !== 'string' || token.length === 0) {
     throw new Error('requestAttestation returned an invalid token.');

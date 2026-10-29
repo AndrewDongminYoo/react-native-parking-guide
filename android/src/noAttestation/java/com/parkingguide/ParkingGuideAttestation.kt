@@ -11,11 +11,11 @@ internal object ParkingGuideAttestation {
     photoSha256: String,
     challenge: String,
     cloudProjectNumber: Long,
-    promise: Promise
+    promise: Promise,
   ) {
     promise.reject(
       E_ATTESTATION_UNSUPPORTED,
-      "This build has no Play Integrity support. Set the Gradle property ParkingGuide_enableAttestation=true."
+      "This build has no Play Integrity support. Set the Gradle property ParkingGuide_enableAttestation=true.",
     )
   }
 

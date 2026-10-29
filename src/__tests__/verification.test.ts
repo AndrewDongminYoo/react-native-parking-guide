@@ -25,7 +25,7 @@ const RULES: RuleResult[] = [
 ];
 
 function options(
-  overrides: Partial<VerifyParkingOptions> = {}
+  overrides: Partial<VerifyParkingOptions> = {},
 ): VerifyParkingOptions {
   return {
     photo: { uri: '/tmp/photo.jpg', width: 1920, height: 1080 },
@@ -69,13 +69,13 @@ describe('verifyParking', () => {
       },
     });
     expect(Object.keys(result.metadata)).not.toEqual(
-      expect.arrayContaining(['location'])
+      expect.arrayContaining(['location']),
     );
     expect(Object.keys(result.metadata)).not.toEqual(
-      expect.arrayContaining(['heading'])
+      expect.arrayContaining(['heading']),
     );
     expect(Object.keys(result.metadata)).not.toEqual(
-      expect.arrayContaining(['attestation'])
+      expect.arrayContaining(['attestation']),
     );
   });
 
@@ -96,7 +96,7 @@ describe('verifyParking', () => {
     const location = { lat: 37.5665, lng: 126.978, accuracy: 8 };
 
     const result = await verifyParking(
-      options({ location, heading: 359.5, attestation: 'token' })
+      options({ location, heading: 359.5, attestation: 'token' }),
     );
 
     expect(result.metadata.location).toEqual(location);
@@ -120,7 +120,7 @@ describe('verifyParking', () => {
     mockGetFileSha256.mockReturnValue(
       new Promise<string>((resolve) => {
         resolveHash = resolve;
-      })
+      }),
     );
     const upright: RuleResult = {
       id: 'UPRIGHT',
@@ -131,7 +131,7 @@ describe('verifyParking', () => {
     const deviceTilt = { pitch: 0.1, roll: -0.2 };
     const location = { lat: 37.5, lng: 127, accuracy: 5 };
     const pending = verifyParking(
-      options({ photo, deviceTilt, location, ruleResults: [upright] })
+      options({ photo, deviceTilt, location, ruleResults: [upright] }),
     );
 
     photo.uri = '/tmp/other.jpg';
@@ -183,7 +183,7 @@ describe('verifyParking', () => {
     const restore = jest.replaceProperty(Platform, 'OS', 'web');
     try {
       await expect(verifyParking(options())).rejects.toThrow(
-        'verifyParking supports only iOS and Android.'
+        'verifyParking supports only iOS and Android.',
       );
       expect(mockGetFileSha256).not.toHaveBeenCalled();
     } finally {
@@ -195,7 +195,7 @@ describe('verifyParking', () => {
     mockGetFileSha256.mockResolvedValue('A'.repeat(64));
 
     await expect(verifyParking(options())).rejects.toThrow(
-      'getFileSha256 returned an invalid SHA-256 digest.'
+      'getFileSha256 returned an invalid SHA-256 digest.',
     );
   });
 
@@ -308,7 +308,7 @@ describe('verifyParking', () => {
 
   it('accepts the tilt and heading range boundaries', async () => {
     const result = await verifyParking(
-      options({ deviceTilt: { pitch: -Math.PI, roll: Math.PI }, heading: 0 })
+      options({ deviceTilt: { pitch: -Math.PI, roll: Math.PI }, heading: 0 }),
     );
 
     expect(result.metadata.deviceTilt).toEqual({

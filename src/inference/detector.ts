@@ -40,13 +40,13 @@ export function decodeDetectorOutput(output: DetectorOutput): RawModelOutput {
   const { boxes, scores, classes } = output;
   if (![boxes, scores, classes].every(Array.isArray)) {
     throw new RangeError(
-      'Detector output boxes, scores, and classes must be arrays.'
+      'Detector output boxes, scores, and classes must be arrays.',
     );
   }
   const count = scores.length;
   if (classes.length !== count || boxes.length !== count * 4) {
     throw new RangeError(
-      'Detector output must have N scores, N classes, and N × 4 box values.'
+      'Detector output must have N scores, N classes, and N × 4 box values.',
     );
   }
   const detections: ModelDetection[] = [];
@@ -55,7 +55,7 @@ export function decodeDetectorOutput(output: DetectorOutput): RawModelOutput {
     const name = DETECTOR_CLASSES[classes[index] as number];
     if (!Number.isInteger(classes[index]) || name === undefined) {
       throw new RangeError(
-        `Detector class indices must be integers in [0, ${DETECTOR_CLASSES.length - 1}].`
+        `Detector class indices must be integers in [0, ${DETECTOR_CLASSES.length - 1}].`,
       );
     }
     const isVehicle = VEHICLE_TYPES.has(name);

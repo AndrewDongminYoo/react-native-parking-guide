@@ -73,7 +73,7 @@ function isValidEndpoint(endpoint: unknown): boolean {
     return (
       labels.length === 4 &&
       labels.every(
-        (label) => IPV4_PART_PATTERN.test(label) && Number(label) <= 255
+        (label) => IPV4_PART_PATTERN.test(label) && Number(label) <= 255,
       )
     );
   }
@@ -123,10 +123,10 @@ function validateOptions(options: UploadOptions): void {
 }
 
 function buildHeaders(
-  headers: Readonly<Record<string, string>> = {}
+  headers: Readonly<Record<string, string>> = {},
 ): Record<string, string> {
   const callerNames = new Set(
-    Object.keys(headers).map((name) => name.toLowerCase())
+    Object.keys(headers).map((name) => name.toLowerCase()),
   );
   const merged: Record<string, string> = {};
   for (const [name, value] of [
@@ -148,7 +148,7 @@ async function attempt(
   endpoint: string,
   init: RequestInit,
   timeoutMs: number,
-  attempts: number
+  attempts: number,
 ): Promise<AttemptOutcome> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -239,7 +239,7 @@ async function attempt(
  */
 export async function uploadVerification<T = unknown>(
   result: VerificationResult,
-  options: UploadOptions
+  options: UploadOptions,
 ): Promise<UploadResult<T>> {
   validateOptions(options);
   const timeoutMs = options.timeoutMs ?? DEFAULT_UPLOAD_TIMEOUT_MS;

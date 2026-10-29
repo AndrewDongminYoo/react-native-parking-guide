@@ -142,11 +142,11 @@ describe('evaluatePolicy', () => {
           rules: {
             UPRIGHT: { enabled: true, severity: 'WARN' },
           },
-        }
+        },
       );
 
       expect(result.score).toBe(score);
-    }
+    },
   );
 
   it.each([
@@ -161,7 +161,7 @@ describe('evaluatePolicy', () => {
         rules: {
           UPRIGHT: { enabled: true, severity: 'WARN' },
         },
-      }
+      },
     );
 
     expect(result.score).toBe(expected);
@@ -176,7 +176,7 @@ describe('evaluatePolicy', () => {
         rules: {
           UPRIGHT: { enabled: true, severity: 'WARN' },
         },
-      }
+      },
     );
 
     expect(result).toEqual({ verdict: 'WARN', score: 0.5 });
@@ -196,7 +196,7 @@ describe('evaluatePolicy', () => {
           UPRIGHT: { enabled: true, severity: 'WARN', weight: 3 },
           GEOFENCE: { enabled: true, severity: 'WARN', weight: 1 },
         },
-      }
+      },
     );
 
     expect(result).toEqual({ verdict: 'WARN', score: 0.75 });
@@ -211,7 +211,7 @@ describe('evaluatePolicy', () => {
         rules: {
           UPRIGHT: { enabled: true, severity: 'WARN', weight: 0 },
         },
-      }
+      },
     );
 
     expect(result).toEqual({ verdict: 'PASS', score: 1 });
@@ -226,7 +226,7 @@ describe('evaluatePolicy', () => {
         rules: {
           UPRIGHT: { enabled: true, severity: 'WARN' },
         },
-      }
+      },
     );
 
     expect(result).toEqual({ verdict: 'PASS', score: 0.75 });

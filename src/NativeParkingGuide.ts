@@ -13,7 +13,7 @@ export interface Spec extends TurboModule {
    */
   runDetector(
     photoUri: string,
-    modelUri: string
+    modelUri: string,
   ): Promise<{ boxes: number[]; scores: number[]; classes: number[] }>;
   /**
    * Requests a device attestation token (App Attest on iOS, Play Integrity on Android) bound to the SHA-256 of the
@@ -23,7 +23,7 @@ export interface Spec extends TurboModule {
   requestAttestation(
     photoSha256: string,
     challenge: string,
-    cloudProjectNumber: number
+    cloudProjectNumber: number,
   ): Promise<string>;
   /**
    * iOS: deletes the stored App Attest key ID, so that the next `requestAttestation` call generates and attests a new

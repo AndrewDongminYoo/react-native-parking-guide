@@ -24,7 +24,7 @@ export interface LayoutSize {
  */
 export function fitGuideFrameWidth(
   area: LayoutSize,
-  hintHeight: number
+  hintHeight: number,
 ): number {
   const byWidth = area.width - 2 * GUIDE_FRAME_HORIZONTAL_MARGIN;
   const byHeight =
@@ -35,7 +35,7 @@ export function fitGuideFrameWidth(
     GUIDE_FRAME_ASPECT_RATIO;
   return Math.max(
     0,
-    Math.floor(Math.min(byWidth, byHeight, GUIDE_FRAME_MAX_WIDTH))
+    Math.floor(Math.min(byWidth, byHeight, GUIDE_FRAME_MAX_WIDTH)),
   );
 }
 
@@ -45,7 +45,7 @@ export function fitGuideFrameWidth(
  */
 export function frameSizeChange(
   previous: Size | null,
-  result: DetectorFrameResult
+  result: DetectorFrameResult,
 ): Size | null {
   if ('error' in result) {
     return null;
@@ -61,7 +61,7 @@ export function frameSizeChange(
 
 /** `box` when it has a positive area, so the guidance hook never receives an empty guide frame. */
 export function usableGuideBox(
-  box: ModelBox | undefined
+  box: ModelBox | undefined,
 ): ModelBox | undefined {
   return box !== undefined && box[0] < box[2] && box[1] < box[3]
     ? box

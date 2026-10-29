@@ -29,14 +29,14 @@ export function captureTitle(vehicleType: VehicleType): string {
 /** Default library text for each current issue, in `getParkingFeedback` order. */
 export function guidanceMessages(issues: readonly GuidanceIssue[]): string[] {
   return getParkingFeedback({ rules: [], issues }).map(
-    (feedback) => feedback.text
+    (feedback) => feedback.text,
   );
 }
 
 /** Guidance messages, preceded by a model-failure message when the detector failed (instead of "no vehicle"). */
 export function captureMessages(
   issues: readonly GuidanceIssue[],
-  detectorError: string | null
+  detectorError: string | null,
 ): string[] {
   const messages = guidanceMessages(issues);
   return detectorError === null
@@ -47,7 +47,7 @@ export function captureMessages(
 /** The guidance lines that the capture screen shows: the messages, or one status line when there is no message. */
 export function guidanceLines(
   messages: readonly string[],
-  ready: boolean
+  ready: boolean,
 ): string[] {
   if (messages.length > 0) {
     return [...messages];
@@ -62,7 +62,7 @@ export function guidanceLines(
 /** The screen reader hint of the shutter button, or undefined while the shutter is enabled. */
 export function shutterHint(
   canCapture: boolean,
-  capturing: boolean
+  capturing: boolean,
 ): string | undefined {
   if (canCapture) {
     return undefined;

@@ -83,18 +83,18 @@ function validateOptions(options: VerifyParkingOptions): ParkingPolicy {
     !isPositiveInteger(photo.height)
   ) {
     throw new RangeError(
-      'photo must have a non-empty uri and integer width and height > 0.'
+      'photo must have a non-empty uri and integer width and height > 0.',
     );
   }
   if (
     !Array.isArray(ruleResults) ||
     // Array.from turns holes into undefined; every() would skip them.
     !Array.from(ruleResults).every(
-      (rule: unknown) => isRecord(rule) && VERDICTS.includes(rule.verdict)
+      (rule: unknown) => isRecord(rule) && VERDICTS.includes(rule.verdict),
     )
   ) {
     throw new RangeError(
-      'ruleResults must be an array of rule results with a PASS, WARN, or FAIL verdict.'
+      'ruleResults must be an array of rule results with a PASS, WARN, or FAIL verdict.',
     );
   }
   const policy = validatePolicy(options.policy ?? defaultPolicy);
@@ -108,11 +108,11 @@ function validateOptions(options: VerifyParkingOptions): ParkingPolicy {
       (rule: RuleResult) =>
         Object.prototype.hasOwnProperty.call(policy.rules, rule.id) &&
         policy.rules[rule.id]?.enabled === true &&
-        (policy.rules[rule.id]?.weight ?? 1) > 0
+        (policy.rules[rule.id]?.weight ?? 1) > 0,
     )
   ) {
     throw new RangeError(
-      'ruleResults must contain a result for at least one rule that the policy enables with a weight above 0.'
+      'ruleResults must contain a result for at least one rule that the policy enables with a weight above 0.',
     );
   }
   if (
@@ -121,7 +121,7 @@ function validateOptions(options: VerifyParkingOptions): ParkingPolicy {
     !isFiniteInRange(deviceTilt.roll, -Math.PI, Math.PI)
   ) {
     throw new RangeError(
-      'deviceTilt pitch and roll must be finite radians in [-π, π].'
+      'deviceTilt pitch and roll must be finite radians in [-π, π].',
     );
   }
   if (
@@ -138,7 +138,7 @@ function validateOptions(options: VerifyParkingOptions): ParkingPolicy {
       !isFiniteInRange(location.accuracy, 0, Infinity))
   ) {
     throw new RangeError(
-      'location must have lat in [-90, 90], lng in [-180, 180], and a finite accuracy >= 0.'
+      'location must have lat in [-90, 90], lng in [-180, 180], and a finite accuracy >= 0.',
     );
   }
   if (
@@ -167,7 +167,7 @@ function validateOptions(options: VerifyParkingOptions): ParkingPolicy {
  * `evaluatePolicy`. Rejects with `RangeError` for invalid options before reading the photo. Logs nothing.
  */
 export async function verifyParking(
-  options: VerifyParkingOptions
+  options: VerifyParkingOptions,
 ): Promise<VerificationResult> {
   const calledAt = Date.now();
   const policy = validateOptions(options);

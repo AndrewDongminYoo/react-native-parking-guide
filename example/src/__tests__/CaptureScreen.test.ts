@@ -65,7 +65,7 @@ jest.mock(
     // App imports the result screen, whose demo policy spreads defaultPolicy at module load.
     ...jest.requireActual<object>('../../../src/policy/defaultPolicy'),
   }),
-  { virtual: true }
+  { virtual: true },
 );
 
 afterEach(() => {
@@ -109,8 +109,8 @@ function renderPermissionScreen() {
         modelUri: undefined,
         onClose: () => undefined,
         onCaptured: () => undefined,
-      })
-    )
+      }),
+    ),
   );
 }
 
@@ -140,16 +140,16 @@ describe('example capture copy', () => {
       'Hold the phone steady.',
     ]);
     expect(captureMessages(['NO_VEHICLE'], null)).toEqual(
-      guidanceMessages(['NO_VEHICLE'])
+      guidanceMessages(['NO_VEHICLE']),
     );
   });
 
   it('describes what the capture screen checks', () => {
     expect(captureDisclaimer(false)).toBe(
-      'Checks image quality only. Vehicle detection and the parking result need a detector model.'
+      'Checks image quality only. Vehicle detection and the parking result need a detector model.',
     );
     expect(captureDisclaimer(true)).toBe(
-      'Checks image quality and vehicle placement with the configured model, then shows a parking result for the photo.'
+      'Checks image quality and vehicle placement with the configured model, then shows a parking result for the photo.',
     );
   });
 
@@ -167,7 +167,7 @@ describe('example capture copy', () => {
     expect(shutterHint(true, false)).toBeUndefined();
     expect(shutterHint(false, true)).toBe('Taking the photo.');
     expect(shutterHint(false, false)).toBe(
-      'Available when the guidance says Ready.'
+      'Available when the guidance says Ready.',
     );
   });
 
@@ -199,8 +199,8 @@ describe('example result screen', () => {
           photo: { path: '/tmp/photo.jpg', guideFrame: undefined },
           onRetake: () => undefined,
           onDone: () => undefined,
-        })
-      )
+        }),
+      ),
     );
     expect(screen).toContain('Checking your parking…');
     expect(screen).toContain('Retake');
@@ -225,18 +225,18 @@ describe('example camera permission on cold start', () => {
       expect(screen).toContain('Take a photo of the kickboard');
       if (denied) {
         expect(screen).toContain(
-          'Camera access is turned off. Turn it on in Settings to take the parking photo.'
+          'Camera access is turned off. Turn it on in Settings to take the parking photo.',
         );
         expect(screen).toContain('Open Settings');
         expect(screen).not.toContain('Allow camera');
       } else {
         expect(screen).toContain(
-          'Camera access is needed to take the parking photo.'
+          'Camera access is needed to take the parking photo.',
         );
         expect(screen).toContain('Allow camera');
         expect(screen).not.toContain('Open Settings');
       }
-    }
+    },
   );
 });
 
@@ -260,13 +260,13 @@ describe('example capture lifecycle', () => {
           modelUri: undefined,
           onClose: () => undefined,
           onCaptured: () => undefined,
-        })
+        }),
       );
 
       expect(names.includes('CameraCapture')).toBe(mounted);
       expect(names).not.toContain('PermissionPrompt');
       expect(names).toContain(mounted ? 'CameraCapture' : 'CaptureHeader');
-    }
+    },
   );
 });
 
@@ -298,7 +298,7 @@ describe('example capture AppState subscription', () => {
 
     expect(AppState.addEventListener).toHaveBeenCalledWith(
       'change',
-      expect.any(Function)
+      expect.any(Function),
     );
     for (const [state, active] of [
       ['background', false],

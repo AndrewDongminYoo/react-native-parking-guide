@@ -29,7 +29,7 @@ export function decideGuidanceAnnouncement(
   last: GuidanceAnnouncement | null,
   line: string,
   now: number,
-  intervalMs: number = GUIDANCE_ANNOUNCEMENT_INTERVAL_MS
+  intervalMs: number = GUIDANCE_ANNOUNCEMENT_INTERVAL_MS,
 ): GuidanceAnnouncementDecision {
   if (last === null) {
     return { kind: 'announce' };

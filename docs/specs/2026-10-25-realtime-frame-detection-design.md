@@ -54,7 +54,7 @@ These issues join the existing image-quality issues (`BLURRY`, `LOW_LIGHT`, `TIL
   - a fresh successful detection contributes its issues (`NO_VEHICLE` when it found no vehicle);
   - a missing or stale detection (older than `staleAfterMs`, default 1500 ms) adds no issue but forces `ready` to false;
   - a detector error adds no issue, forces `ready` to false, and sets `detectorError` (the error code) on the hook result, so the host can show a model problem instead of "no vehicle".
-  The existing reducer's debounce and smoothing then apply to the merged result unchanged.
+    The existing reducer's debounce and smoothing then apply to the merged result unchanged.
 - The `staleAfterMs` default is provisional: a first `.mlpackage` compile or a slow CPU-only LiteRT run can exceed 1500 ms, so the value is revisited once the reference model's latency is measured.
 - The merge is a pure function next to `reduceGuidance` so it is unit-tested without React.
 

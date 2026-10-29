@@ -19,8 +19,8 @@ describe('decodeDetectorOutput', () => {
 
     expect(
       decodeDetectorOutput(output).detections.map(
-        ({ classId, vehicleType }) => [classId, vehicleType]
-      )
+        ({ classId, vehicleType }) => [classId, vehicleType],
+      ),
     ).toEqual([
       ['vehicle', 'kickboard'],
       ['vehicle', 'bicycle'],
@@ -52,7 +52,7 @@ describe('decodeDetectorOutput', () => {
       ],
     });
     expect(Object.keys(result.detections[1] ?? {})).not.toContain(
-      'vehicleType'
+      'vehicleType',
     );
   });
 
@@ -71,7 +71,7 @@ describe('decodeDetectorOutput', () => {
     });
     // The contract carries no upright or imageQuality assessment.
     expect(
-      rules.filter((rule) => ['UPRIGHT', 'IMAGE_QUALITY'].includes(rule.id))
+      rules.filter((rule) => ['UPRIGHT', 'IMAGE_QUALITY'].includes(rule.id)),
     ).toEqual([
       { id: 'UPRIGHT', verdict: 'WARN', score: 0, confidence: 0 },
       { id: 'IMAGE_QUALITY', verdict: 'WARN', score: 0, confidence: 0 },
@@ -84,7 +84,7 @@ describe('decodeDetectorOutput', () => {
         boxes: [0.2, 0.2, 0.8, 0.9],
         scores: [0.99],
         classes: [0],
-      })
+      }),
     );
 
     expect(evaluatePolicy(rules, defaultPolicy).verdict).toBe('FAIL');
@@ -95,13 +95,13 @@ describe('decodeDetectorOutput', () => {
           ...defaultPolicy.rules,
           UPRIGHT: { ...defaultPolicy.rules.UPRIGHT!, severity: 'WARN' },
         },
-      }).verdict
+      }).verdict,
     ).not.toBe('FAIL');
   });
 
   it('decodes an empty output', () => {
     expect(
-      decodeDetectorOutput({ boxes: [], scores: [], classes: [] })
+      decodeDetectorOutput({ boxes: [], scores: [], classes: [] }),
     ).toEqual({ detections: [] });
   });
 

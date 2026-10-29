@@ -20,7 +20,7 @@ export function createAutoCaptureState(): AutoCaptureState {
 export function reduceAutoCapture(
   state: AutoCaptureState,
   input: { ready: boolean; now: number },
-  holdMs: number
+  holdMs: number,
 ): AutoCaptureState {
   if (!Number.isFinite(holdMs) || holdMs < 0) {
     throw new RangeError('holdMs must be finite and >= 0.');
@@ -37,7 +37,7 @@ export function reduceAutoCapture(
 
 /** Clears `due` after the app has taken the photo; the current `ready` period does not fire again. */
 export function acknowledgeAutoCapture(
-  state: AutoCaptureState
+  state: AutoCaptureState,
 ): AutoCaptureState {
   return { ...state, due: false };
 }
