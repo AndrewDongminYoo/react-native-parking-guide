@@ -31,7 +31,7 @@ export function createGuidanceState(): GuidanceReducerState {
 export function reduceGuidance(
   state: GuidanceReducerState,
   frame: GuidanceFrameResult,
-  options: GuidanceOptions = {}
+  options: GuidanceOptions = {},
 ): GuidanceReducerState {
   const { smoothingFactor = 0.25, debounceFrames = 3 } = options;
   if (

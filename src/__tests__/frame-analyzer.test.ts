@@ -27,7 +27,7 @@ describe('createParkingFrameAnalyzer', () => {
     const analyze = createParkingFrameAnalyzer(proxy);
     expect(mockInitFrameProcessorPlugin).toHaveBeenCalledWith(
       'parkingGuide',
-      CAPTURE_GUIDANCE_THRESHOLDS
+      CAPTURE_GUIDANCE_THRESHOLDS,
     );
     expect(CAPTURE_GUIDANCE_THRESHOLDS).toEqual({
       minLaplacianVariance: 100,
@@ -43,7 +43,7 @@ describe('createParkingFrameAnalyzer', () => {
   it('fails explicitly when the native plugin is not registered', () => {
     mockInitFrameProcessorPlugin.mockReturnValue(undefined);
     expect(() => createParkingFrameAnalyzer(proxy)).toThrow(
-      /parkingGuide.*native plugin/
+      /parkingGuide.*native plugin/,
     );
   });
 
@@ -55,7 +55,7 @@ describe('createParkingFrameAnalyzer', () => {
       progress: 0,
     };
     call.mockReturnValue(
-      result as unknown as ReturnType<FrameProcessorPlugin['call']>
+      result as unknown as ReturnType<FrameProcessorPlugin['call']>,
     );
     const analyze = createParkingFrameAnalyzer(proxy);
     let state = createGuidanceState();
@@ -90,7 +90,7 @@ describe('createParkingDetector', () => {
     const detect = createParkingDetector(proxy, { modelUri: '/m.tflite' });
     expect(mockInitFrameProcessorPlugin).toHaveBeenCalledWith(
       'parkingDetector',
-      { modelUri: '/m.tflite' }
+      { modelUri: '/m.tflite' },
     );
     jest.spyOn(Date, 'now').mockReturnValue(1234);
     expect(detect({} as Frame)).toEqual({ ...result, capturedAt: 1234 });
@@ -99,7 +99,7 @@ describe('createParkingDetector', () => {
   it('fails explicitly when the native plugin is not registered', () => {
     mockInitFrameProcessorPlugin.mockReturnValue(undefined);
     expect(() =>
-      createParkingDetector(proxy, { modelUri: '/m.tflite' })
+      createParkingDetector(proxy, { modelUri: '/m.tflite' }),
     ).toThrow(/parkingDetector.*native plugin/);
   });
 

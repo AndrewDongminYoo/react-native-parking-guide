@@ -1,0 +1,3 @@
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+reason = "deepmerge@4.3.1 has no advisory-listed patched version as of 2026-10-29. yarn why deepmerge resolves Jest 29.7.0 and React Native CLI 20.2.0, whose installed call sites merge local configuration. src/ and lib/ do not import deepmerge. This exception accepts the risk of processing untrusted local configuration in development tools. Approved by AndrewDongminYoo on 2026-10-29. Re-evaluation owner: AndrewDongminYoo. Remove when a compatible patch is available or the dependency reaches shipped code."

@@ -5,14 +5,14 @@ import android.media.ExifInterface
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
-import java.io.FileInputStream
-import java.io.InputStream
-import kotlin.random.Random
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
+import java.io.FileInputStream
+import java.io.InputStream
+import kotlin.random.Random
 
 /**
  * Checks the [ParkingDetector] input and output limits from [DetectorTensors] (issue #70) on the synthetic fixtures
@@ -25,10 +25,11 @@ class DetectorLimitsTest {
   private val context = InstrumentationRegistry.getInstrumentation().context
   private val streams = mutableMapOf<PhotoSource, () -> InputStream>()
   private val opens = mutableMapOf<PhotoSource, Int>()
-  private val detector = ParkingDetector(context.cacheDir) { source ->
-    opens[source] = (opens[source] ?: 0) + 1
-    streams[source]?.invoke() ?: (source as? PhotoSource.File)?.let { FileInputStream(it.path) }
-  }
+  private val detector =
+    ParkingDetector(context.cacheDir) { source ->
+      opens[source] = (opens[source] ?: 0) + 1
+      streams[source]?.invoke() ?: (source as? PhotoSource.File)?.let { FileInputStream(it.path) }
+    }
 
   @After fun close() = detector.close()
 
@@ -38,8 +39,10 @@ class DetectorLimitsTest {
     return PhotoSource.File(file.path)
   }
 
-  private fun content(name: String, stream: () -> InputStream): PhotoSource.Content =
-    PhotoSource.Content("content://test/$name").also { streams[it] = stream }
+  private fun content(
+    name: String,
+    stream: () -> InputStream,
+  ): PhotoSource.Content = PhotoSource.Content("content://test/$name").also { streams[it] = stream }
 
   @Test fun rejectsAnEndlessContentModel() {
     val stream = EndlessZeros()
@@ -53,9 +56,10 @@ class DetectorLimitsTest {
   @Test fun rejectsAnEndlessPhoto() {
     val stream = EndlessZeros()
     val photo = content("endless.png") { stream }
-    val error = assertThrows(ParkingDetector.Failure::class.java) {
-      detector.run(photo, fixture("detector-nhwc.tflite"))
-    }
+    val error =
+      assertThrows(ParkingDetector.Failure::class.java) {
+        detector.run(photo, fixture("detector-nhwc.tflite"))
+      }
     logPath("endless photo", error, stream, DetectorTensors.MAX_PHOTO_BYTES)
     assertEquals(ParkingDetector.E_PHOTO_READ, error.code)
     assertEquals(DetectorTensors.MAX_PHOTO_BYTES + 1L, stream.served)
@@ -66,7 +70,12 @@ class DetectorLimitsTest {
    * read at exactly [maxBytes] + 1 bytes; an OutOfMemoryError maps to the same error code, so also check logcat for
    * "Throwing OutOfMemoryError". The endless model case writes up to [maxBytes] bytes to the cache directory.
    */
-  private fun logPath(case: String, error: ParkingDetector.Failure, stream: EndlessZeros, maxBytes: Int) {
+  private fun logPath(
+    case: String,
+    error: ParkingDetector.Failure,
+    stream: EndlessZeros,
+    maxBytes: Int,
+  ) {
     Log.i(TAG, "$case: ${error.code} after ${stream.served} of at most ${maxBytes + 1L} bytes")
   }
 
@@ -98,15 +107,17 @@ class DetectorLimitsTest {
     }
     val bytes = FileInputStream(file).use { DetectorTensors.readAtMost(it, DetectorTensors.MAX_PHOTO_BYTES) }!!
     assertTrue(bytes.size > DetectorTensors.CHUNK_BYTES)
-    val orientation = ExifInterface(bytes.inputStream())
-      .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+    val orientation =
+      ExifInterface(bytes.inputStream())
+        .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
     assertEquals(ExifInterface.ORIENTATION_ROTATE_90, orientation)
   }
 
   @Test fun rejectsAnOutputAboveTheDetectionLimit() {
-    val error = assertThrows(ParkingDetector.Failure::class.java) {
-      detector.run(fixture("solid.png"), fixture("detector-large.tflite"))
-    }
+    val error =
+      assertThrows(ParkingDetector.Failure::class.java) {
+        detector.run(fixture("solid.png"), fixture("detector-large.tflite"))
+      }
     assertEquals(ParkingDetector.E_MODEL_CONTRACT, error.code)
   }
 
@@ -120,7 +131,11 @@ class DetectorLimitsTest {
       return 0
     }
 
-    override fun read(b: ByteArray, off: Int, len: Int): Int {
+    override fun read(
+      b: ByteArray,
+      off: Int,
+      len: Int,
+    ): Int {
       b.fill(0, off, off + len)
       served += len
       return len

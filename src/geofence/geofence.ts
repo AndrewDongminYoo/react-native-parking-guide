@@ -46,7 +46,7 @@ function validatePoint(point: GeoPoint): void {
     Math.abs(point.lng) > 180
   ) {
     throw new RangeError(
-      'Latitude must be in [-90, 90] and longitude in [-180, 180].'
+      'Latitude must be in [-90, 90] and longitude in [-180, 180].',
     );
   }
 }
@@ -58,7 +58,7 @@ function validateZone(zone: GeofenceZone): void {
     (zone.kind !== 'allowed' && zone.kind !== 'prohibited')
   ) {
     throw new RangeError(
-      "Geofence zone kind must be 'allowed' or 'prohibited'."
+      "Geofence zone kind must be 'allowed' or 'prohibited'.",
     );
   }
   if (!Array.isArray(zone.polygon) || zone.polygon.length < 3) {
@@ -81,7 +81,7 @@ function wrapLng(delta: number): number {
  */
 function projectRing(
   origin: GeoPoint,
-  ring: readonly GeoPoint[]
+  ring: readonly GeoPoint[],
 ): [number, number][] {
   const deltas: number[] = [];
   let previous = 0;
@@ -147,7 +147,7 @@ function zoneState(location: GeoLocation, zone: GeofenceZone): ZoneState {
 export function evaluateGeofence(
   location: GeoLocation | undefined,
   zones: readonly GeofenceZone[],
-  options: GeofenceOptions = {}
+  options: GeofenceOptions = {},
 ): RuleResult {
   const maxAccuracy = options.maxAccuracy ?? DEFAULT_MAX_GEOFENCE_ACCURACY;
   if (
@@ -177,7 +177,7 @@ export function evaluateGeofence(
   const prohibited: ZoneState[] = [];
   for (const zone of zones) {
     (zone.kind === 'allowed' ? allowed : prohibited).push(
-      zoneState(location, zone)
+      zoneState(location, zone),
     );
   }
   if (

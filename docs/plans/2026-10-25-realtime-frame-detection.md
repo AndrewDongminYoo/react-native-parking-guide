@@ -35,10 +35,12 @@
 ### Task 1: Pure detection snapshot and merge
 
 **Files:**
+
 - Create: `src/guidance/detection.ts`
 - Test: `src/__tests__/detection.test.ts`
 
 **Interfaces:**
+
 - Consumes: `decodeDetectorOutput` (`src/inference/detector.ts`), `mapGuidanceIssues`, `GuidanceMappingOptions` (`src/inference/guidance.ts`), `GuidanceFrameResult` (`src/guidance/reducer.ts`).
 - Produces:
   - `type DetectorFrameResult = { boxes: number[]; scores: number[]; classes: number[]; frameWidth: number; frameHeight: number } | { error: string }`
@@ -52,35 +54,89 @@
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
-const VEHICLE = { boxes: [0.2, 0.3, 0.8, 0.9], scores: [0.9], classes: [0], frameWidth: 480, frameHeight: 640 };
-const EMPTY = { boxes: [], scores: [], classes: [], frameWidth: 480, frameHeight: 640 };
+const VEHICLE = {
+  boxes: [0.2, 0.3, 0.8, 0.9],
+  scores: [0.9],
+  classes: [0],
+  frameWidth: 480,
+  frameHeight: 640,
+};
+const EMPTY = {
+  boxes: [],
+  scores: [],
+  classes: [],
+  frameWidth: 480,
+  frameHeight: 640,
+};
 const QUALITY = { ready: true, issues: [], progress: 1 };
 
 it('maps a vehicle detection to model issues', () => {
   expect(toDetectionSnapshot(VEHICLE, 10, {}).issues).toEqual([]); // fills 0.6 of the whole frame: no issue
-  expect(toDetectionSnapshot(EMPTY, 10, {})).toEqual({ issues: ['NO_VEHICLE'], error: null, at: 10 });
+  expect(toDetectionSnapshot(EMPTY, 10, {})).toEqual({
+    issues: ['NO_VEHICLE'],
+    error: null,
+    at: 10,
+  });
 });
 it('turns a native error into a snapshot error', () => {
-  expect(toDetectionSnapshot({ error: 'E_MODEL_LOAD' }, 10, {})).toEqual({ issues: [], error: 'E_MODEL_LOAD', at: 10 });
+  expect(toDetectionSnapshot({ error: 'E_MODEL_LOAD' }, 10, {})).toEqual({
+    issues: [],
+    error: 'E_MODEL_LOAD',
+    at: 10,
+  });
 });
 it('turns invalid model output into E_MODEL_CONTRACT without throwing', () => {
-  expect(toDetectionSnapshot({ ...VEHICLE, scores: [Number.NaN] }, 10, {}).error).toBe('E_MODEL_CONTRACT');
-  expect(toDetectionSnapshot({ ...VEHICLE, classes: [] }, 10, {}).error).toBe('E_MODEL_CONTRACT');
+  expect(
+    toDetectionSnapshot({ ...VEHICLE, scores: [Number.NaN] }, 10, {}).error,
+  ).toBe('E_MODEL_CONTRACT');
+  expect(toDetectionSnapshot({ ...VEHICLE, classes: [] }, 10, {}).error).toBe(
+    'E_MODEL_CONTRACT',
+  );
 });
 it('merges fresh issues and keeps ready only without model issues', () => {
   const noVehicle = { issues: ['NO_VEHICLE'], error: null, at: 0 } as const;
-  expect(mergeDetection(QUALITY, noVehicle, 100, 1500)).toEqual({ frame: { ready: false, issues: ['NO_VEHICLE'], progress: 1 }, detectorError: null });
-  expect(mergeDetection(QUALITY, { issues: [], error: null, at: 0 }, 100, 1500).frame.ready).toBe(true);
+  expect(mergeDetection(QUALITY, noVehicle, 100, 1500)).toEqual({
+    frame: { ready: false, issues: ['NO_VEHICLE'], progress: 1 },
+    detectorError: null,
+  });
+  expect(
+    mergeDetection(QUALITY, { issues: [], error: null, at: 0 }, 100, 1500).frame
+      .ready,
+  ).toBe(true);
 });
 it('fails closed on a missing, stale, or failed detection without NO_VEHICLE', () => {
-  expect(mergeDetection(QUALITY, null, 100, 1500)).toEqual({ frame: { ready: false, issues: [], progress: 1 }, detectorError: null });
-  expect(mergeDetection(QUALITY, { issues: [], error: null, at: 0 }, 1501, 1500).frame.ready).toBe(false);
-  expect(mergeDetection(QUALITY, { issues: [], error: 'E_INFERENCE', at: 0 }, 100, 1500)).toEqual({ frame: { ready: false, issues: [], progress: 1 }, detectorError: 'E_INFERENCE' });
+  expect(mergeDetection(QUALITY, null, 100, 1500)).toEqual({
+    frame: { ready: false, issues: [], progress: 1 },
+    detectorError: null,
+  });
+  expect(
+    mergeDetection(QUALITY, { issues: [], error: null, at: 0 }, 1501, 1500)
+      .frame.ready,
+  ).toBe(false);
+  expect(
+    mergeDetection(
+      QUALITY,
+      { issues: [], error: 'E_INFERENCE', at: 0 },
+      100,
+      1500,
+    ),
+  ).toEqual({
+    frame: { ready: false, issues: [], progress: 1 },
+    detectorError: 'E_INFERENCE',
+  });
 });
 it('rejects invalid detection options', () => {
-  expect(() => validateDetectionOptions({ staleAfterMs: 0 })).toThrow(RangeError);
-  expect(() => validateDetectionOptions({ thresholds: { tooFarBelow: 2, tooCloseAbove: 1 } })).toThrow(RangeError);
-  expect(() => validateDetectionOptions({ guideFrame: [0.5, 0, 0.4, 1] })).toThrow(RangeError);
+  expect(() => validateDetectionOptions({ staleAfterMs: 0 })).toThrow(
+    RangeError,
+  );
+  expect(() =>
+    validateDetectionOptions({
+      thresholds: { tooFarBelow: 2, tooCloseAbove: 1 },
+    }),
+  ).toThrow(RangeError);
+  expect(() =>
+    validateDetectionOptions({ guideFrame: [0.5, 0, 0.4, 1] }),
+  ).toThrow(RangeError);
 });
 ```
 
@@ -92,10 +148,12 @@ it('rejects invalid detection options', () => {
 ### Task 2: Auto-capture reducer and screen-to-frame mapping
 
 **Files:**
+
 - Create: `src/guidance/autoCapture.ts`, `src/guidance/screenRect.ts`
 - Test: `src/__tests__/auto-capture.test.ts`, `src/__tests__/screen-rect.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `const DEFAULT_AUTO_CAPTURE_HOLD_MS = 800`
   - `interface AutoCaptureState { readySince: number | null; fired: boolean; due: boolean }`
@@ -124,21 +182,42 @@ it('fires once after holdMs of continuous ready and re-arms after ready drops', 
   expect(s.due).toBe(true);
 });
 it('rejects a negative or non-finite hold', () => {
-  expect(() => reduceAutoCapture(createAutoCaptureState(), { ready: true, now: 0 }, -1)).toThrow(RangeError);
+  expect(() =>
+    reduceAutoCapture(createAutoCaptureState(), { ready: true, now: 0 }, -1),
+  ).toThrow(RangeError);
 });
 it('maps a centered rect through the cover crop', () => {
   // A 480 x 640 portrait frame shown in a 390 x 844 view: scale 1.31875, frame shown 633 x 844, 121.5 px cropped each side.
-  expect(screenRectToFrameBox({ x: 0, y: 0, width: 390, height: 844 }, { width: 390, height: 844 }, { width: 480, height: 640 }))
-    .toEqual([expect.closeTo(0.19194, 4), 0, expect.closeTo(0.80806, 4), 1]);
+  expect(
+    screenRectToFrameBox(
+      { x: 0, y: 0, width: 390, height: 844 },
+      { width: 390, height: 844 },
+      { width: 480, height: 640 },
+    ),
+  ).toEqual([expect.closeTo(0.19194, 4), 0, expect.closeTo(0.80806, 4), 1]);
 });
 it('maps the same rect differently for a landscape frame', () => {
   const rect = { x: 45, y: 300, width: 300, height: 225 };
   const view = { width: 390, height: 844 };
-  expect(screenRectToFrameBox(rect, view, { width: 640, height: 480 })).not.toEqual(screenRectToFrameBox(rect, view, { width: 480, height: 640 }));
+  expect(
+    screenRectToFrameBox(rect, view, { width: 640, height: 480 }),
+  ).not.toEqual(screenRectToFrameBox(rect, view, { width: 480, height: 640 }));
 });
 it('clamps to [0, 1] and rejects empty sizes', () => {
-  expect(screenRectToFrameBox({ x: -10, y: -10, width: 1000, height: 2000 }, { width: 390, height: 844 }, { width: 480, height: 640 })).toEqual([0, 0, 1, 1]);
-  expect(() => screenRectToFrameBox({ x: 0, y: 0, width: 1, height: 1 }, { width: 0, height: 1 }, { width: 1, height: 1 })).toThrow(RangeError);
+  expect(
+    screenRectToFrameBox(
+      { x: -10, y: -10, width: 1000, height: 2000 },
+      { width: 390, height: 844 },
+      { width: 480, height: 640 },
+    ),
+  ).toEqual([0, 0, 1, 1]);
+  expect(() =>
+    screenRectToFrameBox(
+      { x: 0, y: 0, width: 1, height: 1 },
+      { width: 0, height: 1 },
+      { width: 1, height: 1 },
+    ),
+  ).toThrow(RangeError);
 });
 ```
 
@@ -152,11 +231,13 @@ it('clamps to [0, 1] and rejects empty sizes', () => {
 The repository has no React renderer in its test dependencies (the example tests mock hooks), and no new dependency is allowed, so the hook's behavior lives in a pure session reducer that is tested directly; the hook only holds its state.
 
 **Files:**
+
 - Create: `src/guidance/session.ts`
 - Modify: `src/guidance/useParkingGuidance.ts`, `src/guidance/frameAnalyzer.ts`, `src/index.tsx`
 - Test: `src/__tests__/guidance-session.test.ts` (create), `src/__tests__/guidance-api.test.ts` (extend)
 
 **Interfaces:**
+
 - Consumes: Task 1 and Task 2 exports, `createGuidanceState`/`reduceGuidance` (`src/guidance/reducer.ts`).
 - Produces:
   - `interface GuidanceSessionOptions extends GuidanceOptions { detection?: DetectionOptions; autoCapture?: { holdMs?: number } }`
@@ -185,10 +266,12 @@ The repository has no React renderer in its test dependencies (the example tests
 ### Task 4: Android YUV frame to upright ARGB pixels
 
 **Files:**
+
 - Create: `android/src/main/java/com/parkingguide/FramePixels.kt`
 - Test: `android/src/test/java/com/parkingguide/FramePixelsTest.kt`
 
 **Interfaces:**
+
 - Produces:
   - `object FramePixels { fun uprightSize(width: Int, height: Int, rotationDegrees: Int): Pair<Int, Int>; fun toArgb(y: ByteBuffer, u: ByteBuffer, v: ByteBuffer, width: Int, height: Int, yRowStride: Int, uvRowStride: Int, uvPixelStride: Int, rotationDegrees: Int, mirrored: Boolean, videoRange: Boolean): IntArray }`
   - `toArgb` returns `DetectorTensors.INPUT_SIZE²` opaque ARGB pixels of the frame rotated clockwise by `rotationDegrees` (0, 90, 180, 270; `ImageInfo.rotationDegrees` semantics), mirrored horizontally after rotation when `mirrored`, sampled nearest-neighbor, with BT.601 YUV→RGB for video or full range.
@@ -207,11 +290,13 @@ The repository has no React renderer in its test dependencies (the example tests
 ### Task 5: Android shared detector and `parkingDetector` plugin
 
 **Files:**
+
 - Modify: `android/src/main/java/com/parkingguide/ParkingDetector.kt`, `android/src/main/java/com/parkingguide/ParkingGuideModule.kt`, `android/src/visionCamera/java/com/parkingguide/ParkingGuideFrameProcessors.kt`
 - Create: `android/src/main/java/com/parkingguide/ParkingDetectors.kt`
 - Test: `android/src/androidTest/java/com/parkingguide/ParkingDetectorTest.kt` (extend)
 
 **Interfaces:**
+
 - Consumes: `FramePixels` (Task 4).
 - Produces:
   - `ParkingDetector.runPixels(pixels: IntArray, model: PhotoSource): Map<String, DoubleArray>` (synchronized; `run(photo, model)` becomes `runPixels(readPixels(photo), model)`).
@@ -228,10 +313,12 @@ The repository has no React renderer in its test dependencies (the example tests
 ### Task 6: iOS pixel-buffer path, shared detector, `parkingDetector` plugin
 
 **Files:**
+
 - Modify: `ios/ParkingGuideDetector.h`, `ios/ParkingGuideDetector.mm`, `ios/ParkingGuide.mm`, `ParkingGuide.podspec`, `scripts/detector-harness/main.mm`, `scripts/detector-harness/run.sh`
 - Create: `ios/ParkingGuideDetectorFrameProcessor.mm`
 
 **Interfaces:**
+
 - Produces:
   - `+ (ParkingGuideDetector *)shared` and `+ (dispatch_queue_t)sharedQueue` (serial); `ParkingGuide.mm` uses both instead of its own instance and queue, and `invalidate` resets the shared detector on the shared queue.
   - `- (nullable NSDictionary<NSString *, id> *)runWithPixelBuffer:(CVPixelBufferRef)buffer orientation:(CGImagePropertyOrientation)orientation modelURL:(NSURL *)modelURL errorCode:(NSString **)errorCode message:(NSString **)message;` returning the photo path's three arrays plus `frameWidth` and `frameHeight` (upright extent). Photo and pixel-buffer paths share one private method that takes the 512 × 512 RGBX buffer.
@@ -249,10 +336,12 @@ The repository has no React renderer in its test dependencies (the example tests
 ### Task 7: Example app and documentation
 
 **Files:**
+
 - Create: `example/src/detectorModel.ts`
 - Modify: `example/src/CaptureScreen.tsx`, `example/src/__tests__/CaptureScreen.test.ts`, `README.md`, `AGENTS.md`
 
 **Interfaces:**
+
 - Consumes: Task 3 exports.
 - Produces: `export const DETECTOR_MODEL_URI: string | undefined = undefined;` with a comment pointing to the README device smoke test.
 
@@ -282,6 +371,7 @@ The reason: on an iOS device the absolute path of the app's data container chang
 The device smoke test now uses `fixtures/detector/detector-demo.*`, because the fixed box of `detector-nhwc` lies outside the guide frame and kept the shutter disabled.
 Tests: `example/src/__tests__/demoDetector.test.ts`.
 On the iPhone 16 Pro device check of the same day, live detection never reached guidance, for two reasons that the Task 3 and Task 7 tests could not show:
+
 - `react-native-worklets-core` delivers a detector result to the JS thread as a host object. On it, `'error' in result` is true for every key, so a successful result was read as an error with no code, and the example never stored the frame size. `copyDetectorResult` now copies each result in `onDetectorResult`, `toDetectionSnapshot`, and the example (tests: `copyDetectorResult` and `toDetectionSnapshot` cases in `src/__tests__/detection.test.ts`).
 - The worklet runtime's clock ran about 11 ms ahead of the JS runtime's clock, so `mergeDetection` treated each detection as one from the future. The session reducer now dates a detection no later than its arrival (test: `src/__tests__/guidance-session.test.ts`, "dates a detection from a clock that runs ahead at its arrival").
 - Task 7's `runAsync` call ran the detector three times and then scheduled no further calls until the app restarted, while a synchronous call kept working. The example now calls the detector synchronously inside `runAtTargetFps(2, ...)`; the README states the observation, and the root cause is tracked in #83.

@@ -22,7 +22,7 @@ jest.mock(
     ...jest.requireActual<object>('../../../src/policy/evaluate'),
     runDetector: jest.fn(),
   }),
-  { virtual: true }
+  { virtual: true },
 );
 
 const PHOTO = { path: '/tmp/photo.jpg', guideFrame: undefined };
@@ -36,7 +36,7 @@ describe('judgeParking', () => {
   it('reports no result when no detector model is configured', async () => {
     const detect = jest.fn<() => Promise<never>>();
     await expect(
-      judgeParking(PHOTO, 'kickboard', undefined, detect)
+      judgeParking(PHOTO, 'kickboard', undefined, detect),
     ).resolves.toEqual({ kind: 'noModel' });
     expect(detect).not.toHaveBeenCalled();
   });
@@ -46,7 +46,7 @@ describe('judgeParking', () => {
     await judgeParking(PHOTO, 'kickboard', '/models/detector.tflite', detect);
     expect(detect).toHaveBeenCalledWith(
       '/tmp/photo.jpg',
-      '/models/detector.tflite'
+      '/models/detector.tflite',
     );
   });
 
@@ -55,7 +55,7 @@ describe('judgeParking', () => {
       PHOTO,
       'kickboard',
       '/models/detector.tflite',
-      async () => tensors(0.95)
+      async () => tensors(0.95),
     );
     expect(judgment).toMatchObject({ kind: 'verdict', verdict: 'PASS' });
   });
@@ -65,7 +65,7 @@ describe('judgeParking', () => {
       PHOTO,
       'kickboard',
       '/models/detector.tflite',
-      async () => ({ boxes: [], scores: [], classes: [] })
+      async () => ({ boxes: [], scores: [], classes: [] }),
     );
     expect(judgment).toMatchObject({ kind: 'verdict', verdict: 'FAIL' });
     expect(judgment.kind === 'verdict' && judgment.reasons).toEqual([
@@ -79,13 +79,13 @@ describe('judgeParking', () => {
       { path: '/tmp/photo.jpg', guideFrame: [0.1, 0.1, 0.9, 0.9] },
       'kickboard',
       '/models/detector.tflite',
-      detect
+      detect,
     );
     const outside = await judgeParking(
       { path: '/tmp/photo.jpg', guideFrame: [0.5, 0.5, 0.9, 0.9] },
       'kickboard',
       '/models/detector.tflite',
-      detect
+      detect,
     );
     expect(inside).toMatchObject({ kind: 'verdict', verdict: 'PASS' });
     expect(outside).toMatchObject({ kind: 'verdict', verdict: 'FAIL' });
@@ -100,7 +100,7 @@ describe('judgeParking', () => {
         throw Object.assign(new Error('Could not load the model.'), {
           code: 'E_MODEL_LOAD',
         });
-      }
+      },
     );
     expect(judgment).toEqual({ kind: 'error', code: 'E_MODEL_LOAD' });
   });
@@ -110,7 +110,7 @@ describe('judgeParking', () => {
       PHOTO,
       'kickboard',
       '/models/detector.tflite',
-      async () => ({ boxes: [0.1], scores: [0.9], classes: [0] })
+      async () => ({ boxes: [0.1], scores: [0.9], classes: [0] }),
     );
     expect(judgment).toEqual({ kind: 'error', code: 'E_MODEL_CONTRACT' });
   });
@@ -154,7 +154,7 @@ describe('result announcement', () => {
         verdict: 'FAIL',
         score: 0.4,
         reasons: ['Move it off the crosswalk.', 'Park inside the zone.'],
-      })
+      }),
     ).toBe('Park again, FAIL. Score 40 out of 100. Move it off the crosswalk.');
   });
 
@@ -165,16 +165,16 @@ describe('result announcement', () => {
         verdict: 'PASS',
         score: 1,
         reasons: [],
-      })
+      }),
     ).toBe('Parked correctly, PASS. Score 100 out of 100. No problems found.');
   });
 
   it('announces the shown explanation when there is no verdict', () => {
     expect(resultAnnouncement({ kind: 'noModel' })).toBe(
-      `${NO_RESULT_TITLE}. ${noResultDetail({ kind: 'noModel' })}`
+      `${NO_RESULT_TITLE}. ${noResultDetail({ kind: 'noModel' })}`,
     );
     expect(resultAnnouncement({ kind: 'error', code: 'E_MODEL_LOAD' })).toBe(
-      'No parking result. The parking model could not run (E_MODEL_LOAD). Retake the photo.'
+      'No parking result. The parking model could not run (E_MODEL_LOAD). Retake the photo.',
     );
   });
 });

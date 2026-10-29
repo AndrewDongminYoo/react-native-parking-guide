@@ -5,8 +5,11 @@ import java.nio.ByteBuffer
 /** Pure conversion of a `YUV_420_888` camera frame to the upright 512 x 512 ARGB pixels [DetectorTensors] reads. */
 object FramePixels {
   /** Size of the frame after rotating it clockwise by [rotationDegrees] (0, 90, 180, or 270). */
-  fun uprightSize(width: Int, height: Int, rotationDegrees: Int): Pair<Int, Int> =
-    if (quarterTurns(rotationDegrees) % 2 == 1) Pair(height, width) else Pair(width, height)
+  fun uprightSize(
+    width: Int,
+    height: Int,
+    rotationDegrees: Int,
+  ): Pair<Int, Int> = if (quarterTurns(rotationDegrees) % 2 == 1) Pair(height, width) else Pair(width, height)
 
   /**
    * Returns 512 x 512 opaque ARGB pixels of the frame rotated clockwise by [rotationDegrees] (the CameraX
@@ -24,7 +27,7 @@ object FramePixels {
     uvPixelStride: Int,
     rotationDegrees: Int,
     mirrored: Boolean,
-    videoRange: Boolean
+    videoRange: Boolean,
   ): IntArray {
     val turns = quarterTurns(rotationDegrees)
     val (uprightWidth, uprightHeight) = uprightSize(width, height, rotationDegrees)
@@ -38,10 +41,22 @@ object FramePixels {
         val sourceX: Int
         val sourceY: Int
         when (turns) {
-          0 -> { sourceX = uprightX; sourceY = uprightY }
-          1 -> { sourceX = uprightY; sourceY = height - 1 - uprightX }
-          2 -> { sourceX = width - 1 - uprightX; sourceY = height - 1 - uprightY }
-          else -> { sourceX = width - 1 - uprightY; sourceY = uprightX }
+          0 -> {
+            sourceX = uprightX
+            sourceY = uprightY
+          }
+          1 -> {
+            sourceX = uprightY
+            sourceY = height - 1 - uprightX
+          }
+          2 -> {
+            sourceX = width - 1 - uprightX
+            sourceY = height - 1 - uprightY
+          }
+          else -> {
+            sourceX = width - 1 - uprightY
+            sourceY = uprightX
+          }
         }
         val luma = y.get(sourceY * yRowStride + sourceX).toInt() and 0xff
         val chromaIndex = (sourceY / 2) * uvRowStride + (sourceX / 2) * uvPixelStride
@@ -58,7 +73,12 @@ object FramePixels {
     return rotationDegrees / 90
   }
 
-  private fun argb(luma: Int, cb: Int, cr: Int, videoRange: Boolean): Int {
+  private fun argb(
+    luma: Int,
+    cb: Int,
+    cr: Int,
+    videoRange: Boolean,
+  ): Int {
     val r: Double
     val g: Double
     val b: Double

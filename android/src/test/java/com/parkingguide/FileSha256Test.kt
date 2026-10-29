@@ -1,8 +1,8 @@
 package com.parkingguide
 
-import java.io.ByteArrayInputStream
 import org.junit.Assert.*
 import org.junit.Test
+import java.io.ByteArrayInputStream
 
 class FileSha256Test {
   private fun hex(bytes: ByteArray) = FileSha256.hex(ByteArrayInputStream(bytes))
@@ -24,7 +24,10 @@ class FileSha256Test {
     assertEquals(PhotoSource.File("/data/a b/photo.jpg"), FileSha256.resolve("file:///data/a b/photo.jpg"))
     assertEquals(PhotoSource.File("/data/\uD55C.jpg"), FileSha256.resolve("file:///data/%ED%95%9C.jpg"))
     assertEquals(PhotoSource.File("/data/\uD83D\uDEF4 %.jpg"), FileSha256.resolve("file:///data/\uD83D\uDEF4%20%25.jpg"))
-    assertEquals(PhotoSource.Content("content://media/external/images/media/1"), FileSha256.resolve("content://media/external/images/media/1"))
+    assertEquals(
+      PhotoSource.Content("content://media/external/images/media/1"),
+      FileSha256.resolve("content://media/external/images/media/1"),
+    )
     assertEquals(PhotoSource.Invalid, FileSha256.resolve(""))
     assertEquals(PhotoSource.Invalid, FileSha256.resolve("photo.jpg"))
     assertEquals(PhotoSource.Invalid, FileSha256.resolve("https://example.com/photo.jpg"))

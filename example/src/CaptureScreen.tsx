@@ -142,7 +142,7 @@ function useGuidanceAnnouncement(line: string | null) {
     const decision = decideGuidanceAnnouncement(
       lastRef.current,
       line,
-      Date.now()
+      Date.now(),
     );
     if (decision.kind === 'announce') {
       announce();
@@ -188,8 +188,8 @@ function CameraCapture({
               height: guideRect.height,
             },
             cameraView,
-            frameSize
-          )
+            frameSize,
+          ),
         )
       : undefined;
   const guidance = useParkingGuidance({
@@ -202,22 +202,22 @@ function CameraCapture({
   const { onFrameResult, onDetectorResult, reset: resetGuidance } = guidance;
   const analyze = useMemo(
     () => createParkingFrameAnalyzer(VisionCameraProxy),
-    []
+    [],
   );
   const detect = useMemo(
     () =>
       modelUri === undefined
         ? undefined
         : createParkingDetector(VisionCameraProxy, { modelUri }),
-    [modelUri]
+    [modelUri],
   );
   const runDetection = useMemo(
     () => createDetectorAsyncRunner<Frame>(Worklets),
-    []
+    [],
   );
   const deliver = useMemo(
     () => Worklets.createRunOnJS(onFrameResult),
-    [onFrameResult]
+    [onFrameResult],
   );
   const deliverDetection = useMemo(
     () =>
@@ -238,7 +238,7 @@ function CameraCapture({
         }
         onDetectorResult(result);
       }),
-    [onDetectorResult, resetGuidance]
+    [onDetectorResult, resetGuidance],
   );
   const frameProcessor = useFrameProcessor(
     (frame) => {
@@ -258,7 +258,7 @@ function CameraCapture({
         });
       }
     },
-    [analyze, deliver, detect, deliverDetection, runDetection]
+    [analyze, deliver, detect, deliverDetection, runDetection],
   );
   const { autoCaptureDue, acknowledgeAutoCapture } = guidance;
   // Holds the latest capturePhoto, which is declared after the early return below.
@@ -279,7 +279,7 @@ function CameraCapture({
   }, [autoCaptureDue, acknowledgeAutoCapture]);
   const lines = guidanceLines(
     captureMessages(guidance.issues, guidance.detectorError),
-    guidance.ready
+    guidance.ready,
   );
   // Without a camera the screen shows no guidance.
   useGuidanceAnnouncement(device ? lines[0]! : null);
@@ -467,13 +467,13 @@ export function CaptureScreen({
   // resolves to false at once and then shows the Settings path.
   const [permissionDenied, setPermissionDenied] = useState(
     () =>
-      Platform.OS === 'ios' && Camera.getCameraPermissionStatus() === 'denied'
+      Platform.OS === 'ios' && Camera.getCameraPermissionStatus() === 'denied',
   );
   const [active, setActive] = useState(AppState.currentState === 'active');
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) =>
-      setActive(state === 'active')
+      setActive(state === 'active'),
     );
     return () => subscription.remove();
   }, []);
@@ -484,7 +484,7 @@ export function CaptureScreen({
       () => {
         onClose();
         return true;
-      }
+      },
     );
     return () => subscription.remove();
   }, [onClose]);

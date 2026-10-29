@@ -24,7 +24,7 @@ function clampUnit(value: number): number {
 export function screenRectToFrameBox(
   rect: ScreenRect,
   view: Size,
-  frame: Size
+  frame: Size,
 ): ModelBox {
   const sizes = [view.width, view.height, frame.width, frame.height];
   const values = [rect.x, rect.y, rect.width, rect.height];
@@ -33,7 +33,7 @@ export function screenRectToFrameBox(
     !values.every(Number.isFinite)
   ) {
     throw new RangeError(
-      'screenRectToFrameBox needs finite values and positive view and frame sizes.'
+      'screenRectToFrameBox needs finite values and positive view and frame sizes.',
     );
   }
   const scale = Math.max(view.width / frame.width, view.height / frame.height);

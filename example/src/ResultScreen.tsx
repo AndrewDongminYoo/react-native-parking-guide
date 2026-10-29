@@ -60,7 +60,7 @@ export function ResultScreen({
         if (Platform.OS === 'ios') {
           AccessibilityInfo.announceForAccessibilityWithOptions(
             resultAnnouncement(result),
-            { queue: true }
+            { queue: true },
           );
         }
       }
@@ -76,7 +76,7 @@ export function ResultScreen({
       () => {
         onDone();
         return true;
-      }
+      },
     );
     return () => subscription.remove();
   }, [onDone]);

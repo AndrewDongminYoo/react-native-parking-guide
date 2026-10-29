@@ -27,12 +27,12 @@ describe('runDetector', () => {
 
     const output = await runDetector(
       'file:///tmp/photo.jpg',
-      '/data/model.tflite'
+      '/data/model.tflite',
     );
 
     expect(mockRunDetector).toHaveBeenCalledWith(
       'file:///tmp/photo.jpg',
-      '/data/model.tflite'
+      '/data/model.tflite',
     );
     expect(decodeDetectorOutput(output).detections).toEqual([
       {

@@ -45,19 +45,26 @@ internal object ParkingGuideFrameProcessors {
   fun invalidate(context: ReactApplicationContext) {
     motionTrackers.removeAll {
       val tracker = it.get()
-      if (tracker == null) true else if (tracker.context === context) {
+      if (tracker == null) {
+        true
+      } else if (tracker.context === context) {
         tracker.close()
         true
-      } else false
+      } else {
+        false
+      }
     }
   }
 }
 
 private class ParkingGuideFrameProcessor(
   private val thresholds: CaptureThresholds,
-  private val motion: RotationVectorTracker
+  private val motion: RotationVectorTracker,
 ) : FrameProcessorPlugin() {
-  override fun callback(frame: Frame, params: Map<String, Any>?): Any {
+  override fun callback(
+    frame: Frame,
+    params: Map<String, Any>?,
+  ): Any {
     check(Looper.myLooper() != Looper.getMainLooper() && !motion.context.isOnJSQueueThread) {
       "parkingGuide must run on the frame processor thread."
     }
@@ -68,11 +75,18 @@ private class ParkingGuideFrameProcessor(
       if (image.format == ImageFormat.YUV_420_888 && image.planes.isNotEmpty()) {
         val plane = image.planes[0]
         // Android YUV_420_888 defaults to video range when no range is specified.
-        val videoRange = Build.VERSION.SDK_INT < 33 ||
-          android.hardware.DataSpace.getRange(image.dataSpace) != android.hardware.DataSpace.RANGE_FULL
-        metrics = CaptureMetrics.measureLuma(
-          plane.buffer, image.width, image.height, plane.rowStride, plane.pixelStride, videoRange
-        )
+        val videoRange =
+          Build.VERSION.SDK_INT < 33 ||
+            android.hardware.DataSpace.getRange(image.dataSpace) != android.hardware.DataSpace.RANGE_FULL
+        metrics =
+          CaptureMetrics.measureLuma(
+            plane.buffer,
+            image.width,
+            image.height,
+            plane.rowStride,
+            plane.pixelStride,
+            videoRange,
+          )
       }
     }
     return CaptureMetrics.assess(metrics, tilt, thresholds)
@@ -82,9 +96,12 @@ private class ParkingGuideFrameProcessor(
 /** Runs the shared [ParkingDetector] on one camera frame; call it inside `runAsync`. Returns tensors or `error`. */
 private class ParkingDetectorFrameProcessor(
   private val context: ReactApplicationContext,
-  private val model: PhotoSource
+  private val model: PhotoSource,
 ) : FrameProcessorPlugin() {
-  override fun callback(frame: Frame, params: Map<String, Any>?): Any {
+  override fun callback(
+    frame: Frame,
+    params: Map<String, Any>?,
+  ): Any {
     check(Looper.myLooper() != Looper.getMainLooper() && !context.isOnJSQueueThread) {
       "parkingDetector must run on a frame processor thread."
     }
@@ -96,24 +113,36 @@ private class ParkingDetectorFrameProcessor(
     }
     // Frame.orientation is the reverse of CameraX's rotationDegrees (see VisionCamera's Frame.getOrientation), so
     // map it back to the clockwise rotation that makes the frame upright. CameraX itself is not on this classpath.
-    val rotation = when (frame.orientation) {
-      Orientation.PORTRAIT -> 0
-      Orientation.LANDSCAPE_RIGHT -> 90
-      Orientation.PORTRAIT_UPSIDE_DOWN -> 180
-      Orientation.LANDSCAPE_LEFT -> 270
-    }
+    val rotation =
+      when (frame.orientation) {
+        Orientation.PORTRAIT -> 0
+        Orientation.LANDSCAPE_RIGHT -> 90
+        Orientation.PORTRAIT_UPSIDE_DOWN -> 180
+        Orientation.LANDSCAPE_LEFT -> 270
+      }
     // Frame conversion errors (unexpected strides or buffer limits) are reported like a failed photo read.
-    val pixels = try {
-      val (y, u, v) = image.planes
-      val videoRange = Build.VERSION.SDK_INT < 33 ||
-        android.hardware.DataSpace.getRange(image.dataSpace) != android.hardware.DataSpace.RANGE_FULL
-      FramePixels.toArgb(
-        y.buffer, u.buffer, v.buffer, image.width, image.height, y.rowStride, u.rowStride, u.pixelStride,
-        rotation, frame.isMirrored, videoRange
-      )
-    } catch (e: Exception) {
-      return mapOf("error" to ParkingDetector.E_PHOTO_READ)
-    }
+    val pixels =
+      try {
+        val (y, u, v) = image.planes
+        val videoRange =
+          Build.VERSION.SDK_INT < 33 ||
+            android.hardware.DataSpace.getRange(image.dataSpace) != android.hardware.DataSpace.RANGE_FULL
+        FramePixels.toArgb(
+          y.buffer,
+          u.buffer,
+          v.buffer,
+          image.width,
+          image.height,
+          y.rowStride,
+          u.rowStride,
+          u.pixelStride,
+          rotation,
+          frame.isMirrored,
+          videoRange,
+        )
+      } catch (e: Exception) {
+        return mapOf("error" to ParkingDetector.E_PHOTO_READ)
+      }
     val (frameWidth, frameHeight) = FramePixels.uprightSize(image.width, image.height, rotation)
     return try {
       val output = ParkingDetectors.forContext(context).runPixels(pixels, model)
@@ -122,7 +151,7 @@ private class ParkingDetectorFrameProcessor(
         "scores" to output.getValue("scores").toList(),
         "classes" to output.getValue("classes").toList(),
         "frameWidth" to frameWidth.toDouble(),
-        "frameHeight" to frameHeight.toDouble()
+        "frameHeight" to frameHeight.toDouble(),
       )
     } catch (e: ParkingDetector.Failure) {
       mapOf("error" to e.code)
@@ -133,8 +162,10 @@ private class ParkingDetectorFrameProcessor(
   }
 }
 
-private class RotationVectorTracker(val context: ReactApplicationContext) :
-  SensorEventListener, LifecycleEventListener {
+private class RotationVectorTracker(
+  val context: ReactApplicationContext,
+) : SensorEventListener,
+  LifecycleEventListener {
   private val manager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
   private val sensor = manager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
   private var thread: HandlerThread? = null
@@ -143,15 +174,19 @@ private class RotationVectorTracker(val context: ReactApplicationContext) :
   private var timestamp = 0L
   private var lastFrame = 0L
   private var closed = false
-  private val idle = object : Runnable {
-    override fun run() {
-      synchronized(this@RotationVectorTracker) {
-        val remaining = 1_000_000_000L - (SystemClock.elapsedRealtimeNanos() - lastFrame)
-        if (remaining > 0) handler?.postDelayed(this, (remaining / 1_000_000).coerceAtLeast(1))
-        else stop()
+  private val idle =
+    object : Runnable {
+      override fun run() {
+        synchronized(this@RotationVectorTracker) {
+          val remaining = 1_000_000_000L - (SystemClock.elapsedRealtimeNanos() - lastFrame)
+          if (remaining > 0) {
+            handler?.postDelayed(this, (remaining / 1_000_000).coerceAtLeast(1))
+          } else {
+            stop()
+          }
+        }
       }
     }
-  }
 
   @Synchronized
   fun sample(): CaptureTilt? {
@@ -178,15 +213,24 @@ private class RotationVectorTracker(val context: ReactApplicationContext) :
     if (thread == null || closed || event.sensor.type != Sensor.TYPE_ROTATION_VECTOR) return
     val rotation = FloatArray(9)
     SensorManager.getRotationMatrixFromVector(rotation, event.values)
-    tilt = CaptureMetrics.tiltFromGravity(
-      rotation[6].toDouble(), rotation[7].toDouble(), rotation[8].toDouble()
-    )
+    tilt =
+      CaptureMetrics.tiltFromGravity(
+        rotation[6].toDouble(),
+        rotation[7].toDouble(),
+        rotation[8].toDouble(),
+      )
     timestamp = event.timestamp
   }
 
-  override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+  override fun onAccuracyChanged(
+    sensor: Sensor?,
+    accuracy: Int,
+  ) = Unit
+
   override fun onHostResume() = Unit
+
   override fun onHostPause() = stop()
+
   override fun onHostDestroy() = close()
 
   @Synchronized

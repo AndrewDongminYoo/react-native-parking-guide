@@ -38,9 +38,9 @@ function hostObject(value: Record<string, unknown>): DetectorFrameResult {
     Array.isArray(item) ? { ...item, length: item.length } : item;
   return new Proxy(
     Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, wrap(item)])
+      Object.entries(value).map(([key, item]) => [key, wrap(item)]),
     ),
-    { has: () => true }
+    { has: () => true },
   ) as unknown as DetectorFrameResult;
 }
 
@@ -54,7 +54,7 @@ describe('copyDetectorResult', () => {
 
   it('keeps an error result', () => {
     expect(
-      copyDetectorResult(hostObject({ error: 'E_MODEL_LOAD', capturedAt: 5 }))
+      copyDetectorResult(hostObject({ error: 'E_MODEL_LOAD', capturedAt: 5 })),
     ).toEqual({ error: 'E_MODEL_LOAD', capturedAt: 5 });
   });
 });
@@ -77,7 +77,7 @@ describe('toDetectionSnapshot', () => {
   it('applies the guide frame from the options', () => {
     expect(
       toDetectionSnapshot(VEHICLE, 10, { guideFrame: [0.3, 0.3, 0.7, 0.9] })
-        .issues
+        .issues,
     ).toEqual(['TOO_CLOSE', 'GROUND_NOT_VISIBLE']);
   });
 
@@ -99,16 +99,16 @@ describe('toDetectionSnapshot', () => {
 
   it('turns invalid model output into E_MODEL_CONTRACT without throwing', () => {
     expect(
-      toDetectionSnapshot({ ...VEHICLE, scores: [Number.NaN] }, 10, {}).error
+      toDetectionSnapshot({ ...VEHICLE, scores: [Number.NaN] }, 10, {}).error,
     ).toBe('E_MODEL_CONTRACT');
     expect(toDetectionSnapshot({ ...VEHICLE, classes: [] }, 10, {}).error).toBe(
-      'E_MODEL_CONTRACT'
+      'E_MODEL_CONTRACT',
     );
     const missing: Partial<typeof VEHICLE> = { ...VEHICLE };
     delete missing.scores;
     expect(
       toDetectionSnapshot(missing as unknown as DetectorFrameResult, 10, {})
-        .error
+        .error,
     ).toBe('E_MODEL_CONTRACT');
   });
 });
@@ -138,8 +138,8 @@ describe('mergeDetection', () => {
         { ready: false, issues: ['BLURRY'], progress: 0.5 },
         noVehicle,
         100,
-        1500
-      ).frame.issues
+        1500,
+      ).frame.issues,
     ).toEqual(['BLURRY', 'NO_VEHICLE']);
   });
 
@@ -151,10 +151,10 @@ describe('mergeDetection', () => {
     expect(mergeDetection(QUALITY, clear, 1501, 1500).frame.ready).toBe(false);
     expect(mergeDetection(QUALITY, clear, 1500, 1500).frame.ready).toBe(true);
     expect(
-      mergeDetection(QUALITY, { ...clear, at: 200 }, 100, 1500).frame.ready
+      mergeDetection(QUALITY, { ...clear, at: 200 }, 100, 1500).frame.ready,
     ).toBe(false);
     expect(
-      mergeDetection(QUALITY, { ...clear, error: 'E_INFERENCE' }, 100, 1500)
+      mergeDetection(QUALITY, { ...clear, error: 'E_INFERENCE' }, 100, 1500),
     ).toEqual({
       frame: { ready: false, issues: [], progress: 1 },
       detectorError: 'E_INFERENCE',
@@ -170,18 +170,18 @@ describe('validateDetectionOptions', () => {
 
   it('rejects invalid detection options', () => {
     expect(() => validateDetectionOptions({ staleAfterMs: 0 })).toThrow(
-      RangeError
+      RangeError,
     );
     expect(() =>
-      validateDetectionOptions({ staleAfterMs: Number.POSITIVE_INFINITY })
+      validateDetectionOptions({ staleAfterMs: Number.POSITIVE_INFINITY }),
     ).toThrow(RangeError);
     expect(() =>
       validateDetectionOptions({
         thresholds: { tooFarBelow: 2, tooCloseAbove: 1 },
-      })
+      }),
     ).toThrow(RangeError);
     expect(() =>
-      validateDetectionOptions({ guideFrame: [0.5, 0, 0.4, 1] })
+      validateDetectionOptions({ guideFrame: [0.5, 0, 0.4, 1] }),
     ).toThrow(RangeError);
   });
 });

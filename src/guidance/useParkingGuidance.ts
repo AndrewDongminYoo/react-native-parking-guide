@@ -27,7 +27,7 @@ export interface ParkingGuidance extends GuidanceState {
 }
 
 export function useParkingGuidance(
-  options: GuidanceSessionOptions = {}
+  options: GuidanceSessionOptions = {},
 ): ParkingGuidance {
   validateGuidanceSessionOptions(options);
   const [state, setState] = useState(() => createGuidanceSession());
@@ -45,8 +45,8 @@ export function useParkingGuidance(
       reduceGuidanceSession(
         previous,
         { type: 'frame', frame, now },
-        optionsRef.current
-      )
+        optionsRef.current,
+      ),
     );
   }, []);
   const { generation } = state;
@@ -59,11 +59,11 @@ export function useParkingGuidance(
         reduceGuidanceSession(
           previous,
           { type: 'detection', result, generation, now },
-          optionsRef.current
-        )
+          optionsRef.current,
+        ),
       );
     },
-    [generation]
+    [generation],
   );
   const acknowledgeAutoCapture = useCallback(
     () =>
@@ -71,17 +71,17 @@ export function useParkingGuidance(
         reduceGuidanceSession(
           previous,
           { type: 'acknowledgeAutoCapture' },
-          optionsRef.current
-        )
+          optionsRef.current,
+        ),
       ),
-    []
+    [],
   );
   const reset = useCallback(
     () =>
       setState((previous) =>
-        reduceGuidanceSession(previous, { type: 'reset' }, optionsRef.current)
+        reduceGuidanceSession(previous, { type: 'reset' }, optionsRef.current),
       ),
-    []
+    [],
   );
 
   return {

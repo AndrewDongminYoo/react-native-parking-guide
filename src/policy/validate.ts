@@ -89,7 +89,7 @@ export function validatePolicy(input: unknown): PolicyValidationResult {
           value.weight < 0
         ) {
           errors.push(
-            `rules.${id}.weight must be a finite non-negative number.`
+            `rules.${id}.weight must be a finite non-negative number.`,
           );
         } else {
           rule.weight = value.weight;
@@ -107,7 +107,7 @@ export function validatePolicy(input: unknown): PolicyValidationResult {
       if (hasOwn(value, 'failBelow')) {
         if (!isNumberInRange(value.failBelow)) {
           errors.push(
-            `rules.${id}.failBelow must be a finite number between 0 and 1.`
+            `rules.${id}.failBelow must be a finite number between 0 and 1.`,
           );
         } else {
           rule.failBelow = value.failBelow;

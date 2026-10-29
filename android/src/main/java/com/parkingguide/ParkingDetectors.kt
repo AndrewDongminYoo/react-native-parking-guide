@@ -37,9 +37,13 @@ object ParkingDetectors {
   }
 
   /** Opens a resolved photo or model source for reading; `content://` uses the context's `ContentResolver`. */
-  fun openSource(context: ReactApplicationContext, source: PhotoSource): InputStream? = when (source) {
-    is PhotoSource.File -> FileInputStream(File(source.path))
-    is PhotoSource.Content -> context.contentResolver.openInputStream(Uri.parse(source.uri))
-    PhotoSource.Invalid -> null
-  }
+  fun openSource(
+    context: ReactApplicationContext,
+    source: PhotoSource,
+  ): InputStream? =
+    when (source) {
+      is PhotoSource.File -> FileInputStream(File(source.path))
+      is PhotoSource.Content -> context.contentResolver.openInputStream(Uri.parse(source.uri))
+      PhotoSource.Invalid -> null
+    }
 }

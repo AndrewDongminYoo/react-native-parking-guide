@@ -52,7 +52,7 @@ export type GuidanceSessionEvent =
 
 /** Throws `RangeError` for invalid `detection` or `autoCapture` options. */
 export function validateGuidanceSessionOptions(
-  options: GuidanceSessionOptions
+  options: GuidanceSessionOptions,
 ): void {
   if (options.detection !== undefined) {
     validateDetectionOptions(options.detection);
@@ -77,7 +77,7 @@ export function createGuidanceSession(generation = 0): GuidanceSessionState {
 export function reduceGuidanceSession(
   state: GuidanceSessionState,
   event: GuidanceSessionEvent,
-  options: GuidanceSessionOptions
+  options: GuidanceSessionOptions,
 ): GuidanceSessionState {
   switch (event.type) {
     case 'reset':
@@ -99,7 +99,7 @@ export function reduceGuidanceSession(
         capturedAt !== undefined && Number.isFinite(capturedAt)
           ? Math.min(capturedAt, event.now)
           : event.now,
-        options.detection ?? {}
+        options.detection ?? {},
       );
       return { ...state, snapshot, detectorError: snapshot.error };
     }
@@ -112,7 +112,7 @@ export function reduceGuidanceSession(
               event.frame,
               state.snapshot,
               event.now,
-              detection.staleAfterMs ?? DEFAULT_DETECTION_STALE_MS
+              detection.staleAfterMs ?? DEFAULT_DETECTION_STALE_MS,
             );
       const guidance = reduceGuidance(state.guidance, merged.frame, options);
       return {
@@ -125,7 +125,7 @@ export function reduceGuidanceSession(
             : reduceAutoCapture(
                 state.autoCapture,
                 { ready: guidance.guidance.ready, now: event.now },
-                autoCapture.holdMs ?? DEFAULT_AUTO_CAPTURE_HOLD_MS
+                autoCapture.holdMs ?? DEFAULT_AUTO_CAPTURE_HOLD_MS,
               ),
       };
     }

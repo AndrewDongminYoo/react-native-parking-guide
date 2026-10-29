@@ -98,14 +98,14 @@ describe('uploadVerification', () => {
   it('returns an undefined body for an empty 2xx response', async () => {
     fetchMock.mockResolvedValueOnce(response(204));
     await expect(
-      uploadVerification(RESULT, { endpoint: ENDPOINT })
+      uploadVerification(RESULT, { endpoint: ENDPOINT }),
     ).resolves.toEqual({ ok: true, status: 204, body: undefined, attempts: 1 });
   });
 
   it('reports an invalid JSON body without retrying', async () => {
     fetchMock.mockResolvedValue(response(200, 'not json'));
     await expect(
-      uploadVerification(RESULT, { endpoint: ENDPOINT, retryDelayMs: 0 })
+      uploadVerification(RESULT, { endpoint: ENDPOINT, retryDelayMs: 0 }),
     ).resolves.toEqual({
       ok: false,
       error: 'invalid_response',
@@ -118,7 +118,7 @@ describe('uploadVerification', () => {
   it('does not retry a non-retryable HTTP status', async () => {
     fetchMock.mockResolvedValue(response(400, '{"error":"bad"}'));
     await expect(
-      uploadVerification(RESULT, { endpoint: ENDPOINT, retryDelayMs: 0 })
+      uploadVerification(RESULT, { endpoint: ENDPOINT, retryDelayMs: 0 }),
     ).resolves.toEqual({ ok: false, error: 'http', status: 400, attempts: 1 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -130,14 +130,14 @@ describe('uploadVerification', () => {
         .mockResolvedValueOnce(response(status))
         .mockResolvedValueOnce(response(201, '{"id":1}'));
       await expect(
-        uploadVerification(RESULT, { endpoint: ENDPOINT, retryDelayMs: 0 })
+        uploadVerification(RESULT, { endpoint: ENDPOINT, retryDelayMs: 0 }),
       ).resolves.toEqual({
         ok: true,
         status: 201,
         body: { id: 1 },
         attempts: 2,
       });
-    }
+    },
   );
 
   it('stops after the configured retries and reports the last failure', async () => {
@@ -149,13 +149,13 @@ describe('uploadVerification', () => {
         endpoint: ENDPOINT,
         retries: 1,
         retryDelayMs: 0,
-      })
+      }),
     ).resolves.toEqual({ ok: false, error: 'http', status: 502, attempts: 2 });
 
     fetchMock.mockReset();
     fetchMock.mockRejectedValue(new TypeError('Network request failed'));
     await expect(
-      uploadVerification(RESULT, { endpoint: ENDPOINT, retryDelayMs: 0 })
+      uploadVerification(RESULT, { endpoint: ENDPOINT, retryDelayMs: 0 }),
     ).resolves.toEqual({ ok: false, error: 'network', attempts: 3 });
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
@@ -168,7 +168,7 @@ describe('uploadVerification', () => {
         timeoutMs: 10,
         retries: 1,
         retryDelayMs: 0,
-      })
+      }),
     ).resolves.toEqual({ ok: false, error: 'timeout', attempts: 2 });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -186,7 +186,7 @@ describe('uploadVerification', () => {
         endpoint: ENDPOINT,
         timeoutMs: 10,
         retryDelayMs: 0,
-      })
+      }),
     ).resolves.toEqual({
       ok: false,
       error: 'timeout',
@@ -203,7 +203,7 @@ describe('uploadVerification', () => {
         endpoint: ENDPOINT,
         timeoutMs: 10,
         retries: 0,
-      })
+      }),
     ).resolves.toEqual({ ok: false, error: 'timeout', attempts: 1 });
   });
 
@@ -277,7 +277,7 @@ describe('uploadVerification', () => {
     ];
     for (const options of invalid) {
       await expect(
-        uploadVerification(RESULT, options as never)
+        uploadVerification(RESULT, options as never),
       ).rejects.toThrow(RangeError);
     }
     expect(fetchMock).not.toHaveBeenCalled();
@@ -293,7 +293,7 @@ describe('uploadVerification', () => {
   ])('accepts %s', async (endpoint) => {
     fetchMock.mockResolvedValueOnce(response(200));
     await expect(
-      uploadVerification(RESULT, { endpoint })
+      uploadVerification(RESULT, { endpoint }),
     ).resolves.toMatchObject({ ok: true });
   });
 

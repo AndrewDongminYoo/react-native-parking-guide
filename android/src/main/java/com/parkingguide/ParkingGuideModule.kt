@@ -7,17 +7,20 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 
-class ParkingGuideModule(reactContext: ReactApplicationContext) :
-  NativeParkingGuideSpec(reactContext) {
-
+class ParkingGuideModule(
+  reactContext: ReactApplicationContext,
+) : NativeParkingGuideSpec(reactContext) {
   private val fileExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
-  override fun getFileSha256(uri: String, promise: Promise) {
+  override fun getFileSha256(
+    uri: String,
+    promise: Promise,
+  ) {
     val source = FileSha256.resolve(uri)
     if (source == PhotoSource.Invalid) {
       promise.reject(
         "E_INVALID_URI",
-        "The photo URI must be an absolute path, a file:/// URI, or a content:// URI."
+        "The photo URI must be an absolute path, a file:/// URI, or a content:// URI.",
       )
       return
     }
@@ -39,13 +42,17 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
     }
   }
 
-  override fun runDetector(photoUri: String, modelUri: String, promise: Promise) {
+  override fun runDetector(
+    photoUri: String,
+    modelUri: String,
+    promise: Promise,
+  ) {
     val photo = FileSha256.resolve(photoUri)
     val model = FileSha256.resolve(modelUri)
     if (photo == PhotoSource.Invalid || model == PhotoSource.Invalid) {
       promise.reject(
         "E_INVALID_URI",
-        "The photo and model URIs must be absolute paths, file:/// URIs, or content:// URIs."
+        "The photo and model URIs must be absolute paths, file:/// URIs, or content:// URIs.",
       )
       return
     }
@@ -76,14 +83,14 @@ class ParkingGuideModule(reactContext: ReactApplicationContext) :
     photoSha256: String,
     challenge: String,
     cloudProjectNumber: Double,
-    promise: Promise
+    promise: Promise,
   ) {
     ParkingGuideAttestation.request(
       reactApplicationContext,
       photoSha256,
       challenge,
       cloudProjectNumber.toLong(),
-      promise
+      promise,
     )
   }
 

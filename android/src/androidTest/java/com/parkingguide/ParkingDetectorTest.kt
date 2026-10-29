@@ -2,13 +2,13 @@ package com.parkingguide
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
-import java.io.FileInputStream
-import java.nio.ByteBuffer
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
+import java.io.FileInputStream
+import java.nio.ByteBuffer
 
 /**
  * Runs [ParkingDetector] on the synthetic fixtures from scripts/make-fixture-models.py. Row 0 score is the mean red
@@ -18,9 +18,10 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ParkingDetectorTest {
   private val context = InstrumentationRegistry.getInstrumentation().context
-  private val detector = ParkingDetector(context.cacheDir) { source ->
-    (source as? PhotoSource.File)?.let { FileInputStream(it.path) }
-  }
+  private val detector =
+    ParkingDetector(context.cacheDir) { source ->
+      (source as? PhotoSource.File)?.let { FileInputStream(it.path) }
+    }
 
   @After fun close() = detector.close()
 
@@ -66,14 +67,19 @@ class ParkingDetectorTest {
   }
 
   @Test fun rejectsAMissingModel() {
-    val error = assertThrows(ParkingDetector.Failure::class.java) {
-      detector.run(fixture("solid.png"), PhotoSource.File("/nonexistent/model.tflite"))
-    }
+    val error =
+      assertThrows(ParkingDetector.Failure::class.java) {
+        detector.run(fixture("solid.png"), PhotoSource.File("/nonexistent/model.tflite"))
+      }
     assertEquals(ParkingDetector.E_MODEL_LOAD, error.code)
   }
 
   @Test fun deletesOnlyModelCopies() {
-    val dir = File(context.cacheDir, "model-copies").apply { deleteRecursively(); mkdirs() }
+    val dir =
+      File(context.cacheDir, "model-copies").apply {
+        deleteRecursively()
+        mkdirs()
+      }
     val copy = File(dir, "parking-guide-model123.tflite").apply { writeText("model") }
     val others = listOf("parking-guide-model123.png", "model.tflite").map { File(dir, it).apply { writeText("x") } }
     ParkingDetector.deleteModelCopies(dir)
@@ -82,9 +88,10 @@ class ParkingDetectorTest {
   }
 
   @Test fun rejectsAnUnreadablePhoto() {
-    val error = assertThrows(ParkingDetector.Failure::class.java) {
-      detector.run(fixture("detector-nhwc.tflite"), fixture("detector-nhwc.tflite"))
-    }
+    val error =
+      assertThrows(ParkingDetector.Failure::class.java) {
+        detector.run(fixture("detector-nhwc.tflite"), fixture("detector-nhwc.tflite"))
+      }
     assertEquals(ParkingDetector.E_PHOTO_READ, error.code)
   }
 }

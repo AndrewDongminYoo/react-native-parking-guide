@@ -52,7 +52,7 @@ export async function judgeParking(
   photo: CapturedPhoto,
   vehicleType: VehicleType,
   modelUri: string | undefined,
-  detect: Detect = runDetector
+  detect: Detect = runDetector,
 ): Promise<ParkingJudgment> {
   if (modelUri === undefined) {
     return { kind: 'noModel' };
@@ -78,7 +78,7 @@ export async function judgeParking(
   }
   const { verdict, score } = evaluatePolicy(rules, DEMO_POLICY);
   const reasons = getParkingFeedback({ rules }, { policy: DEMO_POLICY }).map(
-    (feedback) => feedback.text
+    (feedback) => feedback.text,
   );
   return { kind: 'verdict', verdict, score, reasons };
 }
@@ -102,7 +102,7 @@ export const NO_RESULT_TITLE = 'No parking result';
 
 /** The explanation that the result screen shows under `NO_RESULT_TITLE`. */
 export function noResultDetail(
-  judgment: Exclude<ParkingJudgment, { kind: 'verdict' }>
+  judgment: Exclude<ParkingJudgment, { kind: 'verdict' }>,
 ): string {
   return judgment.kind === 'noModel'
     ? 'No detector model is configured. Set DETECTOR_MODEL in example/src/detectorModel.ts to judge the photo.'

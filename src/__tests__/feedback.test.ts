@@ -52,17 +52,17 @@ const allIssues: Exclude<
 function rule(
   id: RuleId,
   verdict: RuleResult['verdict'],
-  extra: Partial<RuleResult> = {}
+  extra: Partial<RuleResult> = {},
 ): RuleResult {
   return { id, verdict, confidence: 0.9, ...extra };
 }
 
 function keys(
   input: Parameters<typeof getParkingFeedback>[0],
-  policy?: ParkingPolicy
+  policy?: ParkingPolicy,
 ) {
   return getParkingFeedback(input, policy ? { policy } : {}).map(
-    (entry) => entry.key
+    (entry) => entry.key,
   );
 }
 
@@ -86,7 +86,7 @@ describe('getParkingFeedback', () => {
 
   it('returns no entry for passing rules and no issues', () => {
     expect(
-      getParkingFeedback({ rules: RULE_IDS.map((id) => rule(id, 'PASS')) })
+      getParkingFeedback({ rules: RULE_IDS.map((id) => rule(id, 'PASS')) }),
     ).toEqual([]);
   });
 
@@ -182,7 +182,7 @@ describe('getParkingFeedback', () => {
       issues: ['BLURRY'] as const,
     };
     expect(
-      getParkingFeedback(input, { policy }).map((entry) => entry.key)
+      getParkingFeedback(input, { policy }).map((entry) => entry.key),
     ).toEqual(['rule.CROSSWALK.FAIL', 'guidance.BLURRY']);
     expect(getParkingFeedback(input).map((entry) => entry.key)).toEqual([
       'rule.CROSSWALK.FAIL',
@@ -200,7 +200,7 @@ describe('getParkingFeedback', () => {
           { id: 'UPRIGHT', verdict: 'BAD' as 'FAIL', confidence: 1 },
         ],
         issues: ['UNKNOWN' as GuidanceIssue],
-      })
+      }),
     ).toEqual([]);
   });
 
@@ -223,7 +223,7 @@ describe('getParkingFeedback', () => {
     expect(
       getParkingFeedback({
         rules: [rule('UPRIGHT', 'WARN', { score: 0, confidence: 0 })],
-      })
+      }),
     ).toEqual([
       {
         kind: 'rule',
@@ -246,7 +246,7 @@ describe('getParkingFeedback', () => {
           rule('GEOFENCE', 'FAIL'),
           rule('IMAGE_QUALITY', 'WARN'),
         ],
-      })
+      }),
     ).toEqual([
       'rule.VEHICLE_DETECTED.FAIL',
       'rule.GEOFENCE.FAIL',
@@ -264,8 +264,8 @@ describe('getParkingFeedback', () => {
             rule('CROSSWALK', 'FAIL'),
           ],
         },
-        defaultPolicy
-      )
+        defaultPolicy,
+      ),
     ).toEqual(['rule.VEHICLE_DETECTED.WARN', 'rule.CROSSWALK.FAIL']);
   });
 
@@ -286,7 +286,7 @@ describe('getParkingFeedback', () => {
       thresholds: { VEHICLE_DETECTED: { failBelow: 0.7, passAt: 0.8 } },
     });
     expect(
-      rules.find((entry) => entry.id === 'VEHICLE_DETECTED')
+      rules.find((entry) => entry.id === 'VEHICLE_DETECTED'),
     ).toMatchObject({
       verdict: 'FAIL',
       evidence: { bbox: [0.3, 0.3, 0.6, 0.6] },
@@ -315,7 +315,7 @@ describe('getParkingFeedback', () => {
     const borderline = [rule('UPRIGHT', 'WARN', { score: 0.6 })];
     expect(evaluatePolicy(borderline, defaultPolicy).verdict).toBe('FAIL');
     expect(
-      getParkingFeedback({ rules: borderline }, { policy: defaultPolicy })
+      getParkingFeedback({ rules: borderline }, { policy: defaultPolicy }),
     ).toEqual([
       {
         kind: 'rule',
@@ -338,8 +338,8 @@ describe('getParkingFeedback', () => {
     expect(
       keys(
         { rules: [rule('SIDEWALK_BLOCK', 'WARN', { score: 0.1 })] },
-        defaultPolicy
-      )
+        defaultPolicy,
+      ),
     ).toEqual(['rule.SIDEWALK_BLOCK.WARN']);
   });
 
@@ -371,8 +371,8 @@ describe('getParkingFeedback', () => {
       expect(evaluatePolicy(rules, defaultPolicy).verdict).toBe('FAIL');
       expect(
         getParkingFeedback({ rules }, { policy: defaultPolicy }).some(
-          (entry) => entry.kind === 'rule' && entry.verdict === 'FAIL'
-        )
+          (entry) => entry.kind === 'rule' && entry.verdict === 'FAIL',
+        ),
       ).toBe(true);
     }
   });
@@ -393,7 +393,7 @@ describe('getParkingFeedback', () => {
           rule('UPRIGHT', 'WARN', { confidence: 0 }),
           rule('UPRIGHT', 'WARN'),
         ],
-      })
+      }),
     ).toEqual(['rule.UPRIGHT.WARN']);
     expect(
       keys({
@@ -401,7 +401,7 @@ describe('getParkingFeedback', () => {
           rule('UPRIGHT', 'WARN'),
           rule('UPRIGHT', 'WARN', { confidence: 0 }),
         ],
-      })
+      }),
     ).toEqual(['rule.UPRIGHT.WARN']);
   });
 });

@@ -18,7 +18,7 @@ const mockRequestAttestation =
     (
       photoSha256: string,
       challenge: string,
-      cloudProjectNumber: number
+      cloudProjectNumber: number,
     ) => Promise<string>
   >();
 const mockResetAttestationKey = jest.fn<() => Promise<void>>();
@@ -29,7 +29,7 @@ jest.mock('../NativeParkingGuide', () => ({
     requestAttestation: (
       photoSha256: string,
       challenge: string,
-      cloudProjectNumber: number
+      cloudProjectNumber: number,
     ) => mockRequestAttestation(photoSha256, challenge, cloudProjectNumber),
     resetAttestationKey: () => mockResetAttestationKey(),
   },
@@ -49,7 +49,7 @@ beforeEach(() => {
 describe('requestAttestation', () => {
   it('forwards the options to the native module and returns its token', async () => {
     await expect(
-      requestAttestation({ photoSha256: HASH, challenge: 'nonce-1' })
+      requestAttestation({ photoSha256: HASH, challenge: 'nonce-1' }),
     ).resolves.toBe(TOKEN);
 
     expect(mockRequestAttestation).toHaveBeenCalledTimes(1);
@@ -66,7 +66,7 @@ describe('requestAttestation', () => {
     expect(mockRequestAttestation).toHaveBeenCalledWith(
       HASH,
       'nonce-1',
-      123456789012
+      123456789012,
     );
   });
 
@@ -79,7 +79,7 @@ describe('requestAttestation', () => {
     expect(mockRequestAttestation).toHaveBeenCalledWith(
       HASH,
       '\u{1F6F4}\uD55C',
-      0
+      0,
     );
   });
 
@@ -87,16 +87,16 @@ describe('requestAttestation', () => {
     const restore = jest.replaceProperty(Platform, 'OS', 'android');
     try {
       await expect(
-        requestAttestation({ photoSha256: HASH, challenge: 'nonce-1' })
+        requestAttestation({ photoSha256: HASH, challenge: 'nonce-1' }),
       ).rejects.toThrow(
-        new RangeError('cloudProjectNumber is required on Android.')
+        new RangeError('cloudProjectNumber is required on Android.'),
       );
       await expect(
         requestAttestation({
           photoSha256: HASH,
           challenge: 'nonce-1',
           cloudProjectNumber: 42,
-        })
+        }),
       ).resolves.toBe(TOKEN);
       expect(mockRequestAttestation).toHaveBeenCalledTimes(1);
       expect(mockRequestAttestation).toHaveBeenCalledWith(HASH, 'nonce-1', 42);
@@ -146,10 +146,10 @@ describe('requestAttestation', () => {
     'rejects %s with RangeError before calling native',
     async (_name, value) => {
       await expect(requestAttestation(invalid(value))).rejects.toBeInstanceOf(
-        RangeError
+        RangeError,
       );
       expect(mockRequestAttestation).not.toHaveBeenCalled();
-    }
+    },
   );
 
   it('propagates a native rejection', async () => {
@@ -159,21 +159,21 @@ describe('requestAttestation', () => {
     mockRequestAttestation.mockRejectedValueOnce(error);
 
     await expect(
-      requestAttestation({ photoSha256: HASH, challenge: 'nonce-1' })
+      requestAttestation({ photoSha256: HASH, challenge: 'nonce-1' }),
     ).rejects.toBe(error);
   });
 
   it('rejects an empty or non-string native token', async () => {
     mockRequestAttestation.mockResolvedValueOnce('');
     await expect(
-      requestAttestation({ photoSha256: HASH, challenge: 'nonce-1' })
+      requestAttestation({ photoSha256: HASH, challenge: 'nonce-1' }),
     ).rejects.toThrow('requestAttestation returned an invalid token.');
 
     mockRequestAttestation.mockResolvedValueOnce(
-      undefined as unknown as string
+      undefined as unknown as string,
     );
     await expect(
-      requestAttestation({ photoSha256: HASH, challenge: 'nonce-1' })
+      requestAttestation({ photoSha256: HASH, challenge: 'nonce-1' }),
     ).rejects.toThrow('requestAttestation returned an invalid token.');
   });
 });
@@ -189,7 +189,7 @@ describe('resetAttestationKey', () => {
   it('propagates a native rejection', async () => {
     const error = Object.assign(
       new Error('App Attest key reset failed (OSStatus -25308).'),
-      { code: 'E_ATTESTATION_FAILED' }
+      { code: 'E_ATTESTATION_FAILED' },
     );
     mockResetAttestationKey.mockRejectedValueOnce(error);
 

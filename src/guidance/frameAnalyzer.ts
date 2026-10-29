@@ -17,16 +17,16 @@ export interface ParkingFrameAnalyzer<Frame> {
 export function createParkingFrameAnalyzer<Frame>(proxy: {
   initFrameProcessorPlugin(
     name: string,
-    options: Record<string, number>
+    options: Record<string, number>,
   ): { call(frame: Frame): unknown } | undefined;
 }): ParkingFrameAnalyzer<Frame> {
   const plugin = proxy.initFrameProcessorPlugin(
     'parkingGuide',
-    CAPTURE_GUIDANCE_THRESHOLDS
+    CAPTURE_GUIDANCE_THRESHOLDS,
   );
   if (plugin == null) {
     throw new Error(
-      'The parkingGuide frame processor is unavailable. Install the native plugin and enable VisionCamera frame processors.'
+      'The parkingGuide frame processor is unavailable. Install the native plugin and enable VisionCamera frame processors.',
     );
   }
 
@@ -55,17 +55,17 @@ export function createParkingDetector<Frame>(
   proxy: {
     initFrameProcessorPlugin(
       name: string,
-      options: Record<string, string | number>
+      options: Record<string, string | number>,
     ): { call(frame: Frame): unknown } | undefined;
   },
-  options: { modelUri: string }
+  options: { modelUri: string },
 ): ParkingDetector<Frame> {
   const plugin = proxy.initFrameProcessorPlugin('parkingDetector', {
     modelUri: options.modelUri,
   });
   if (plugin == null) {
     throw new Error(
-      'The parkingDetector frame processor is unavailable. Install the native plugin and enable VisionCamera frame processors.'
+      'The parkingDetector frame processor is unavailable. Install the native plugin and enable VisionCamera frame processors.',
     );
   }
 

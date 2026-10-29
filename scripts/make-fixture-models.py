@@ -51,7 +51,14 @@ CLASSES = np.array([[0.0, 3.0]], dtype=np.float32)
 SHAPES = {"nhwc": (1, SIZE, SIZE, 3), "nchw": (1, 3, SIZE, SIZE)}
 LARGE_ROWS = 1001
 DEMO_BOXES = np.array(
-    [[[0.375, 0.3125, 0.625, 0.5], [0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 1.0, 1.0]]],
+    [
+        [
+            [0.375, 0.3125, 0.625, 0.5],
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
+        ]
+    ],
     dtype=np.float32,
 )
 # kickboard, crosswalk, sidewalk_block, parking_zone (indices into DETECTOR_CLASSES).
@@ -74,11 +81,19 @@ def write_png(path: Path, width: int, height: int, rgb: tuple[int, int, int]) ->
     raw = row * height
 
     def chunk(kind: bytes, data: bytes) -> bytes:
-        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data))
+        )
 
     header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
     path.write_bytes(
-        b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(raw, 9))
+        + chunk(b"IEND", b"")
     )
 
 
@@ -88,7 +103,9 @@ def red_channel(image: tf.Tensor, layout: str) -> tf.Tensor:
 
 def make_tflite(layout: str) -> None:
     class Fixture(tf.Module):
-        @tf.function(input_signature=[tf.TensorSpec(SHAPES[layout], tf.float32, name="image")])
+        @tf.function(
+            input_signature=[tf.TensorSpec(SHAPES[layout], tf.float32, name="image")]
+        )
         def serve(self, image):
             red = tf.reshape(tf.reduce_mean(red_channel(image, layout)), [1, 1])
             zero = red * 0.0
@@ -99,13 +116,17 @@ def make_tflite(layout: str) -> None:
             }
 
     module = Fixture()
-    converter = tf.lite.TFLiteConverter.from_concrete_functions([module.serve.get_concrete_function()], module)
+    converter = tf.lite.TFLiteConverter.from_concrete_functions(
+        [module.serve.get_concrete_function()], module
+    )
     (OUT / f"detector-{layout}.tflite").write_bytes(converter.convert())
 
 
 def make_dynamic_tflite() -> None:
     class Fixture(tf.Module):
-        @tf.function(input_signature=[tf.TensorSpec(SHAPES["nhwc"], tf.float32, name="image")])
+        @tf.function(
+            input_signature=[tf.TensorSpec(SHAPES["nhwc"], tf.float32, name="image")]
+        )
         def serve(self, image):
             red = tf.reduce_mean(image[..., 0])
             keep = tf.stack([tf.constant(True), red > 0.5])
@@ -117,22 +138,33 @@ def make_dynamic_tflite() -> None:
             }
 
     module = Fixture()
-    converter = tf.lite.TFLiteConverter.from_concrete_functions([module.serve.get_concrete_function()], module)
+    converter = tf.lite.TFLiteConverter.from_concrete_functions(
+        [module.serve.get_concrete_function()], module
+    )
     (OUT / "detector-dynamic.tflite").write_bytes(converter.convert())
 
 
 def check_dynamic() -> None:
-    runner = tf.lite.Interpreter(model_path=str(OUT / "detector-dynamic.tflite")).get_signature_runner()
+    runner = tf.lite.Interpreter(
+        model_path=str(OUT / "detector-dynamic.tflite")
+    ).get_signature_runner()
     for red, rows in [(0.8, 2), (0.2, 1), (0.8, 2)]:
-        image = np.ascontiguousarray(np.broadcast_to(np.array([red, 0.4, 1 - red], np.float32), SHAPES["nhwc"]))
+        image = np.ascontiguousarray(
+            np.broadcast_to(np.array([red, 0.4, 1 - red], np.float32), SHAPES["nhwc"])
+        )
         result = runner(image=image)
         assert result["boxes"].shape == (1, rows, 4), result["boxes"].shape
-        assert result["scores"].shape == (1, rows) and result["classes"].shape == (1, rows), result
+        assert result["scores"].shape == (1, rows) and result["classes"].shape == (
+            1,
+            rows,
+        ), result
 
 
 def make_large_tflite() -> None:
     class Fixture(tf.Module):
-        @tf.function(input_signature=[tf.TensorSpec(SHAPES["nhwc"], tf.float32, name="image")])
+        @tf.function(
+            input_signature=[tf.TensorSpec(SHAPES["nhwc"], tf.float32, name="image")]
+        )
         def serve(self, image):
             zero = tf.reduce_mean(image) * 0.0
             return {
@@ -142,15 +174,21 @@ def make_large_tflite() -> None:
             }
 
     module = Fixture()
-    converter = tf.lite.TFLiteConverter.from_concrete_functions([module.serve.get_concrete_function()], module)
+    converter = tf.lite.TFLiteConverter.from_concrete_functions(
+        [module.serve.get_concrete_function()], module
+    )
     (OUT / "detector-large.tflite").write_bytes(converter.convert())
 
 
 def check_large() -> None:
-    runner = tf.lite.Interpreter(model_path=str(OUT / "detector-large.tflite")).get_signature_runner()
+    runner = tf.lite.Interpreter(
+        model_path=str(OUT / "detector-large.tflite")
+    ).get_signature_runner()
     result = runner(image=np.zeros(SHAPES["nhwc"], np.float32))
     assert result["boxes"].shape == (LARGE_ROWS, 4), result["boxes"].shape
-    assert result["scores"].shape == (LARGE_ROWS,) and result["classes"].shape == (LARGE_ROWS,), result
+    assert result["scores"].shape == (LARGE_ROWS,) and result["classes"].shape == (
+        LARGE_ROWS,
+    ), result
 
 
 def make_demo_tflite() -> None:
@@ -160,21 +198,29 @@ def make_demo_tflite() -> None:
 
     def share(pixels, channel):
         others = [pixels[..., c] for c in range(3) if c != channel]
-        lead = pixels[..., channel] - tf.maximum(others[0], others[1]) > DEMO_PIXEL_MARGIN
+        lead = (
+            pixels[..., channel] - tf.maximum(others[0], others[1]) > DEMO_PIXEL_MARGIN
+        )
         return tf.reduce_mean(tf.cast(lead, tf.float32), axis=[1, 2])
 
     class Fixture(tf.Module):
-        @tf.function(input_signature=[tf.TensorSpec(SHAPES["nhwc"], tf.float32, name="image")])
+        @tf.function(
+            input_signature=[tf.TensorSpec(SHAPES["nhwc"], tf.float32, name="image")]
+        )
         def serve(self, image):
             (top, left), (bottom, right) = DEMO_REGION_BEGIN[1:3], DEMO_REGION_END[1:3]
             region = tf.reduce_mean(image[:, top:bottom, left:right, :], axis=[1, 2])
             (top, left), (bottom, right) = DEMO_GROUND_BEGIN[1:3], DEMO_GROUND_END[1:3]
             ground = image[:, top:bottom, left:right, :]
-            vehicle = tf.logical_and(region[:, 0] > DEMO_RED_MIN, dominance(region, 0) > DEMO_RED_MARGIN)
+            vehicle = tf.logical_and(
+                region[:, 0] > DEMO_RED_MIN, dominance(region, 0) > DEMO_RED_MARGIN
+            )
             green = share(ground, 1) > DEMO_GROUND_SHARE
             blue = share(ground, 2) > DEMO_GROUND_SHARE
             parking = tf.logical_not(tf.logical_or(green, blue))
-            scores = DEMO_SCORE * tf.cast(tf.stack([vehicle, green, blue, parking], axis=1), tf.float32)
+            scores = DEMO_SCORE * tf.cast(
+                tf.stack([vehicle, green, blue, parking], axis=1), tf.float32
+            )
             zero = tf.reduce_sum(scores) * 0.0
             return {
                 "boxes": tf.constant(DEMO_BOXES) + zero,
@@ -183,7 +229,9 @@ def make_demo_tflite() -> None:
             }
 
     module = Fixture()
-    converter = tf.lite.TFLiteConverter.from_concrete_functions([module.serve.get_concrete_function()], module)
+    converter = tf.lite.TFLiteConverter.from_concrete_functions(
+        [module.serve.get_concrete_function()], module
+    )
     (OUT / "detector-demo.tflite").write_bytes(converter.convert())
 
 
@@ -199,20 +247,36 @@ def make_demo_coreml() -> None:
         return mb.cast(x=condition, dtype="fp32")
 
     def share(pixels, index):
-        end = [DEMO_GROUND_END[0], DEMO_GROUND_END[1] - DEMO_GROUND_BEGIN[1], DEMO_GROUND_END[2] - DEMO_GROUND_BEGIN[2]]
+        end = [
+            DEMO_GROUND_END[0],
+            DEMO_GROUND_END[1] - DEMO_GROUND_BEGIN[1],
+            DEMO_GROUND_END[2] - DEMO_GROUND_BEGIN[2],
+        ]
 
         def plane(c):
             return mb.slice_by_index(x=pixels, begin=[0, 0, 0, c], end=[*end, c + 1])
 
         others = [plane(c) for c in range(3) if c != index]
-        lead = mb.greater(x=mb.sub(x=plane(index), y=mb.maximum(x=others[0], y=others[1])), y=DEMO_PIXEL_MARGIN)
-        return mb.reshape(x=mb.reduce_mean(x=flag(lead), axes=[1, 2, 3], keep_dims=False), shape=[1, 1])
+        lead = mb.greater(
+            x=mb.sub(x=plane(index), y=mb.maximum(x=others[0], y=others[1])),
+            y=DEMO_PIXEL_MARGIN,
+        )
+        return mb.reshape(
+            x=mb.reduce_mean(x=flag(lead), axes=[1, 2, 3], keep_dims=False),
+            shape=[1, 1],
+        )
 
-    @mb.program(input_specs=[mb.TensorSpec(shape=SHAPES["nhwc"])], opset_version=ct.target.iOS15)
+    @mb.program(
+        input_specs=[mb.TensorSpec(shape=SHAPES["nhwc"])], opset_version=ct.target.iOS15
+    )
     def program(image):
-        region = mb.slice_by_index(x=image, begin=DEMO_REGION_BEGIN, end=DEMO_REGION_END)
+        region = mb.slice_by_index(
+            x=image, begin=DEMO_REGION_BEGIN, end=DEMO_REGION_END
+        )
         region = mb.reduce_mean(x=region, axes=[1, 2], keep_dims=False)
-        ground = mb.slice_by_index(x=image, begin=DEMO_GROUND_BEGIN, end=DEMO_GROUND_END)
+        ground = mb.slice_by_index(
+            x=image, begin=DEMO_GROUND_BEGIN, end=DEMO_GROUND_END
+        )
         vehicle = mb.logical_and(
             x=mb.greater(x=channel(region, 0), y=DEMO_RED_MIN),
             y=mb.greater(x=dominance(region, 0), y=DEMO_RED_MARGIN),
@@ -220,10 +284,14 @@ def make_demo_coreml() -> None:
         green = mb.greater(x=share(ground, 1), y=DEMO_GROUND_SHARE)
         blue = mb.greater(x=share(ground, 2), y=DEMO_GROUND_SHARE)
         parking = mb.logical_not(x=mb.logical_or(x=green, y=blue))
-        flags = mb.concat(values=[flag(vehicle), flag(green), flag(blue), flag(parking)], axis=1)
+        flags = mb.concat(
+            values=[flag(vehicle), flag(green), flag(blue), flag(parking)], axis=1
+        )
         scores = mb.mul(x=flags, y=DEMO_SCORE, name="scores")
         zero = mb.mul(x=mb.reduce_sum(x=scores, axes=[0, 1], keep_dims=True), y=0.0)
-        boxes = mb.add(x=DEMO_BOXES, y=mb.reshape(x=zero, shape=[1, 1, 1]), name="boxes")
+        boxes = mb.add(
+            x=DEMO_BOXES, y=mb.reshape(x=zero, shape=[1, 1, 1]), name="boxes"
+        )
         classes = mb.add(x=DEMO_CLASSES, y=zero, name="classes")
         return boxes, scores, classes
 
@@ -253,7 +321,9 @@ def check_demo() -> None:
         # A slightly green-tinted white desk stays a parking zone.
         (gray, red, [0.8, 0.82, 0.8], [0.9, 0.0, 0.0, 0.9]),
     ]
-    runner = tf.lite.Interpreter(model_path=str(OUT / "detector-demo.tflite")).get_signature_runner()
+    runner = tf.lite.Interpreter(
+        model_path=str(OUT / "detector-demo.tflite")
+    ).get_signature_runner()
     coreml = ct.models.MLModel(str(OUT / "detector-demo.mlpackage"))
     for background, block, ground, expected in scenes:
         image = np.empty(SHAPES["nhwc"], dtype=np.float32)
@@ -262,10 +332,25 @@ def check_demo() -> None:
             (top, left), (bottom, right) = DEMO_GROUND_BEGIN[1:3], DEMO_GROUND_END[1:3]
             image[:, top:bottom, left:right, :] = ground
         image[:, 160:256, 192:320, :] = block
-        for name, result in [("tflite", runner(image=image)), ("coreml", coreml.predict({"image": image}))]:
-            np.testing.assert_allclose(result["boxes"], DEMO_BOXES, atol=1e-6, err_msg=f"{name} demo boxes")
-            np.testing.assert_allclose(result["scores"], [expected], atol=1e-6, err_msg=f"{name} demo {background}")
-            np.testing.assert_allclose(result["classes"], DEMO_CLASSES, atol=1e-6, err_msg=f"{name} demo classes")
+        for name, result in [
+            ("tflite", runner(image=image)),
+            ("coreml", coreml.predict({"image": image})),
+        ]:
+            np.testing.assert_allclose(
+                result["boxes"], DEMO_BOXES, atol=1e-6, err_msg=f"{name} demo boxes"
+            )
+            np.testing.assert_allclose(
+                result["scores"],
+                [expected],
+                atol=1e-6,
+                err_msg=f"{name} demo {background}",
+            )
+            np.testing.assert_allclose(
+                result["classes"],
+                DEMO_CLASSES,
+                atol=1e-6,
+                err_msg=f"{name} demo classes",
+            )
 
 
 def make_coreml(layout: str) -> None:
@@ -275,7 +360,9 @@ def make_coreml(layout: str) -> None:
     @mb.program(input_specs=[mb.TensorSpec(shape=shape)], opset_version=ct.target.iOS15)
     def program(image):
         red = mb.slice_by_index(x=image, begin=[0, 0, 0, 0], end=end)
-        mean = mb.reshape(x=mb.reduce_mean(x=red, axes=[1, 2, 3], keep_dims=False), shape=[1, 1])
+        mean = mb.reshape(
+            x=mb.reduce_mean(x=red, axes=[1, 2, 3], keep_dims=False), shape=[1, 1]
+        )
         zero = mb.mul(x=mean, y=0.0)
         boxes = mb.add(x=BOXES, y=mb.reshape(x=zero, shape=[1, 1, 1]), name="boxes")
         scores = mb.concat(values=[mean, zero], axis=1, name="scores")
@@ -302,11 +389,19 @@ def self_check(layout: str) -> None:
     interpreter = tf.lite.Interpreter(model_path=str(OUT / f"detector-{layout}.tflite"))
     runner = interpreter.get_signature_runner()
     results = {"tflite": runner(image=image)}
-    results["coreml"] = ct.models.MLModel(str(OUT / f"detector-{layout}.mlpackage")).predict({"image": image})
+    results["coreml"] = ct.models.MLModel(
+        str(OUT / f"detector-{layout}.mlpackage")
+    ).predict({"image": image})
     for name, result in results.items():
-        np.testing.assert_allclose(result["boxes"], BOXES, atol=1e-6, err_msg=f"{name} {layout} boxes")
-        np.testing.assert_allclose(result["scores"], [[0.8, 0.0]], atol=1e-3, err_msg=f"{name} {layout} scores")
-        np.testing.assert_allclose(result["classes"], CLASSES, atol=1e-6, err_msg=f"{name} {layout} classes")
+        np.testing.assert_allclose(
+            result["boxes"], BOXES, atol=1e-6, err_msg=f"{name} {layout} boxes"
+        )
+        np.testing.assert_allclose(
+            result["scores"], [[0.8, 0.0]], atol=1e-3, err_msg=f"{name} {layout} scores"
+        )
+        np.testing.assert_allclose(
+            result["classes"], CLASSES, atol=1e-6, err_msg=f"{name} {layout} classes"
+        )
 
 
 def main() -> None:

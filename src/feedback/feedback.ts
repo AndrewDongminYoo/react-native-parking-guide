@@ -188,7 +188,7 @@ function feedbackStatus(result: RuleResult): RuleFeedbackStatus {
  */
 export function getParkingFeedback(
   input: FeedbackInput,
-  options: FeedbackOptions = {}
+  options: FeedbackOptions = {},
 ): ParkingFeedback[] {
   const statuses = new Map<RuleId, RuleStatus>();
   let vehicleMissing = false;

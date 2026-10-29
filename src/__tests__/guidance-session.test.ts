@@ -31,7 +31,7 @@ const DETECTION: GuidanceSessionOptions = { debounceFrames: 1, detection: {} };
 function frame(
   state: GuidanceSessionState,
   now: number,
-  options: GuidanceSessionOptions
+  options: GuidanceSessionOptions,
 ): GuidanceSessionState {
   return reduceGuidanceSession(
     state,
@@ -40,7 +40,7 @@ function frame(
       frame: { ready: true, issues: [], progress: 1 },
       now,
     },
-    options
+    options,
   );
 }
 
@@ -48,12 +48,12 @@ function detect(
   state: GuidanceSessionState,
   result: DetectorFrameResult,
   now: number,
-  options: GuidanceSessionOptions
+  options: GuidanceSessionOptions,
 ): GuidanceSessionState {
   return reduceGuidanceSession(
     state,
     { type: 'detection', result, generation: state.generation, now },
-    options
+    options,
   );
 }
 
@@ -89,7 +89,7 @@ describe('reduceGuidanceSession', () => {
     state = reduceGuidanceSession(
       state,
       { type: 'detection', result: VEHICLE, generation: before, now: 0 },
-      DETECTION
+      DETECTION,
     );
     expect(state.snapshot).toBeNull();
     state = frame(state, 10, DETECTION);
@@ -107,7 +107,7 @@ describe('reduceGuidanceSession', () => {
     state = reduceGuidanceSession(
       state,
       { type: 'acknowledgeAutoCapture' },
-      options
+      options,
     );
     state = detect(state, VEHICLE, 2000, options);
     state = frame(state, 2000, options);
@@ -148,7 +148,7 @@ describe('reduceGuidanceSession', () => {
         generation: 0,
         now: 1000,
       },
-      DETECTION
+      DETECTION,
     );
     state = frame(state, 1400, DETECTION);
     expect(state.guidance.guidance.ready).toBe(true);
@@ -166,7 +166,7 @@ describe('reduceGuidanceSession', () => {
         generation: 0,
         now: 1000,
       },
-      DETECTION
+      DETECTION,
     );
     state = frame(state, 1005, DETECTION);
     expect(state.guidance.guidance.ready).toBe(true);
@@ -181,8 +181,8 @@ describe('reduceGuidanceSession', () => {
       reduceGuidance(
         createGuidanceState(),
         { ready: true, issues: [], progress: 1 },
-        options
-      )
+        options,
+      ),
     );
     expect(state.guidance.guidance.ready).toBe(true);
     expect(state.detectorError).toBeNull();
@@ -192,10 +192,10 @@ describe('reduceGuidanceSession', () => {
 describe('validateGuidanceSessionOptions', () => {
   it('rejects invalid session options', () => {
     expect(() =>
-      validateGuidanceSessionOptions({ detection: { staleAfterMs: -1 } })
+      validateGuidanceSessionOptions({ detection: { staleAfterMs: -1 } }),
     ).toThrow(RangeError);
     expect(() =>
-      validateGuidanceSessionOptions({ autoCapture: { holdMs: Number.NaN } })
+      validateGuidanceSessionOptions({ autoCapture: { holdMs: Number.NaN } }),
     ).toThrow(RangeError);
     expect(() => validateGuidanceSessionOptions({})).not.toThrow();
   });

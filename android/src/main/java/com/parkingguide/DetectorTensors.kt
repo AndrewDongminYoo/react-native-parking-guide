@@ -28,8 +28,10 @@ object DetectorTensors {
   const val MAX_DECODED_SIDE = 4096
 
   /** Whether an output tensor named [name] with [count] elements is within [MAX_DETECTIONS]. */
-  fun withinOutputLimit(name: String, count: Int): Boolean =
-    count <= (if (name == "boxes") 4 * MAX_DETECTIONS else MAX_DETECTIONS)
+  fun withinOutputLimit(
+    name: String,
+    count: Int,
+  ): Boolean = count <= (if (name == "boxes") 4 * MAX_DETECTIONS else MAX_DETECTIONS)
 
   /** Buffer and chunk size for [readAtMost] and [copyAtMost]. */
   const val CHUNK_BYTES = 64 * 1024
@@ -38,7 +40,10 @@ object DetectorTensors {
    * Reads [input] to the end into [CHUNK_BYTES] chunks, or returns null as soon as it has more than [maxBytes] bytes.
    * Reads at most [maxBytes] + 1 bytes, and never copies the bytes it has read.
    */
-  fun readAtMost(input: InputStream, maxBytes: Int): ChunkedBytes? {
+  fun readAtMost(
+    input: InputStream,
+    maxBytes: Int,
+  ): ChunkedBytes? {
     val chunks = mutableListOf<ByteArray>()
     var total = 0L
     var filled = CHUNK_BYTES
@@ -63,7 +68,11 @@ object DetectorTensors {
    * Copies [input] to [output] until the end and returns true, or returns false as soon as [input] has more than
    * [maxBytes] bytes. Reads at most [maxBytes] + 1 bytes and writes at most [maxBytes].
    */
-  fun copyAtMost(input: InputStream, output: OutputStream, maxBytes: Long): Boolean {
+  fun copyAtMost(
+    input: InputStream,
+    output: OutputStream,
+    maxBytes: Long,
+  ): Boolean {
     val buffer = ByteArray(CHUNK_BYTES)
     var total = 0L
     while (true) {
@@ -79,7 +88,10 @@ object DetectorTensors {
    * Power-of-two `inSampleSize` for a [width] × [height] photo: the largest that keeps at least [INPUT_SIZE] pixels on
    * the short side, then larger until the long side is at most [MAX_DECODED_SIDE].
    */
-  fun sampleSize(width: Int, height: Int): Int {
+  fun sampleSize(
+    width: Int,
+    height: Int,
+  ): Int {
     var sample = 1
     while (minOf(width, height) / (sample * 2) >= INPUT_SIZE) sample *= 2
     while (maxOf(width, height) / sample > MAX_DECODED_SIDE) sample *= 2
@@ -87,14 +99,19 @@ object DetectorTensors {
   }
 
   /** [InputLayout.NHWC] for `[1, 512, 512, 3]`, [InputLayout.NCHW] for `[1, 3, 512, 512]`, otherwise null. */
-  fun layoutOf(shape: IntArray): InputLayout? = when {
-    shape.contentEquals(intArrayOf(1, INPUT_SIZE, INPUT_SIZE, 3)) -> InputLayout.NHWC
-    shape.contentEquals(intArrayOf(1, 3, INPUT_SIZE, INPUT_SIZE)) -> InputLayout.NCHW
-    else -> null
-  }
+  fun layoutOf(shape: IntArray): InputLayout? =
+    when {
+      shape.contentEquals(intArrayOf(1, INPUT_SIZE, INPUT_SIZE, 3)) -> InputLayout.NHWC
+      shape.contentEquals(intArrayOf(1, 3, INPUT_SIZE, INPUT_SIZE)) -> InputLayout.NCHW
+      else -> null
+    }
 
   /** Writes 512 x 512 ARGB pixels to [out] as RGB values in `[0, 1]` in [layout] order, starting at index 0. */
-  fun fillInput(argb: IntArray, layout: InputLayout, out: FloatBuffer) {
+  fun fillInput(
+    argb: IntArray,
+    layout: InputLayout,
+    out: FloatBuffer,
+  ) {
     val plane = INPUT_SIZE * INPUT_SIZE
     require(argb.size == plane) { "expected $plane pixels" }
     for (p in 0 until plane) {
@@ -107,7 +124,10 @@ object DetectorTensors {
   }
 
   /** Reads every value of a native-order output buffer of [kind] from position 0. */
-  fun readValues(buffer: ByteBuffer, kind: ValueKind): DoubleArray {
+  fun readValues(
+    buffer: ByteBuffer,
+    kind: ValueKind,
+  ): DoubleArray {
     val data = buffer.duplicate().order(ByteOrder.nativeOrder())
     data.rewind()
     return when (kind) {
@@ -122,50 +142,58 @@ object DetectorTensors {
  * [size] bytes held in [DetectorTensors.CHUNK_BYTES] chunks; every chunk but the last is full. [inputStream] reads
  * them without copying, any number of times.
  */
-class ChunkedBytes internal constructor(private val chunks: List<ByteArray>, val size: Int) {
+class ChunkedBytes internal constructor(
+  private val chunks: List<ByteArray>,
+  val size: Int,
+) {
   /** A new stream over all [size] bytes, with mark and reset support. */
-  fun inputStream(): InputStream = object : InputStream() {
-    private var position = 0
-    private var marked = 0
+  fun inputStream(): InputStream =
+    object : InputStream() {
+      private var position = 0
+      private var marked = 0
 
-    override fun read(): Int {
-      if (position >= size) return -1
-      val chunk = chunks[position / DetectorTensors.CHUNK_BYTES]
-      return chunk[position++ % DetectorTensors.CHUNK_BYTES].toInt() and 0xff
-    }
-
-    override fun read(b: ByteArray, off: Int, len: Int): Int {
-      if (off < 0 || len < 0 || len > b.size - off) throw IndexOutOfBoundsException()
-      if (len == 0) return 0
-      if (position >= size) return -1
-      val count = minOf(len, size - position)
-      var copied = 0
-      while (copied < count) {
-        val offset = position % DetectorTensors.CHUNK_BYTES
-        val part = minOf(count - copied, DetectorTensors.CHUNK_BYTES - offset)
-        System.arraycopy(chunks[position / DetectorTensors.CHUNK_BYTES], offset, b, off + copied, part)
-        copied += part
-        position += part
+      override fun read(): Int {
+        if (position >= size) return -1
+        val chunk = chunks[position / DetectorTensors.CHUNK_BYTES]
+        return chunk[position++ % DetectorTensors.CHUNK_BYTES].toInt() and 0xff
       }
-      return count
+
+      override fun read(
+        b: ByteArray,
+        off: Int,
+        len: Int,
+      ): Int {
+        if (off < 0 || len < 0 || len > b.size - off) throw IndexOutOfBoundsException()
+        if (len == 0) return 0
+        if (position >= size) return -1
+        val count = minOf(len, size - position)
+        var copied = 0
+        while (copied < count) {
+          val offset = position % DetectorTensors.CHUNK_BYTES
+          val part = minOf(count - copied, DetectorTensors.CHUNK_BYTES - offset)
+          System.arraycopy(chunks[position / DetectorTensors.CHUNK_BYTES], offset, b, off + copied, part)
+          copied += part
+          position += part
+        }
+        return count
+      }
+
+      override fun skip(n: Long): Long {
+        val count = n.coerceIn(0L, (size - position).toLong()).toInt()
+        position += count
+        return count.toLong()
+      }
+
+      override fun available(): Int = size - position
+
+      override fun markSupported(): Boolean = true
+
+      override fun mark(readlimit: Int) {
+        marked = position
+      }
+
+      override fun reset() {
+        position = marked
+      }
     }
-
-    override fun skip(n: Long): Long {
-      val count = n.coerceIn(0L, (size - position).toLong()).toInt()
-      position += count
-      return count.toLong()
-    }
-
-    override fun available(): Int = size - position
-
-    override fun markSupported(): Boolean = true
-
-    override fun mark(readlimit: Int) {
-      marked = position
-    }
-
-    override fun reset() {
-      position = marked
-    }
-  }
 }

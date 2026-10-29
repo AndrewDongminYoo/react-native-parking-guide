@@ -26,7 +26,7 @@ jest.mock(
     ...jest.requireActual<object>('../../../src/policy/evaluate'),
     runDetector: jest.fn(),
   }),
-  { virtual: true }
+  { virtual: true },
 );
 
 /**
@@ -35,7 +35,7 @@ jest.mock(
  */
 function demoOutput(
   vehicle: boolean,
-  scene: 'neutral' | 'green' | 'blue'
+  scene: 'neutral' | 'green' | 'blue',
 ): DetectorOutput {
   const score = (on: boolean) => (on ? 0.9 : 0);
   return {
@@ -57,22 +57,22 @@ describe('detectorModelUri', () => {
   it('keeps no model, absolute paths, and URIs as they are', () => {
     expect(detectorModelUri(undefined, '/files')).toBeUndefined();
     expect(detectorModelUri('/models/a.tflite', '/files')).toBe(
-      '/models/a.tflite'
+      '/models/a.tflite',
     );
     expect(detectorModelUri('file:///models/a.tflite', '/files')).toBe(
-      'file:///models/a.tflite'
+      'file:///models/a.tflite',
     );
     expect(detectorModelUri('content://models/a', '/files')).toBe(
-      'content://models/a'
+      'content://models/a',
     );
   });
 
   it('resolves a file name inside the files directory', () => {
     expect(detectorModelUri('a.mlpackage', '/app/Documents')).toBe(
-      '/app/Documents/a.mlpackage'
+      '/app/Documents/a.mlpackage',
     );
     expect(detectorModelUri('a.mlpackage', '/app/Documents/')).toBe(
-      '/app/Documents/a.mlpackage'
+      '/app/Documents/a.mlpackage',
     );
   });
 
@@ -90,18 +90,18 @@ describe('demo detector verdicts under the demo policy', () => {
     'judges a red vehicle on a $scene scene as $verdict',
     async ({ scene, verdict, reasons }) => {
       const judgment = await judgeParking(PHOTO, 'kickboard', MODEL, async () =>
-        demoOutput(true, scene)
+        demoOutput(true, scene),
       );
       expect(judgment).toMatchObject({ kind: 'verdict', verdict });
       expect(judgment.kind === 'verdict' && judgment.reasons).toHaveLength(
-        reasons
+        reasons,
       );
-    }
+    },
   );
 
   it('fails a scene without a red vehicle', async () => {
     const judgment = await judgeParking(PHOTO, 'kickboard', MODEL, async () =>
-      demoOutput(false, 'neutral')
+      demoOutput(false, 'neutral'),
     );
     expect(judgment).toMatchObject({ kind: 'verdict', verdict: 'FAIL' });
   });
@@ -146,14 +146,14 @@ describe('demo detector box in the example guide frame', () => {
         ...layout,
         frame,
         label: `${frame.width}x${frame.height}`,
-      }))
-    )
+      })),
+    ),
   )(
     'has no guidance issue on $name with a $label frame',
     ({ view, area, frame }) => {
       const width = fitGuideFrameWidth(
         { width: view.width, height: area.height },
-        HINT_HEIGHT
+        HINT_HEIGHT,
       );
       const height = width / GUIDE_FRAME_ASPECT_RATIO;
       const guideFrame = screenRectToFrameBox(
@@ -166,15 +166,15 @@ describe('demo detector box in the example guide frame', () => {
           height,
         },
         view,
-        frame
+        frame,
       );
       expect(
         mapGuidanceIssues(decodeDetectorOutput(demoOutput(true, 'neutral')), {
           guideFrame,
           vehicleType: 'kickboard',
-        })
+        }),
       ).toEqual([]);
-    }
+    },
   );
 
   it.each(['bicycle', 'ebike', 'motorcycle'] as const)(
@@ -183,8 +183,8 @@ describe('demo detector box in the example guide frame', () => {
       expect(
         mapGuidanceIssues(decodeDetectorOutput(demoOutput(true, 'neutral')), {
           vehicleType,
-        })
+        }),
       ).toEqual(['NO_VEHICLE']);
-    }
+    },
   );
 });

@@ -56,7 +56,7 @@ function validateThresholds(thresholds: GuidanceThresholds): void {
     tooFarBelow > tooCloseAbove
   ) {
     throw new RangeError(
-      'tooFarBelow and tooCloseAbove must be finite with 0 <= tooFarBelow <= tooCloseAbove.'
+      'tooFarBelow and tooCloseAbove must be finite with 0 <= tooFarBelow <= tooCloseAbove.',
     );
   }
   validateUnit(groundMarginBelow);
@@ -69,7 +69,7 @@ function validateThresholds(thresholds: GuidanceThresholds): void {
  */
 export function mapGuidanceIssues(
   output: RawModelOutput,
-  options: GuidanceMappingOptions = {}
+  options: GuidanceMappingOptions = {},
 ): GuidanceIssue[] {
   const minimumConfidence = options.minimumConfidence ?? 0.5;
   validateUnit(minimumConfidence);
@@ -92,7 +92,7 @@ export function mapGuidanceIssues(
   const vehicle = selectVehicle(
     acceptedDetections(output, minimumConfidence),
     options.guideFrame,
-    options.vehicleType
+    options.vehicleType,
   );
   if (!vehicle) {
     return ['NO_VEHICLE'];
@@ -104,7 +104,7 @@ export function mapGuidanceIssues(
   const frameHeight = frameBottom - frameTop;
   const [left, top, right, bottom] = vehicle.box;
   const fill = roundGeometricScore(
-    Math.max((right - left) / frameWidth, (bottom - top) / frameHeight)
+    Math.max((right - left) / frameWidth, (bottom - top) / frameHeight),
   );
   const groundGap = roundGeometricScore((frameBottom - bottom) / frameHeight);
 

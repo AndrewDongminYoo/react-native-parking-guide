@@ -29,11 +29,11 @@ state, per-rule results, and the verdict. `example/` demonstrates the screen.
 
 ### Implementation status
 
-| Goal step | Implemented | Not implemented |
-| --- | --- | --- |
-| 1. Capture guidance | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), and live detection on camera frames with `createParkingDetector` and auto capture (see [Live detector guidance](#live-detector-guidance)) | Device acceptance with a trained model (requires the reference model, #56) |
-| 2. Parking judgment | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection by `MappingOptions.vehicleType` and inside `MappingOptions.guideFrame`, and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `runDetector` (native inference of a host-supplied CoreML or LiteRT/TFLite detector on a photo, see [Native detector inference](#native-detector-inference)), `decodeDetectorOutput` (detector output tensors → model output, see [Detector model contract](#detector-model-contract)), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A published reference model (see [Model source](#model-source)) and an uprightness classifier; reading device location or fetching zone data |
-| 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`); `verifyParking` (native photo SHA-256, caller-supplied rule results, and capture metadata → `VerificationResult`); the example app's capture → verdict and reasons → retake flow (see [Live detector guidance](#live-detector-guidance)) | Producing rule results from the photo inside `verifyParking` |
+| Goal step             | Implemented                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Not implemented                                                                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Capture guidance   | `useParkingGuidance`, `createParkingFrameAnalyzer`, iOS and Android image-quality analysis (`BLURRY`, `LOW_LIGHT`, `TILTED`), `mapGuidanceIssues` (model output → `NO_VEHICLE`, `TOO_CLOSE`, `TOO_FAR`, `GROUND_NOT_VISIBLE`), and live detection on camera frames with `createParkingDetector` and auto capture (see [Live detector guidance](#live-detector-guidance))                                                                                                                                                                                                                                                                             | Device acceptance with a trained model (requires the reference model, #56)                                                                   |
+| 2. Parking judgment   | `mapModelOutput` (model output → `RuleResult[]`, with target-vehicle selection by `MappingOptions.vehicleType` and inside `MappingOptions.guideFrame`, and a `TACTILE_PAVING`/`CROSSWALK` proximity flag in `evidence.proximity`), `runDetector` (native inference of a host-supplied CoreML or LiteRT/TFLite detector on a photo, see [Native detector inference](#native-detector-inference)), `decodeDetectorOutput` (detector output tensors → model output, see [Detector model contract](#detector-model-contract)), `evaluateGeofence` (caller-supplied location and zones → `GEOFENCE`), `evaluatePolicy`, `validatePolicy`, `defaultPolicy` | A published reference model (see [Model source](#model-source)) and an uprightness classifier; reading device location or fetching zone data |
+| 3. Immediate feedback | `Verdict`, score, and `RuleResult[]` from `evaluatePolicy` and `mapModelOutput`; `getParkingFeedback` (feedback keys and default English text for failed, warned, or unchecked rules and for each `GuidanceIssue`); `verifyParking` (native photo SHA-256, caller-supplied rule results, and capture metadata → `VerificationResult`); the example app's capture → verdict and reasons → retake flow (see [Live detector guidance](#live-detector-guidance))                                                                                                                                                                                         | Producing rule results from the photo inside `verifyParking`                                                                                 |
 
 Outside the three goal steps, `uploadVerification` (an opt-in upload of a `VerificationResult` to a caller-owned
 endpoint) and `requestAttestation` (an opt-in App Attest or Play Integrity token bound to the photo hash, see
@@ -265,11 +265,11 @@ come directly from their assessments. Zone confidence is the minimum of the sele
 and all accepted instances of that zone class; if none exist, it is the vehicle's confidence.
 Assessment rules retain their assessment confidence. Confidence is diagnostic and does not weight the policy score.
 
-| Rule | `failBelow` | `passAt` |
-| --- | --- | --- |
-| `VEHICLE_DETECTED`, `UPRIGHT`, `PARKING_ZONE`, `IMAGE_QUALITY` | `0.5` | `0.8` |
-| `TACTILE_PAVING`, `CROSSWALK`, `ROADWAY` | `0.9` | `0.99` |
-| `SIDEWALK_BLOCK` | `0.8` | `0.95` |
+| Rule                                                           | `failBelow` | `passAt` |
+| -------------------------------------------------------------- | ----------- | -------- |
+| `VEHICLE_DETECTED`, `UPRIGHT`, `PARKING_ZONE`, `IMAGE_QUALITY` | `0.5`       | `0.8`    |
+| `TACTILE_PAVING`, `CROSSWALK`, `ROADWAY`                       | `0.9`       | `0.99`   |
+| `SIDEWALK_BLOCK`                                               | `0.8`       | `0.95`   |
 
 For an available rule, score strictly below `failBelow` gives `FAIL`; score greater than or equal to `passAt`
 gives `PASS`; all other scores give `WARN`. Override individual pairs through `MappingOptions.thresholds`.
@@ -300,7 +300,11 @@ The mapper is synchronous, deterministic, and does not mutate inputs, perform I/
 `evaluatePolicy` remains unchanged: its configured severity and `failBelow` can hard-fail a mapper `WARN`.
 
 ```ts
-import { defaultPolicy, evaluatePolicy, mapModelOutput } from 'react-native-parking-guide';
+import {
+  defaultPolicy,
+  evaluatePolicy,
+  mapModelOutput,
+} from 'react-native-parking-guide';
 import type { RawModelOutput } from 'react-native-parking-guide';
 
 const output: RawModelOutput = {
@@ -343,11 +347,11 @@ Input:
 Output: three tensors for N detections. N can be a fixed, padded count, and is at most 1000: `runDetector` and the
 `parkingDetector` plugins reject a larger output with `E_MODEL_CONTRACT` before copying it.
 
-| Tensor | Shape | Values |
-| --- | --- | --- |
-| `boxes` | N × 4 | Normalized `[left, top, right, bottom]`, each in `[0, 1]`, with `left <= right` and `top <= bottom`. |
-| `scores` | N | Confidence in `[0, 1]`. |
-| `classes` | N | Integer index into `DETECTOR_CLASSES` (table below). |
+| Tensor    | Shape | Values                                                                                               |
+| --------- | ----- | ---------------------------------------------------------------------------------------------------- |
+| `boxes`   | N × 4 | Normalized `[left, top, right, bottom]`, each in `[0, 1]`, with `left <= right` and `top <= bottom`. |
+| `scores`  | N     | Confidence in `[0, 1]`.                                                                              |
+| `classes` | N     | Integer index into `DETECTOR_CLASSES` (table below).                                                 |
 
 The output tensors must be named `boxes`, `scores`, and `classes` (TFLite signature output names; CoreML output
 feature names). Any shape with the listed element count is accepted, for example `[1, N, 4]`; element types are
@@ -356,16 +360,16 @@ float32, int32, or int64 on Android and any CoreML multi-array type on iOS.
 Post-processing is part of the exported model, not of this package: score activation, conversion to corner
 coordinates, clamping to `[0, 1]`, and duplicate suppression.
 
-| Index | Detector class | `classId` | `vehicleType` |
-| --- | --- | --- | --- |
-| 0 | `kickboard` | `vehicle` | `'kickboard'` |
-| 1 | `bicycle` (includes e-bikes) | `vehicle` | `'bicycle'` |
-| 2 | `motorcycle` (includes mopeds) | `vehicle` | `'motorcycle'` |
-| 3 | `tactile_paving` | `tactile_paving` | – |
-| 4 | `crosswalk` | `crosswalk` | – |
-| 5 | `roadway` | `roadway` | – |
-| 6 | `sidewalk_block` | `sidewalk_block` | – |
-| 7 | `parking_zone` | `parking_zone` | – |
+| Index | Detector class                 | `classId`        | `vehicleType`  |
+| ----- | ------------------------------ | ---------------- | -------------- |
+| 0     | `kickboard`                    | `vehicle`        | `'kickboard'`  |
+| 1     | `bicycle` (includes e-bikes)   | `vehicle`        | `'bicycle'`    |
+| 2     | `motorcycle` (includes mopeds) | `vehicle`        | `'motorcycle'` |
+| 3     | `tactile_paving`               | `tactile_paving` | –              |
+| 4     | `crosswalk`                    | `crosswalk`      | –              |
+| 5     | `roadway`                      | `roadway`        | –              |
+| 6     | `sidewalk_block`               | `sidewalk_block` | –              |
+| 7     | `parking_zone`                 | `parking_zone`   | –              |
 
 `DetectorOutput` holds the three tensors flattened row-major as `number[]`: `boxes` has `4 × N` values and row `i` is
 `boxes[4i]` to `boxes[4i + 3]`.
@@ -391,10 +395,16 @@ the [Detector model contract](#detector-model-contract) on one photo, off the JS
 tensors. Pass the result to `decodeDetectorOutput`. The package bundles no model; see [Model source](#model-source).
 
 ```ts
-import { decodeDetectorOutput, mapModelOutput, runDetector } from 'react-native-parking-guide';
+import {
+  decodeDetectorOutput,
+  mapModelOutput,
+  runDetector,
+} from 'react-native-parking-guide';
 
 const tensors = await runDetector(photo.path, modelPath);
-const ruleResults = mapModelOutput(decodeDetectorOutput(tensors), { vehicleType: 'kickboard' });
+const ruleResults = mapModelOutput(decodeDetectorOutput(tensors), {
+  vehicleType: 'kickboard',
+});
 ```
 
 - `photoUri` accepts the same forms as `getFileSha256` (see [Photo verification](#photo-verification)): an absolute
@@ -422,13 +432,13 @@ const ruleResults = mapModelOutput(decodeDetectorOutput(tensors), { vehicleType:
 
 It rejects with these codes. Messages do not contain file paths.
 
-| Code | Reason |
-| --- | --- |
-| `E_INVALID_URI` | `photoUri` or `modelUri` is not one of the accepted forms. |
-| `E_MODEL_LOAD` | The model file cannot be read, compiled, or loaded, its iOS extension is not `.mlmodelc`, `.mlmodel`, or `.mlpackage`, or (Android) a `content://` model is larger than 256 MiB. |
+| Code               | Reason                                                                                                                                                                                                                                                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `E_INVALID_URI`    | `photoUri` or `modelUri` is not one of the accepted forms.                                                                                                                                                                                                                                                                    |
+| `E_MODEL_LOAD`     | The model file cannot be read, compiled, or loaded, its iOS extension is not `.mlmodelc`, `.mlmodel`, or `.mlpackage`, or (Android) a `content://` model is larger than 256 MiB.                                                                                                                                              |
 | `E_MODEL_CONTRACT` | The model does not have exactly one float32 input of shape `[1, 512, 512, 3]` or `[1, 3, 512, 512]`, or lacks a `boxes`, `scores`, or `classes` output (Android: of type float32, int32, or int64), or (Android) does not have exactly one signature, or an output holds more than 1000 detections (checked after inference). |
-| `E_PHOTO_READ` | The photo cannot be opened or decoded, or is larger than 64 MiB. |
-| `E_INFERENCE` | The inference call fails. |
+| `E_PHOTO_READ`     | The photo cannot be opened or decoded, or is larger than 64 MiB.                                                                                                                                                                                                                                                              |
+| `E_INFERENCE`      | The inference call fails.                                                                                                                                                                                                                                                                                                     |
 
 On Android, the package depends on `com.google.ai.edge.litert:litert:1.4.2` (the LiteRT Interpreter API), which adds
 native libraries for `arm64-v8a`, `armeabi-v7a`, `x86`, and `x86_64` to the app. LiteRT 2.x is not used: its Kotlin
@@ -509,11 +519,11 @@ as `mapModelOutput` does and selects the vehicle exactly as `mapModelOutput` doe
   - The result lists `TOO_FAR` or `TOO_CLOSE` (at most one) first, then `GROUND_NOT_VISIBLE`. An empty array means no
     model-based issue.
 
-| Threshold | Default |
-| --- | --- |
-| `tooFarBelow` | `0.4` |
-| `tooCloseAbove` | `0.95` |
-| `groundMarginBelow` | `0.05` |
+| Threshold           | Default |
+| ------------------- | ------- |
+| `tooFarBelow`       | `0.4`   |
+| `tooCloseAbove`     | `0.95`  |
+| `groundMarginBelow` | `0.05`  |
 
 Override individual values through `GuidanceMappingOptions.thresholds`; an omitted or `undefined` value uses the
 default. `tooFarBelow` and `tooCloseAbove` must be
@@ -559,42 +569,42 @@ declaration order (`VEHICLE_DETECTED`, `UPRIGHT`, `TACTILE_PAVING`, `CROSSWALK`,
 
 `text` is the default English text from `DEFAULT_FEEDBACK_TEXT`. Keys are stable; localize by `key` in the host app.
 
-| Key | Default English text |
-| --- | --- |
-| `rule.VEHICLE_DETECTED.FAIL` | No vehicle found in the photo. Retake it with the whole vehicle in the frame. |
-| `rule.VEHICLE_DETECTED.WARN` | The vehicle is hard to recognize. Retake the photo with the whole vehicle in the frame. |
-| `rule.VEHICLE_DETECTED.UNCHECKED` | Could not check for a vehicle. Retake the photo with the whole vehicle in the frame. |
-| `rule.UPRIGHT.FAIL` | The vehicle has fallen over. Stand it upright on its kickstand. |
-| `rule.UPRIGHT.WARN` | The vehicle may not be upright. Make sure it stands on its kickstand. |
-| `rule.UPRIGHT.UNCHECKED` | Could not check whether the vehicle is upright. Retake the photo with the whole vehicle in the frame. |
-| `rule.TACTILE_PAVING.FAIL` | The vehicle is on tactile paving for visually impaired pedestrians. Move it off the paving. |
-| `rule.TACTILE_PAVING.WARN` | The vehicle may be on tactile paving. Make sure it is clear of the paving. |
-| `rule.TACTILE_PAVING.UNCHECKED` | Could not check for tactile paving. Retake the photo with the ground around the vehicle in the frame. |
-| `rule.CROSSWALK.FAIL` | The vehicle is on a crosswalk. Move it off the crosswalk. |
-| `rule.CROSSWALK.WARN` | The vehicle may be on a crosswalk. Make sure it is clear of the crosswalk. |
-| `rule.CROSSWALK.UNCHECKED` | Could not check for a crosswalk. Retake the photo with the ground around the vehicle in the frame. |
-| `rule.ROADWAY.FAIL` | The vehicle is on the road. Move it off the road. |
-| `rule.ROADWAY.WARN` | The vehicle may be on the road. Make sure it is off the road. |
-| `rule.ROADWAY.UNCHECKED` | Could not check whether the vehicle is on the road. Retake the photo with the ground around the vehicle in the frame. |
-| `rule.SIDEWALK_BLOCK.FAIL` | The vehicle blocks the sidewalk. Move it to the edge so people can pass. |
-| `rule.SIDEWALK_BLOCK.WARN` | The vehicle may block the sidewalk. Make sure people can pass. |
-| `rule.SIDEWALK_BLOCK.UNCHECKED` | Could not check whether the vehicle blocks the sidewalk. Retake the photo with the ground around the vehicle in the frame. |
-| `rule.PARKING_ZONE.FAIL` | The vehicle is outside the parking zone. Move it inside the marked zone. |
-| `rule.PARKING_ZONE.WARN` | The vehicle may be outside the parking zone. Make sure it is fully inside the marked zone. |
-| `rule.PARKING_ZONE.UNCHECKED` | Could not check the parking zone. Retake the photo with the ground around the vehicle in the frame. |
-| `rule.GEOFENCE.FAIL` | Parking is not allowed here. Move the vehicle to an allowed parking area. |
-| `rule.GEOFENCE.WARN` | Parking may not be allowed here. Check the map for allowed parking areas. |
-| `rule.GEOFENCE.UNCHECKED` | Could not check the parking location. Turn on precise location access and try again. |
-| `rule.IMAGE_QUALITY.FAIL` | The photo is too unclear to check. Retake it in better light and hold the phone steady. |
-| `rule.IMAGE_QUALITY.WARN` | The photo may be too unclear to check. Retake it in better light and hold the phone steady. |
-| `rule.IMAGE_QUALITY.UNCHECKED` | Could not check the photo quality. Retake the photo. |
-| `guidance.NO_VEHICLE` | Point the camera at the vehicle. |
-| `guidance.TOO_CLOSE` | Move back so the whole vehicle fits in the frame. |
-| `guidance.TOO_FAR` | Move closer to the vehicle. |
-| `guidance.TILTED` | Hold the phone upright and straight. |
-| `guidance.BLURRY` | Hold the phone steady. |
-| `guidance.LOW_LIGHT` | It is too dark. Move to a brighter spot. |
-| `guidance.GROUND_NOT_VISIBLE` | Show the ground under the vehicle in the frame. |
+| Key                               | Default English text                                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `rule.VEHICLE_DETECTED.FAIL`      | No vehicle found in the photo. Retake it with the whole vehicle in the frame.                                              |
+| `rule.VEHICLE_DETECTED.WARN`      | The vehicle is hard to recognize. Retake the photo with the whole vehicle in the frame.                                    |
+| `rule.VEHICLE_DETECTED.UNCHECKED` | Could not check for a vehicle. Retake the photo with the whole vehicle in the frame.                                       |
+| `rule.UPRIGHT.FAIL`               | The vehicle has fallen over. Stand it upright on its kickstand.                                                            |
+| `rule.UPRIGHT.WARN`               | The vehicle may not be upright. Make sure it stands on its kickstand.                                                      |
+| `rule.UPRIGHT.UNCHECKED`          | Could not check whether the vehicle is upright. Retake the photo with the whole vehicle in the frame.                      |
+| `rule.TACTILE_PAVING.FAIL`        | The vehicle is on tactile paving for visually impaired pedestrians. Move it off the paving.                                |
+| `rule.TACTILE_PAVING.WARN`        | The vehicle may be on tactile paving. Make sure it is clear of the paving.                                                 |
+| `rule.TACTILE_PAVING.UNCHECKED`   | Could not check for tactile paving. Retake the photo with the ground around the vehicle in the frame.                      |
+| `rule.CROSSWALK.FAIL`             | The vehicle is on a crosswalk. Move it off the crosswalk.                                                                  |
+| `rule.CROSSWALK.WARN`             | The vehicle may be on a crosswalk. Make sure it is clear of the crosswalk.                                                 |
+| `rule.CROSSWALK.UNCHECKED`        | Could not check for a crosswalk. Retake the photo with the ground around the vehicle in the frame.                         |
+| `rule.ROADWAY.FAIL`               | The vehicle is on the road. Move it off the road.                                                                          |
+| `rule.ROADWAY.WARN`               | The vehicle may be on the road. Make sure it is off the road.                                                              |
+| `rule.ROADWAY.UNCHECKED`          | Could not check whether the vehicle is on the road. Retake the photo with the ground around the vehicle in the frame.      |
+| `rule.SIDEWALK_BLOCK.FAIL`        | The vehicle blocks the sidewalk. Move it to the edge so people can pass.                                                   |
+| `rule.SIDEWALK_BLOCK.WARN`        | The vehicle may block the sidewalk. Make sure people can pass.                                                             |
+| `rule.SIDEWALK_BLOCK.UNCHECKED`   | Could not check whether the vehicle blocks the sidewalk. Retake the photo with the ground around the vehicle in the frame. |
+| `rule.PARKING_ZONE.FAIL`          | The vehicle is outside the parking zone. Move it inside the marked zone.                                                   |
+| `rule.PARKING_ZONE.WARN`          | The vehicle may be outside the parking zone. Make sure it is fully inside the marked zone.                                 |
+| `rule.PARKING_ZONE.UNCHECKED`     | Could not check the parking zone. Retake the photo with the ground around the vehicle in the frame.                        |
+| `rule.GEOFENCE.FAIL`              | Parking is not allowed here. Move the vehicle to an allowed parking area.                                                  |
+| `rule.GEOFENCE.WARN`              | Parking may not be allowed here. Check the map for allowed parking areas.                                                  |
+| `rule.GEOFENCE.UNCHECKED`         | Could not check the parking location. Turn on precise location access and try again.                                       |
+| `rule.IMAGE_QUALITY.FAIL`         | The photo is too unclear to check. Retake it in better light and hold the phone steady.                                    |
+| `rule.IMAGE_QUALITY.WARN`         | The photo may be too unclear to check. Retake it in better light and hold the phone steady.                                |
+| `rule.IMAGE_QUALITY.UNCHECKED`    | Could not check the photo quality. Retake the photo.                                                                       |
+| `guidance.NO_VEHICLE`             | Point the camera at the vehicle.                                                                                           |
+| `guidance.TOO_CLOSE`              | Move back so the whole vehicle fits in the frame.                                                                          |
+| `guidance.TOO_FAR`                | Move closer to the vehicle.                                                                                                |
+| `guidance.TILTED`                 | Hold the phone upright and straight.                                                                                       |
+| `guidance.BLURRY`                 | Hold the phone steady.                                                                                                     |
+| `guidance.LOW_LIGHT`              | It is too dark. Move to a brighter spot.                                                                                   |
+| `guidance.GROUND_NOT_VISIBLE`     | Show the ground under the vehicle in the frame.                                                                            |
 
 ### Capture guidance
 
@@ -628,19 +638,22 @@ export function useParkingFrameProcessor() {
   const { onFrameResult } = guidance;
   const analyze = useMemo(
     () => createParkingFrameAnalyzer(VisionCameraProxy),
-    []
+    [],
   );
   const deliver = useMemo(
     () => Worklets.createRunOnJS(onFrameResult),
-    [onFrameResult]
+    [onFrameResult],
   );
-  const frameProcessor = useFrameProcessor((frame) => {
-    'worklet';
-    runAtTargetFps(5, () => {
+  const frameProcessor = useFrameProcessor(
+    (frame) => {
       'worklet';
-      deliver(analyze(frame));
-    });
-  }, [analyze, deliver]);
+      runAtTargetFps(5, () => {
+        'worklet';
+        deliver(analyze(frame));
+      });
+    },
+    [analyze, deliver],
+  );
 
   return { ...guidance, frameProcessor };
 }
@@ -652,11 +665,11 @@ active and unmount it when capture stops, as in `example/src/CaptureScreen.tsx`,
 The Android implementation matches the algorithms and values in `cpp/CaptureMetrics.h` and
 `ios/ParkingGuideFrameProcessor.mm`. `src/guidance/frameAnalyzer.ts` supplies all three thresholds:
 
-| Constant field | Issue condition |
-| --- | --- |
-| `minLaplacianVariance = 100` | `BLURRY` when four-neighbor Laplacian population variance is strictly below `100`. |
-| `minMeanLuminance = 50` | `LOW_LIGHT` when mean luminance is strictly below `50` on the `[0, 255]` scale. |
-| `maxTiltRadians = Math.PI / 9` | `TILTED` when absolute pitch or roll deviation is strictly above `20` degrees. |
+| Constant field                 | Issue condition                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| `minLaplacianVariance = 100`   | `BLURRY` when four-neighbor Laplacian population variance is strictly below `100`. |
+| `minMeanLuminance = 50`        | `LOW_LIGHT` when mean luminance is strictly below `50` on the `[0, 255]` scale.    |
+| `maxTiltRadians = Math.PI / 9` | `TILTED` when absolute pitch or roll deviation is strictly above `20` degrees.     |
 
 `android/src/main/java/com/parkingguide/CaptureMetrics.kt` samples the entire luma plane on a nearest-neighbor
 grid of at most `160 × 120` pixels, excluding grid borders from Laplacian variance. It respects buffer position,
@@ -785,7 +798,7 @@ Pass each result to `onDetectorResult` on the JS thread and set the hook's `dete
 ```tsx
 const detect = useMemo(
   () => createParkingDetector(VisionCameraProxy, { modelUri }),
-  [modelUri]
+  [modelUri],
 );
 const guidance = useParkingGuidance({
   detection: { guideFrame, vehicleType: 'kickboard' },
@@ -793,22 +806,25 @@ const guidance = useParkingGuidance({
 });
 const deliverDetection = useMemo(
   () => Worklets.createRunOnJS(guidance.onDetectorResult),
-  [guidance.onDetectorResult]
+  [guidance.onDetectorResult],
 );
 const runDetection = useMemo(
   () => createDetectorAsyncRunner<Frame>(Worklets),
-  []
+  [],
 );
-const frameProcessor = useFrameProcessor((frame) => {
-  'worklet';
-  runAtTargetFps(2, () => {
+const frameProcessor = useFrameProcessor(
+  (frame) => {
     'worklet';
-    runDetection(frame, () => {
+    runAtTargetFps(2, () => {
       'worklet';
-      deliverDetection(detect(frame));
+      runDetection(frame, () => {
+        'worklet';
+        deliverDetection(detect(frame));
+      });
     });
-  });
-}, [detect, deliverDetection, runDetection]);
+  },
+  [detect, deliverDetection, runDetection],
+);
 ```
 
 `onDetectorResult` copies each result with `copyDetectorResult`, because the worklet delivers it as a host object.
@@ -851,8 +867,8 @@ that region's pixels are green, a sidewalk block when at least 30% are blue, and
   to `'detector-demo.tflite'`.
 - iOS device: install the example app, then
   `xcrun devicectl device copy to --device <UDID> --domain-type appDataContainer --domain-identifier
-  parkingguide.example --source fixtures/detector/detector-demo.mlpackage --destination
-  Documents/detector-demo.mlpackage`, and set `DETECTOR_MODEL` to `'detector-demo.mlpackage'`. The copy stays in the
+parkingguide.example --source fixtures/detector/detector-demo.mlpackage --destination
+Documents/detector-demo.mlpackage`, and set `DETECTOR_MODEL` to `'detector-demo.mlpackage'`. The copy stays in the
   data container when a new build is installed over the app.
 - Choose **Kickboard** on the home screen: the demo reports only a kickboard, so for any other vehicle guidance
   reports `NO_VEHICLE`.
@@ -883,17 +899,17 @@ produced them, for example from `runDetector`, `decodeDetectorOutput`, `mapModel
 host supplies the model file, so it also knows its version; the package does not read a version from the model.
 `rules` in the result is a copy of `options.ruleResults` in the same order, including rules that the policy ignores.
 
-| Option | Default | Constraint | Meaning |
-| --- | --- | --- | --- |
-| `photo` | none (required) | `uri`: non-empty string; `width`, `height`: integers `> 0` | The captured photo, for example `{ uri: photo.path, width: photo.width, height: photo.height }` from VisionCamera `takePhoto()`. |
-| `ruleResults` | none (required) | array; every item has `verdict` `'PASS'`, `'WARN'`, or `'FAIL'`; at least one item has an `id` whose policy entry has `enabled: true` and a `weight` above `0` (an omitted weight is `1`) | Rule results for this photo. An empty array, or one in which the policy ignores every item or gives every enabled item weight `0`, rejects with `RangeError`: `evaluatePolicy` would score it `1` and return `PASS` for a photo that nothing evaluated. |
-| `policy` | `defaultPolicy` | passes `validatePolicy` | Policy for `evaluatePolicy`. An invalid policy rejects with `RangeError` that lists the `validatePolicy` messages. |
-| `deviceTilt` | none (required) | `pitch`, `roll`: finite radians in `[-π, π]` | Device tilt at capture time. |
-| `heading` | omitted | finite degrees in `[0, 360)`, clockwise from true north | Device heading at capture time. |
-| `location` | omitted | `GeoLocation`: `lat` in `[-90, 90]`, `lng` in `[-180, 180]`, `accuracy` finite and `>= 0` meters | Rider location. Pass it only after the rider consents; the package never reads the device location. |
-| `capturedAt` | the time `verifyParking` is called | valid `Date` | Written as an ISO 8601 UTC string, for example `2026-10-25T01:02:03.004Z`. |
-| `attestation` | omitted | string | Device attestation token, for example from `requestAttestation` (see [Attestation](#attestation)), copied as-is. |
-| `modelVersion` | none (required) | non-empty string | Version of the host-supplied model that produced `ruleResults`, copied as-is to `metadata.modelVersion`. |
+| Option         | Default                            | Constraint                                                                                                                                                                                | Meaning                                                                                                                                                                                                                                                 |
+| -------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `photo`        | none (required)                    | `uri`: non-empty string; `width`, `height`: integers `> 0`                                                                                                                                | The captured photo, for example `{ uri: photo.path, width: photo.width, height: photo.height }` from VisionCamera `takePhoto()`.                                                                                                                        |
+| `ruleResults`  | none (required)                    | array; every item has `verdict` `'PASS'`, `'WARN'`, or `'FAIL'`; at least one item has an `id` whose policy entry has `enabled: true` and a `weight` above `0` (an omitted weight is `1`) | Rule results for this photo. An empty array, or one in which the policy ignores every item or gives every enabled item weight `0`, rejects with `RangeError`: `evaluatePolicy` would score it `1` and return `PASS` for a photo that nothing evaluated. |
+| `policy`       | `defaultPolicy`                    | passes `validatePolicy`                                                                                                                                                                   | Policy for `evaluatePolicy`. An invalid policy rejects with `RangeError` that lists the `validatePolicy` messages.                                                                                                                                      |
+| `deviceTilt`   | none (required)                    | `pitch`, `roll`: finite radians in `[-π, π]`                                                                                                                                              | Device tilt at capture time.                                                                                                                                                                                                                            |
+| `heading`      | omitted                            | finite degrees in `[0, 360)`, clockwise from true north                                                                                                                                   | Device heading at capture time.                                                                                                                                                                                                                         |
+| `location`     | omitted                            | `GeoLocation`: `lat` in `[-90, 90]`, `lng` in `[-180, 180]`, `accuracy` finite and `>= 0` meters                                                                                          | Rider location. Pass it only after the rider consents; the package never reads the device location.                                                                                                                                                     |
+| `capturedAt`   | the time `verifyParking` is called | valid `Date`                                                                                                                                                                              | Written as an ISO 8601 UTC string, for example `2026-10-25T01:02:03.004Z`.                                                                                                                                                                              |
+| `attestation`  | omitted                            | string                                                                                                                                                                                    | Device attestation token, for example from `requestAttestation` (see [Attestation](#attestation)), copied as-is.                                                                                                                                        |
+| `modelVersion` | none (required)                    | non-empty string                                                                                                                                                                          | Version of the host-supplied model that produced `ruleResults`, copied as-is to `metadata.modelVersion`.                                                                                                                                                |
 
 Other errors: `verifyParking` rejects with `Error` when `Platform.OS` is neither `'ios'` nor `'android'`, when
 `getFileSha256` rejects, and when the native digest is not 64 lowercase hexadecimal digits.
@@ -949,32 +965,33 @@ Request:
   A host whose last label is numeric must be such an IPv4 address. Everything else is rejected, including `http://`
   and other schemes, an empty host, user information such as `user:password@`, percent-encoded hosts, IPv6 literals
   such as `[2001:db8::1]`, and a trailing dot.
+
 - Body: `JSON.stringify(result)`. Headers: `Content-Type: application/json` and `Accept: application/json`, then
   `options.headers`. A caller header replaces a default header whose name matches case-insensitively.
 
 Options (invalid values reject with `RangeError` before any request is sent; `options` must be an object and
 `options.headers`, when present, a non-array object whose values are strings):
 
-| Option | Default | Constraint | Meaning |
-| --- | --- | --- | --- |
-| `endpoint` | none (required) | `https://` URL as above | Upload target. |
-| `headers` | `{}` | object of strings | Extra request headers, for example `Authorization`. |
-| `timeoutMs` | `DEFAULT_UPLOAD_TIMEOUT_MS` (`10000`) | finite, `> 0` | Per-attempt limit for the request and for reading the response body. The request is aborted when it elapses. |
-| `retries` | `DEFAULT_UPLOAD_RETRIES` (`2`) | integer, `>= 0` | Attempts after the first, so at most `retries + 1` requests. |
-| `retryDelayMs` | `DEFAULT_UPLOAD_RETRY_DELAY_MS` (`500`) | finite, `>= 0` | Retry `n` (1-based) starts `retryDelayMs × 2^(n − 1)` ms after the previous attempt fails. |
+| Option         | Default                                 | Constraint              | Meaning                                                                                                      |
+| -------------- | --------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `endpoint`     | none (required)                         | `https://` URL as above | Upload target.                                                                                               |
+| `headers`      | `{}`                                    | object of strings       | Extra request headers, for example `Authorization`.                                                          |
+| `timeoutMs`    | `DEFAULT_UPLOAD_TIMEOUT_MS` (`10000`)   | finite, `> 0`           | Per-attempt limit for the request and for reading the response body. The request is aborted when it elapses. |
+| `retries`      | `DEFAULT_UPLOAD_RETRIES` (`2`)          | integer, `>= 0`         | Attempts after the first, so at most `retries + 1` requests.                                                 |
+| `retryDelayMs` | `DEFAULT_UPLOAD_RETRY_DELAY_MS` (`500`) | finite, `>= 0`          | Retry `n` (1-based) starts `retryDelayMs × 2^(n − 1)` ms after the previous attempt fails.                   |
 
 Outcome. The returned promise resolves with an `UploadResult<T>` for every transport outcome:
 
-| Attempt outcome | Result | Retried |
-| --- | --- | --- |
-| HTTP status `200`–`299`, empty body | `{ ok: true, status, body: undefined, attempts }` | — |
-| HTTP status `200`–`299`, JSON body | `{ ok: true, status, body, attempts }`; `body` is `JSON.parse` output cast to `T` without validation | — |
-| HTTP status `200`–`299`, body that is not valid JSON | `{ ok: false, error: 'invalid_response', status, attempts }` | No |
-| HTTP status `200`–`299`, body read fails or exceeds `timeoutMs` | `{ ok: false, error: 'network' \| 'timeout', status, attempts }` | No (the server already accepted the request) |
-| HTTP status `408`, `429`, or `500`–`599` | `{ ok: false, error: 'http', status, attempts }` | Yes |
-| Any other HTTP status | `{ ok: false, error: 'http', status, attempts }` | No |
-| `fetch` rejects | `{ ok: false, error: 'network', attempts }` | Yes |
-| No response within `timeoutMs` | `{ ok: false, error: 'timeout', attempts }` | Yes |
+| Attempt outcome                                                 | Result                                                                                               | Retried                                      |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| HTTP status `200`–`299`, empty body                             | `{ ok: true, status, body: undefined, attempts }`                                                    | —                                            |
+| HTTP status `200`–`299`, JSON body                              | `{ ok: true, status, body, attempts }`; `body` is `JSON.parse` output cast to `T` without validation | —                                            |
+| HTTP status `200`–`299`, body that is not valid JSON            | `{ ok: false, error: 'invalid_response', status, attempts }`                                         | No                                           |
+| HTTP status `200`–`299`, body read fails or exceeds `timeoutMs` | `{ ok: false, error: 'network' \| 'timeout', status, attempts }`                                     | No (the server already accepted the request) |
+| HTTP status `408`, `429`, or `500`–`599`                        | `{ ok: false, error: 'http', status, attempts }`                                                     | Yes                                          |
+| Any other HTTP status                                           | `{ ok: false, error: 'http', status, attempts }`                                                     | No                                           |
+| `fetch` rejects                                                 | `{ ok: false, error: 'network', attempts }`                                                          | Yes                                          |
+| No response within `timeoutMs`                                  | `{ ok: false, error: 'timeout', attempts }`                                                          | Yes                                          |
 
 `attempts` is the number of requests sent. When retries run out, the result of the last attempt is returned.
 A timeout or network failure can occur after the server has received the request, so a retry can deliver the same
@@ -1007,11 +1024,11 @@ it; `verifyParking` does not call it. Pass the returned string to `verifyParking
 
 Options (invalid values reject with `RangeError` before the native call):
 
-| Option | Default | Constraint | Meaning |
-| --- | --- | --- | --- |
-| `photoSha256` | none (required) | 64 lowercase hexadecimal digits | SHA-256 of the photo, from `getFileSha256(uri)`. It equals `VerificationResult.photo.sha256` for the same file. |
-| `challenge` | none (required) | non-empty string with no lone UTF-16 surrogate | A single-use value that the host server issued for this verification. |
-| `cloudProjectNumber` | omitted | safe integer `> 0`; required on Android, ignored on iOS | The Google Cloud project number linked to the app in the Play Console. |
+| Option               | Default         | Constraint                                              | Meaning                                                                                                         |
+| -------------------- | --------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `photoSha256`        | none (required) | 64 lowercase hexadecimal digits                         | SHA-256 of the photo, from `getFileSha256(uri)`. It equals `VerificationResult.photo.sha256` for the same file. |
+| `challenge`          | none (required) | non-empty string with no lone UTF-16 surrogate          | A single-use value that the host server issued for this verification.                                           |
+| `cloudProjectNumber` | omitted         | safe integer `> 0`; required on Android, ignored on iOS | The Google Cloud project number linked to the app in the Play Console.                                          |
 
 Request hash. Native code computes the SHA-256 of the UTF-8 bytes of `photoSha256 + ':' + challenge`. Because
 `photoSha256` always has 64 characters, the first `:` separates the two values. iOS passes the 32 digest bytes as the
@@ -1126,33 +1143,33 @@ These are the types exported by `src/index.tsx`. Numeric fields are TypeScript `
 stated below, this package does not validate a narrower range. No fields have implicit defaults unless explicitly
 stated.
 
-| Type | Values and fields |
-| --- | --- |
-| `VehicleType` | `'bicycle'`, `'ebike'`, `'kickboard'`, `'motorcycle'`, or `'auto'`. `'auto'` means detect the vehicle type automatically; it does not mean automobile. `MappingOptions.vehicleType` and `GuidanceMappingOptions.vehicleType` accept it; `ModelDetection.vehicleType` accepts every value except `'auto'`. |
-| `Verdict` | `'PASS'`, `'WARN'`, or `'FAIL'`. |
-| `RuleId` | `'VEHICLE_DETECTED'`, `'UPRIGHT'`, `'TACTILE_PAVING'`, `'CROSSWALK'`, `'ROADWAY'`, `'SIDEWALK_BLOCK'`, `'PARKING_ZONE'`, `'GEOFENCE'`, or `'IMAGE_QUALITY'`. |
-| `GuidanceIssue` | `'NO_VEHICLE'`, `'TOO_CLOSE'`, `'TOO_FAR'`, `'TILTED'`, `'BLURRY'`, `'LOW_LIGHT'`, or `'GROUND_NOT_VISIBLE'`. Native analysis produces only `'TILTED'`, `'BLURRY'`, and `'LOW_LIGHT'`; `mapGuidanceIssues` produces the other four from model output. |
-| `GuidanceState` | Required `ready: boolean`, `issues: GuidanceIssue[]`, and `progress: number`. Guidance processing returns progress in `[0, 1]`; initial values are `false`, `[]`, and `0`. |
-| `GuidanceFrameResult` | Required `ready: boolean`, `issues: readonly GuidanceIssue[]`, and `progress: number`. Serializable frame-processor output delivered on the JS thread. |
-| `GuidanceOptions` | Optional `smoothingFactor: number` (default `0.25`) and `debounceFrames: number` (default `3`); constraints are specified in [Capture guidance](#capture-guidance). |
-| `GuidanceReducerState` | Required `guidance: GuidanceState`, `candidate: { ready: boolean; issues: GuidanceIssue[] }`, and `consecutiveFrames: number`. Initialize with `createGuidanceState()`. |
-| `ParkingGuidance` | Extends `GuidanceState` with `onFrameResult(result: GuidanceFrameResult): void`, `onDetectorResult(result: DetectorFrameResult): void`, `detectorError: string \| null`, `autoCaptureDue: boolean`, `acknowledgeAutoCapture(): void`, and `reset(): void`. |
-| `GuidanceSessionOptions`, `GuidanceSessionState`, `GuidanceSessionEvent`, `DetectionOptions`, `DetectorFrameResult`, `ParkingDetector`, `DetectorAsyncRunner`, `DetectorRunnerWorklets`, `ScreenRect`, `Size` | Live detector guidance types. See [Live detector guidance](#live-detector-guidance). |
-| `ParkingFrameAnalyzer<Frame>` | `(frame: Frame) => GuidanceFrameResult`; `Frame` is inferred from the injected camera proxy. Invoke only inside a VisionCamera frame-processor worklet. |
-| `RuleResult` | Required `id: RuleId`, `verdict: Verdict`, and `confidence: number`; optional `score: number`, `message: string`, and `evidence: { bbox?: number[]; maskUri?: string; proximity?: ZoneProximity }`. `evaluatePolicy` clamps a numeric `score` to `[0, 1]`; it does not use `confidence`. |
-| `ZoneProximity` | Required `distance: number` (`>= 0`) and `near: boolean`. See [Model-output mapping](#model-output-mapping). |
-| `RulePolicy` | Required `enabled: boolean`; optional `weight: number`, `severity: Verdict`, and `failBelow: number`. An omitted `weight` defaults to `1` in `evaluatePolicy`. |
-| `ParkingPolicy` | Required `version: number`, `rules: Partial<Record<RuleId, RulePolicy>>`, and `passThreshold: number`. `evaluatePolicy` does not validate ranges; `validatePolicy` checks them as listed in [Runtime exports](#runtime-exports). |
-| `PolicyValidationResult` | `ParkingPolicy \| string[]`. A `string[]` contains one message per validation error. |
-| `FeedbackInput`, `FeedbackKey`, `FeedbackOptions`, `FeedbackVerdict`, `GuidanceFeedbackKey`, `ParkingFeedback`, `RuleFeedbackKey`, `RuleFeedbackStatus` | Rider feedback types. See [Rider feedback](#rider-feedback). |
-| `GuidanceMappingOptions`, `GuidanceThresholds` | Model-based capture guidance types. See [Model-based capture guidance](#model-based-capture-guidance). |
-| `GeoLocation`, `GeoPoint`, `GeofenceOptions`, `GeofenceZone`, `GeofenceZoneKind` | Geofence types. See [Geofence](#geofence). |
-| `UploadErrorKind`, `UploadOptions`, `UploadResult<T>` | Opt-in upload types. See [Opt-in upload](#opt-in-upload). |
-| `AttestationOptions` | Required `photoSha256: string` and `challenge: string`; optional `cloudProjectNumber: number`. See [Attestation](#attestation). |
-| `DetectorOutput` | Required `boxes`, `scores`, and `classes` (`readonly number[]`). See [Detector model contract](#detector-model-contract). |
-| `VerifyParkingOptions` | Photo verification options. See [Photo verification](#photo-verification). |
-| `InferenceRuleId`, `MappingOptions`, `MappingThresholds`, `ModelAssessment`, `ModelBox`, `ModelClass`, `ModelDetection`, `ModelMask`, `RawModelOutput` | Model-output mapping types. See [Model-output mapping](#model-output-mapping). |
-| `VerificationResult` | Required `verdict: Verdict`, `score: number`, `rules: RuleResult[]`, `photo: { uri: string; width: number; height: number; sha256: string }`, and `metadata: { capturedAt: string; location?: { lat: number; lng: number; accuracy: number }; heading?: number; deviceTilt: { pitch: number; roll: number }; modelVersion: string; platform: 'ios' \| 'android'; attestation?: string }`. The type defines no additional numeric ranges or defaults; `verifyParking` produces values in the ranges listed in [Photo verification](#photo-verification). |
+| Type                                                                                                                                                                                                          | Values and fields                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VehicleType`                                                                                                                                                                                                 | `'bicycle'`, `'ebike'`, `'kickboard'`, `'motorcycle'`, or `'auto'`. `'auto'` means detect the vehicle type automatically; it does not mean automobile. `MappingOptions.vehicleType` and `GuidanceMappingOptions.vehicleType` accept it; `ModelDetection.vehicleType` accepts every value except `'auto'`.                                                                                                                                                                                                                                               |
+| `Verdict`                                                                                                                                                                                                     | `'PASS'`, `'WARN'`, or `'FAIL'`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `RuleId`                                                                                                                                                                                                      | `'VEHICLE_DETECTED'`, `'UPRIGHT'`, `'TACTILE_PAVING'`, `'CROSSWALK'`, `'ROADWAY'`, `'SIDEWALK_BLOCK'`, `'PARKING_ZONE'`, `'GEOFENCE'`, or `'IMAGE_QUALITY'`.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `GuidanceIssue`                                                                                                                                                                                               | `'NO_VEHICLE'`, `'TOO_CLOSE'`, `'TOO_FAR'`, `'TILTED'`, `'BLURRY'`, `'LOW_LIGHT'`, or `'GROUND_NOT_VISIBLE'`. Native analysis produces only `'TILTED'`, `'BLURRY'`, and `'LOW_LIGHT'`; `mapGuidanceIssues` produces the other four from model output.                                                                                                                                                                                                                                                                                                   |
+| `GuidanceState`                                                                                                                                                                                               | Required `ready: boolean`, `issues: GuidanceIssue[]`, and `progress: number`. Guidance processing returns progress in `[0, 1]`; initial values are `false`, `[]`, and `0`.                                                                                                                                                                                                                                                                                                                                                                              |
+| `GuidanceFrameResult`                                                                                                                                                                                         | Required `ready: boolean`, `issues: readonly GuidanceIssue[]`, and `progress: number`. Serializable frame-processor output delivered on the JS thread.                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `GuidanceOptions`                                                                                                                                                                                             | Optional `smoothingFactor: number` (default `0.25`) and `debounceFrames: number` (default `3`); constraints are specified in [Capture guidance](#capture-guidance).                                                                                                                                                                                                                                                                                                                                                                                     |
+| `GuidanceReducerState`                                                                                                                                                                                        | Required `guidance: GuidanceState`, `candidate: { ready: boolean; issues: GuidanceIssue[] }`, and `consecutiveFrames: number`. Initialize with `createGuidanceState()`.                                                                                                                                                                                                                                                                                                                                                                                 |
+| `ParkingGuidance`                                                                                                                                                                                             | Extends `GuidanceState` with `onFrameResult(result: GuidanceFrameResult): void`, `onDetectorResult(result: DetectorFrameResult): void`, `detectorError: string \| null`, `autoCaptureDue: boolean`, `acknowledgeAutoCapture(): void`, and `reset(): void`.                                                                                                                                                                                                                                                                                              |
+| `GuidanceSessionOptions`, `GuidanceSessionState`, `GuidanceSessionEvent`, `DetectionOptions`, `DetectorFrameResult`, `ParkingDetector`, `DetectorAsyncRunner`, `DetectorRunnerWorklets`, `ScreenRect`, `Size` | Live detector guidance types. See [Live detector guidance](#live-detector-guidance).                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `ParkingFrameAnalyzer<Frame>`                                                                                                                                                                                 | `(frame: Frame) => GuidanceFrameResult`; `Frame` is inferred from the injected camera proxy. Invoke only inside a VisionCamera frame-processor worklet.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `RuleResult`                                                                                                                                                                                                  | Required `id: RuleId`, `verdict: Verdict`, and `confidence: number`; optional `score: number`, `message: string`, and `evidence: { bbox?: number[]; maskUri?: string; proximity?: ZoneProximity }`. `evaluatePolicy` clamps a numeric `score` to `[0, 1]`; it does not use `confidence`.                                                                                                                                                                                                                                                                |
+| `ZoneProximity`                                                                                                                                                                                               | Required `distance: number` (`>= 0`) and `near: boolean`. See [Model-output mapping](#model-output-mapping).                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `RulePolicy`                                                                                                                                                                                                  | Required `enabled: boolean`; optional `weight: number`, `severity: Verdict`, and `failBelow: number`. An omitted `weight` defaults to `1` in `evaluatePolicy`.                                                                                                                                                                                                                                                                                                                                                                                          |
+| `ParkingPolicy`                                                                                                                                                                                               | Required `version: number`, `rules: Partial<Record<RuleId, RulePolicy>>`, and `passThreshold: number`. `evaluatePolicy` does not validate ranges; `validatePolicy` checks them as listed in [Runtime exports](#runtime-exports).                                                                                                                                                                                                                                                                                                                        |
+| `PolicyValidationResult`                                                                                                                                                                                      | `ParkingPolicy \| string[]`. A `string[]` contains one message per validation error.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `FeedbackInput`, `FeedbackKey`, `FeedbackOptions`, `FeedbackVerdict`, `GuidanceFeedbackKey`, `ParkingFeedback`, `RuleFeedbackKey`, `RuleFeedbackStatus`                                                       | Rider feedback types. See [Rider feedback](#rider-feedback).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `GuidanceMappingOptions`, `GuidanceThresholds`                                                                                                                                                                | Model-based capture guidance types. See [Model-based capture guidance](#model-based-capture-guidance).                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `GeoLocation`, `GeoPoint`, `GeofenceOptions`, `GeofenceZone`, `GeofenceZoneKind`                                                                                                                              | Geofence types. See [Geofence](#geofence).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `UploadErrorKind`, `UploadOptions`, `UploadResult<T>`                                                                                                                                                         | Opt-in upload types. See [Opt-in upload](#opt-in-upload).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `AttestationOptions`                                                                                                                                                                                          | Required `photoSha256: string` and `challenge: string`; optional `cloudProjectNumber: number`. See [Attestation](#attestation).                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `DetectorOutput`                                                                                                                                                                                              | Required `boxes`, `scores`, and `classes` (`readonly number[]`). See [Detector model contract](#detector-model-contract).                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `VerifyParkingOptions`                                                                                                                                                                                        | Photo verification options. See [Photo verification](#photo-verification).                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `InferenceRuleId`, `MappingOptions`, `MappingThresholds`, `ModelAssessment`, `ModelBox`, `ModelClass`, `ModelDetection`, `ModelMask`, `RawModelOutput`                                                        | Model-output mapping types. See [Model-output mapping](#model-output-mapping).                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `VerificationResult`                                                                                                                                                                                          | Required `verdict: Verdict`, `score: number`, `rules: RuleResult[]`, `photo: { uri: string; width: number; height: number; sha256: string }`, and `metadata: { capturedAt: string; location?: { lat: number; lng: number; accuracy: number }; heading?: number; deviceTilt: { pitch: number; roll: number }; modelVersion: string; platform: 'ios' \| 'android'; attestation?: string }`. The type defines no additional numeric ranges or defaults; `verifyParking` produces values in the ranges listed in [Photo verification](#photo-verification). |
 
 ### Policy format
 
@@ -1166,15 +1183,60 @@ This JSON object matches `ParkingPolicy` and has the same values as `defaultPoli
   "version": 1,
   "passThreshold": 0.75,
   "rules": {
-    "VEHICLE_DETECTED": { "enabled": true, "weight": 1.2, "severity": "FAIL", "failBelow": 0.6 },
-    "UPRIGHT": { "enabled": true, "weight": 1.1, "severity": "FAIL", "failBelow": 0.7 },
-    "TACTILE_PAVING": { "enabled": true, "weight": 1, "severity": "FAIL", "failBelow": 0.9 },
-    "CROSSWALK": { "enabled": true, "weight": 1, "severity": "FAIL", "failBelow": 0.9 },
-    "ROADWAY": { "enabled": true, "weight": 1, "severity": "FAIL", "failBelow": 0.85 },
-    "SIDEWALK_BLOCK": { "enabled": true, "weight": 1, "severity": "WARN", "failBelow": 0.8 },
-    "PARKING_ZONE": { "enabled": true, "weight": 0.8, "severity": "WARN", "failBelow": 0.7 },
-    "GEOFENCE": { "enabled": true, "weight": 1, "severity": "FAIL", "failBelow": 0.5 },
-    "IMAGE_QUALITY": { "enabled": true, "weight": 0.9, "severity": "WARN", "failBelow": 0.6 }
+    "VEHICLE_DETECTED": {
+      "enabled": true,
+      "weight": 1.2,
+      "severity": "FAIL",
+      "failBelow": 0.6
+    },
+    "UPRIGHT": {
+      "enabled": true,
+      "weight": 1.1,
+      "severity": "FAIL",
+      "failBelow": 0.7
+    },
+    "TACTILE_PAVING": {
+      "enabled": true,
+      "weight": 1,
+      "severity": "FAIL",
+      "failBelow": 0.9
+    },
+    "CROSSWALK": {
+      "enabled": true,
+      "weight": 1,
+      "severity": "FAIL",
+      "failBelow": 0.9
+    },
+    "ROADWAY": {
+      "enabled": true,
+      "weight": 1,
+      "severity": "FAIL",
+      "failBelow": 0.85
+    },
+    "SIDEWALK_BLOCK": {
+      "enabled": true,
+      "weight": 1,
+      "severity": "WARN",
+      "failBelow": 0.8
+    },
+    "PARKING_ZONE": {
+      "enabled": true,
+      "weight": 0.8,
+      "severity": "WARN",
+      "failBelow": 0.7
+    },
+    "GEOFENCE": {
+      "enabled": true,
+      "weight": 1,
+      "severity": "FAIL",
+      "failBelow": 0.5
+    },
+    "IMAGE_QUALITY": {
+      "enabled": true,
+      "weight": 0.9,
+      "severity": "WARN",
+      "failBelow": 0.6
+    }
   }
 }
 ```
