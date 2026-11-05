@@ -14,7 +14,7 @@
 
 - Detector input: 512 × 512 RGB, values in `[0, 1]`, float32, layout read from the model shape (`[1, 512, 512, 3]` NHWC or `[1, 3, 512, 512]` NCHW), upright and unmirrored, stretched without letterbox (README "Detector model contract").
 - Error codes: reuse `E_INVALID_URI`, `E_MODEL_LOAD`, `E_MODEL_CONTRACT`, `E_PHOTO_READ`, `E_INFERENCE`; messages contain no file paths.
-- One shared detector per model URI between the frame plugin and `runDetector`; calls are serialized (Andrew's decision in the spec).
+- One shared detector per model URI between the frame plugin and `runDetector`; calls are serialized (decided in the spec).
 - Defaults: detection target rate 2 per second (example app), `staleAfterMs` 1500 (provisional), auto-capture `holdMs` 800.
 - Fail closed: missing, stale, or failed detection keeps `ready` false; only a successful detection yields `NO_VEHICLE`; failures surface as `detectorError`.
 - Without a configured detector, guidance behaves exactly as today.
@@ -307,7 +307,7 @@ The repository has no React renderer in its test dependencies (the example tests
 - [ ] **Step 1: Write the failing instrumented test** `runsAFramePixelPathWithTheSharedFixture`: build a solid YUV frame equivalent to `solid.png` (RGB 204, 102, 51 converted to full-range Y/U/V), convert with `FramePixels.toArgb(..., rotationDegrees = 90, mirrored = false, videoRange = false)`, run `runPixels` on `detector-nhwc.tflite`, and assert the row-0 score is 0.8 within 2e-2 (YUV rounding) and `boxes` equals the fixture box.
 - [ ] **Step 2: Build** `./gradlew :react-native-parking-guide:assembleDebugAndroidTest` — expected: FAIL to compile (`runPixels` missing).
 - [ ] **Step 3: Implement the refactor, `ParkingDetectors`, and the plugin.** Existing `ParkingDetectorTest` cases must keep passing unchanged.
-- [ ] **Step 4: Build the test APK and run unit tests** (`assembleDebugAndroidTest`, `testDebugUnitTest`) — expected: BUILD SUCCESSFUL. Running `connectedDebugAndroidTest` needs a device; record it as Andrew's step in the PR.
+- [ ] **Step 4: Build the test APK and run unit tests** (`assembleDebugAndroidTest`, `testDebugUnitTest`) — expected: BUILD SUCCESSFUL. Running `connectedDebugAndroidTest` needs a device; record it as my step in the PR.
 - [ ] **Step 5: Commit** `feat: run the shared detector on Android camera frames`.
 
 ### Task 6: iOS pixel-buffer path, shared detector, `parkingDetector` plugin
