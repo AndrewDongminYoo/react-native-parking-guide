@@ -1,3 +1,11 @@
 [[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+reason = "glob@13.0.6 via the react-native-builder-bob@0.44.1 devDependency has no compatible patch as of 2026-11-05: the advisory covers >= 9.0.0, <= 14.0.1, the fix is glob 14.0.2, and react-native-builder-bob 0.44.1, its latest release, still requires glob@^13.0.6. Medium severity, AbortSignal cancellation bypass that allows filesystem traversal after a timeout. Reached only by the library build tooling, not shipped library code. Approved on 2026-11-05. Re-evaluate when react-native-builder-bob accepts glob 14."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+reason = "minimatch@10.2.6 via @typescript-eslint/typescript-estree@8.72.x (8.72.1, its latest release, requires minimatch@^10.2.2) and via glob@13.0.6 has no compatible patch as of 2026-11-05: the advisory covers >= 7.0.0, < 11.0.1 and the fix is minimatch 11. Medium severity, DoS through globparts amplification. Reached only by lint and build tooling, not shipped library code. Approved on 2026-11-05. Re-evaluate when typescript-estree and glob accept minimatch 11."
+
+[[IgnoredVulns]]
 id = "GHSA-gcqx-w48m-w2h4"
 reason = "deepmerge@4.3.1 has no advisory-listed patched version as of 2026-10-29. yarn why deepmerge resolves Jest 29.7.0 and React Native CLI 20.2.0, whose installed call sites merge local configuration. src/ and lib/ do not import deepmerge. This exception accepts the risk of processing untrusted local configuration in development tools. Approved on 2026-10-29. Remove when a compatible patch is available or the dependency reaches shipped code."
