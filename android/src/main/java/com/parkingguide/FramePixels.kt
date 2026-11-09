@@ -45,14 +45,17 @@ object FramePixels {
             sourceX = uprightX
             sourceY = uprightY
           }
+
           1 -> {
             sourceX = uprightY
             sourceY = height - 1 - uprightX
           }
+
           2 -> {
             sourceX = width - 1 - uprightX
             sourceY = height - 1 - uprightY
           }
+
           else -> {
             sourceX = width - 1 - uprightY
             sourceY = uprightX

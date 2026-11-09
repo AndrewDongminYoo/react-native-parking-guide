@@ -30,7 +30,7 @@ lint:
     - eslint@9.39.5
     - git-diff-check
     - isort@9.0.2
-    - ktlint@1.7.1
+    - ktlint@1.8.0
     - markdownlint@0.50.0
     - osv-scanner@2.2.4
     - oxipng@9.1.5

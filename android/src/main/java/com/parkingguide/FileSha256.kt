@@ -30,11 +30,21 @@ object FileSha256 {
    */
   fun resolve(uri: String): PhotoSource =
     when {
-      uri.startsWith("/") -> PhotoSource.File(uri)
-      uri.startsWith("$FILE_PREFIX/") ->
+      uri.startsWith("/") -> {
+        PhotoSource.File(uri)
+      }
+
+      uri.startsWith("$FILE_PREFIX/") -> {
         percentDecode(uri.substring(FILE_PREFIX.length))?.let { PhotoSource.File(it) } ?: PhotoSource.Invalid
-      uri.startsWith(CONTENT_PREFIX) && uri.length > CONTENT_PREFIX.length -> PhotoSource.Content(uri)
-      else -> PhotoSource.Invalid
+      }
+
+      uri.startsWith(CONTENT_PREFIX) && uri.length > CONTENT_PREFIX.length -> {
+        PhotoSource.Content(uri)
+      }
+
+      else -> {
+        PhotoSource.Invalid
+      }
     }
 
   private fun hexValue(c: Char): Int =
