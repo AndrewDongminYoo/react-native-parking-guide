@@ -2,7 +2,7 @@
 # To learn more about the format of this file, see https://docs.trunk.io/reference/trunk-yaml
 version: 0.1
 cli:
-  version: 1.25.0
+  version: 1.29.0
 plugins:
   sources:
     - id: trunk
@@ -18,29 +18,33 @@ runtimes:
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 # cspell:words dotenv, taplo
 lint:
+  definitions:
+    - name: pinact
+      commands:
+        - name: upgrade
+          enabled: true
   disabled:
     - bandit
     - dotenv-linter
     - grype
     - taplo
   enabled:
-    - actionlint@1.7.8
+    - actionlint@1.7.12
     - black@26.10.1
-    - checkov@3.4.0
-    - eslint@9.39.5
+    - checkov@3.4.3
+    - eslint@10.14.0
     - git-diff-check
     - isort@9.0.2
     - ktlint@1.8.0
     - markdownlint@0.50.0
-    - osv-scanner@2.2.4
-    - oxipng@9.1.5
-    - pinact@4.1.1!:
-        commands: [lint, upgrade]
+    - osv-scanner@2.7.0
+    - oxipng@10.2.1
+    - pinact@4.1.1!
     - prettier@3.9.10
-    - ruff@0.17.3
-    - shfmt@3.13.1
-    - trivy@0.70.0
-    - trufflehog@3.90.13
+    - ruff@0.17.4
+    - shfmt@3.14.1
+    - trivy@0.76.2
+    - trufflehog@3.99.8
     - yamllint@1.38.0
   ignore:
     # Preserve skill files from the upstream commit recorded in .github/skills/README.md.
